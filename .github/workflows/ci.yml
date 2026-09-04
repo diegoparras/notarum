@@ -13,6 +13,22 @@ jobs:
   probar:
     name: Suite completa
     runs-on: ubuntu-latest
+
+    # Postgres de verdad: los tests del motor no sirven contra un simulacro.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: notarum
+          POSTGRES_PASSWORD: notarum
+          POSTGRES_DB: notarum
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
 
@@ -36,6 +52,8 @@ jobs:
       # Los tests de unidad usan fixtures HTML reales guardados en el repo:
       # no salen a la red, así que corren igual de rápido acá que en local.
       - name: Tests
+        env:
+          NOTARUM_TEST_POSTGRES: postgres://notarum:notarum@localhost:5432/notarum?sslmode=disable
         run: go test -race ./...
 
       - name: Que la imagen se construya

@@ -13,13 +13,39 @@ services:
       - notarum-datos:/datos
     environment:
       NOTARUM_PUERTO: "8080"
+      # disco | sqlite | postgres
       NOTARUM_ALMACEN: sqlite
       NOTARUM_DB: /datos/notarum.db
+      # Con NOTARUM_ALMACEN=postgres, además:
+      # NOTARUM_POSTGRES_HOST: postgres
+      # NOTARUM_POSTGRES_BASE: notarum
+      # NOTARUM_POSTGRES_USUARIO: notarum
+      # NOTARUM_POSTGRES_CLAVE: notarum
       NOTARUM_POR_MINUTO: "60"
       NOTARUM_INTERVALO: 500ms
       NOTARUM_LOG: json
       # Poné acá una URL de contacto real: el sitio del Boletín es público.
       NOTARUM_USER_AGENT: notarum/1.0 (+https://github.com/diegoparras/notarum)
 
+  # Postgres es opcional. Para usarlo:
+  #   docker compose --profile postgres up -d
+  # y en el servicio de arriba cambiá NOTARUM_ALMACEN a postgres.
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["postgres"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: notarum
+      POSTGRES_PASSWORD: notarum
+      POSTGRES_DB: notarum
+    volumes:
+      - notarum-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notarum"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   notarum-datos:
+  notarum-postgres:

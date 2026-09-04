@@ -66,9 +66,13 @@ func ayuda() {
   notarum servir
       Levanta la API. Configuración por variables de entorno o banderas:
         NOTARUM_PUERTO      (--puerto)      puerto HTTP                 [8080]
-        NOTARUM_ALMACEN     (--almacen)     disco | sqlite              [disco]
+        NOTARUM_ALMACEN     (--almacen)     disco | sqlite | postgres   [disco]
         NOTARUM_CACHE       (--cache)       directorio (motor disco)    [/datos/cache]
         NOTARUM_DB          (--db)          archivo (motor sqlite)      [/datos/notarum.db]
+
+      Con el motor postgres, la conexión sale de NOTARUM_POSTGRES_DSN, o de
+      las piezas sueltas NOTARUM_POSTGRES_HOST, _PUERTO, _BASE, _USUARIO,
+      _CLAVE, _SSL y _ESQUEMA.
         NOTARUM_POR_MINUTO  (--por-minuto)  pedidos por minuto por IP   [60]
         NOTARUM_INTERVALO   (--intervalo)   espera entre pedidos al sitio [500ms]
         NOTARUM_USER_AGENT  (--user-agent)  User-Agent hacia el sitio
@@ -123,9 +127,36 @@ func armarAlmacen(motor, dirCache, rutaDB string) (almacen.Almacen, error) {
 		return almacen.NuevoDisco(dirCache)
 	case "sqlite", "db", "base":
 		return almacen.NuevoSQLite(rutaDB)
+	case "postgres", "postgresql", "postgresdb":
+		return armarPostgres()
 	default:
-		return nil, fmt.Errorf("almacén %q desconocido: se esperaba disco o sqlite", motor)
+		return nil, fmt.Errorf("almacén %q desconocido: se esperaba disco, sqlite o postgres", motor)
 	}
+}
+
+// armarPostgres toma la cadena de conexión entera si la hay, y si no la
+// arma con las piezas sueltas, que es como se configura en un panel.
+func armarPostgres() (almacen.Almacen, error) {
+	dsn := entorno("NOTARUM_POSTGRES_DSN", "")
+	if dsn == "" {
+		var err error
+		dsn, err = almacen.ArmarDSN(almacen.DatosConexion{
+			Host:    entorno("NOTARUM_POSTGRES_HOST", ""),
+			Puerto:  entorno("NOTARUM_POSTGRES_PUERTO", "5432"),
+			Base:    entorno("NOTARUM_POSTGRES_BASE", "notarum"),
+			Usuario: entorno("NOTARUM_POSTGRES_USUARIO", ""),
+			Clave:   entorno("NOTARUM_POSTGRES_CLAVE", ""),
+			SSLMode: entorno("NOTARUM_POSTGRES_SSL", ""),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("%w: definí NOTARUM_POSTGRES_DSN o las piezas NOTARUM_POSTGRES_HOST/BASE/USUARIO/CLAVE", err)
+		}
+	}
+	slog.Info("conectando a Postgres", "dsn", almacen.OcultarClave(dsn))
+	return almacen.NuevoPostgres(almacen.OpcionesPostgres{
+		DSN:     dsn,
+		Esquema: entorno("NOTARUM_POSTGRES_ESQUEMA", "public"),
+	})
 }
 
 // armarServicio crea el cliente y el almacén compartidos por ambos comandos.
@@ -158,7 +189,7 @@ func servir(args []string) error {
 	fs := flag.NewFlagSet("servir", flag.ContinueOnError)
 	puerto := fs.String("puerto", entorno("NOTARUM_PUERTO", "8080"), "puerto HTTP")
 	dirCache := fs.String("cache", entorno("NOTARUM_CACHE", "/datos/cache"), "directorio de caché (motor disco)")
-	motor := fs.String("almacen", entorno("NOTARUM_ALMACEN", "disco"), "dónde guardar: disco o sqlite")
+	motor := fs.String("almacen", entorno("NOTARUM_ALMACEN", "disco"), "dónde guardar: disco, sqlite o postgres")
 	rutaDB := fs.String("db", entorno("NOTARUM_DB", "/datos/notarum.db"), "archivo de la base (motor sqlite)")
 	porMinuto := fs.String("por-minuto", entorno("NOTARUM_POR_MINUTO", "60"), "pedidos por minuto por IP (0 desactiva)")
 	intervalo := fs.String("intervalo", entorno("NOTARUM_INTERVALO", "500ms"), "espera entre pedidos al sitio")
@@ -236,7 +267,7 @@ func servir(args []string) error {
 func servirMCP(args []string) error {
 	fs := flag.NewFlagSet("mcp", flag.ContinueOnError)
 	dirCache := fs.String("cache", entorno("NOTARUM_CACHE", "/datos/cache"), "directorio de caché (motor disco)")
-	motor := fs.String("almacen", entorno("NOTARUM_ALMACEN", "disco"), "dónde guardar: disco o sqlite")
+	motor := fs.String("almacen", entorno("NOTARUM_ALMACEN", "disco"), "dónde guardar: disco, sqlite o postgres")
 	rutaDB := fs.String("db", entorno("NOTARUM_DB", "/datos/notarum.db"), "archivo de la base (motor sqlite)")
 	intervalo := fs.String("intervalo", entorno("NOTARUM_INTERVALO", "500ms"), "espera entre pedidos al sitio")
 	userAgent := fs.String("user-agent", entorno("NOTARUM_USER_AGENT", uaPorDefecto), "User-Agent hacia el sitio")
@@ -271,7 +302,7 @@ func rellenar(args []string) error {
 	desdeTxt := fs.String("desde", "", "fecha inicial AAAA-MM-DD (obligatoria)")
 	hastaTxt := fs.String("hasta", "", "fecha final AAAA-MM-DD (por defecto, hoy)")
 	dirCache := fs.String("cache", entorno("NOTARUM_CACHE", "/datos/cache"), "directorio de caché (motor disco)")
-	motor := fs.String("almacen", entorno("NOTARUM_ALMACEN", "disco"), "dónde guardar: disco o sqlite")
+	motor := fs.String("almacen", entorno("NOTARUM_ALMACEN", "disco"), "dónde guardar: disco, sqlite o postgres")
 	rutaDB := fs.String("db", entorno("NOTARUM_DB", "/datos/notarum.db"), "archivo de la base (motor sqlite)")
 	intervalo := fs.String("intervalo", entorno("NOTARUM_INTERVALO", "500ms"), "espera entre pedidos al sitio")
 	userAgent := fs.String("user-agent", entorno("NOTARUM_USER_AGENT", uaPorDefecto), "User-Agent hacia el sitio")

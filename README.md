@@ -253,9 +253,11 @@ registry y el detalle de cada paso, está en
 | Variable | Por defecto | Qué hace |
 |---|---|---|
 | `NOTARUM_PUERTO` | `8080` | puerto HTTP |
-| `NOTARUM_ALMACEN` | `disco` | `disco` o `sqlite` |
+| `NOTARUM_ALMACEN` | `disco` | `disco`, `sqlite` o `postgres` |
 | `NOTARUM_CACHE` | `/datos/cache` | directorio, con el motor `disco` |
 | `NOTARUM_DB` | `/datos/notarum.db` | archivo, con el motor `sqlite` |
+| `NOTARUM_POSTGRES_DSN` | — | cadena completa, con el motor `postgres` |
+| `NOTARUM_POSTGRES_HOST` … | — | o las piezas sueltas: `_PUERTO`, `_BASE`, `_USUARIO`, `_CLAVE`, `_SSL`, `_ESQUEMA` |
 | `NOTARUM_POR_MINUTO` | `60` | pedidos por minuto por IP; `0` lo desactiva |
 | `NOTARUM_INTERVALO` | `500ms` | espera entre pedidos al Boletín |
 | `NOTARUM_USER_AGENT` | `notarum/1.1 (+…)` | poné una URL de contacto real |
