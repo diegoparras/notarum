@@ -2,10 +2,12 @@ package web
 
 import (
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/diegoparras/notarum/internal/contrato"
+	"github.com/diegoparras/notarum/internal/cuentas"
 	"github.com/diegoparras/notarum/internal/mcp"
 )
 
@@ -193,5 +195,31 @@ func TestBaseVisible(t *testing.T) {
 		if got := baseVisible(r); got != c.esperado {
 			t.Errorf("host=%q proto=%q -> %q, se esperaba %q", c.host, c.proto, got, c.esperado)
 		}
+	}
+}
+
+// La documentación tiene que decir en qué modo está la instancia y con qué
+// cuota: no puede afirmar que todo es abierto, porque eso lo decide quien la
+// levanta.
+func TestDocsMuestraElAcceso(t *testing.T) {
+	srv := sitioDePrueba(t)
+	_, cuerpo := pedir(t, srv, "/docs")
+
+	p := cuentas.PoliticaPorDefecto(false)
+	if !strings.Contains(cuerpo, p.Explicacion()) {
+		t.Errorf("la documentación no explica el modo: falta %q", p.Explicacion())
+	}
+	if !strings.Contains(cuerpo, strconv.Itoa(p.Anonimo)) {
+		t.Error("no dice la cuota de quien no se identifica")
+	}
+	if !strings.Contains(cuerpo, "Authorization: Bearer") {
+		t.Error("no dice cómo se manda el token")
+	}
+	// Y no puede quedar afirmando lo contrario.
+	if strings.Contains(cuerpo, "sin clave") {
+		t.Error("la documentación sigue diciendo que no hace falta clave")
+	}
+	if strings.Contains(cuerpo, "acceso </span>") {
+		t.Error("el modo salió vacío")
 	}
 }

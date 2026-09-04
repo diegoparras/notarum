@@ -6,7 +6,9 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"crypto/rand"
 	"errors"
 	"flag"
 	"fmt"
@@ -22,6 +24,7 @@ import (
 	"github.com/diegoparras/notarum/internal/almacen"
 	"github.com/diegoparras/notarum/internal/api"
 	"github.com/diegoparras/notarum/internal/boletin"
+	"github.com/diegoparras/notarum/internal/cuentas"
 	"github.com/diegoparras/notarum/internal/infoleg"
 	"github.com/diegoparras/notarum/internal/mcp"
 	"github.com/diegoparras/notarum/internal/servicio"
@@ -51,6 +54,8 @@ func ejecutar(args []string) error {
 		return servirMCP(args)
 	case "infoleg":
 		return sincronizarInfoLEG(args)
+	case "usuarios", "usuario":
+		return administrarUsuarios(args)
 	case "version", "--version", "-v":
 		fmt.Println("notarum " + version)
 		return nil
@@ -76,7 +81,13 @@ func ayuda() {
       Con el motor postgres, la conexión sale de NOTARUM_POSTGRES_DSN, o de
       las piezas sueltas NOTARUM_POSTGRES_HOST, _PUERTO, _BASE, _USUARIO,
       _CLAVE, _SSL y _ESQUEMA.
-        NOTARUM_POR_MINUTO  (--por-minuto)  pedidos por minuto por IP   [60]
+        NOTARUM_ACCESO      abierto | mixto | cerrado   [cerrado si hay cuentas]
+        NOTARUM_POR_MINUTO  (--por-minuto)  cuota de quien no entró     [60]
+        NOTARUM_CUOTA_PERSONA               cuota del rol persona       [600]
+        NOTARUM_CUOTA_ADMIN                 cuota del rol admin         [6000]
+        NOTARUM_CUOTA_LECTOR                cuota de las páginas web    [600]
+        NOTARUM_CUOTA_LOGIN                 intentos de entrada         [10]
+        NOTARUM_SECRETO_SESION              firma las sesiones          [se genera]
         NOTARUM_INTERVALO   (--intervalo)   espera entre pedidos al sitio [500ms]
         NOTARUM_USER_AGENT  (--user-agent)  User-Agent hacia el sitio
         NOTARUM_LOG         (--log)         text | json                 [json]
@@ -99,6 +110,11 @@ func ayuda() {
       Baja el catálogo de normativa de InfoLEG y lo guarda. Con eso, cada
       aviso del Boletín muestra la norma que InfoLEG mantiene actualizada.
       Son unas 428 mil normas; se puede cortar y volver a correr.
+
+  notarum usuarios crear <nombre> [--rol admin|persona]
+      Crea una cuenta. La clave se pide por teclado y no queda en el historial
+      del shell. Mientras no exista ninguna cuenta, notarum funciona sin login
+      y con todo abierto, que es como viene.
 
   notarum version
 `)
@@ -236,9 +252,24 @@ func servir(args []string) error {
 		return err
 	}
 	defer cerrar()
+	// Las cuentas se encienden solas cuando existe alguna: mientras no haya
+	// ninguna, notarum funciona abierto y sin login, como viene.
+	reg, err := armarRegistro(srv.Almacen())
+	if err != nil {
+		return err
+	}
+	if !reg.HayUsuarios() {
+		reg = nil
+	}
+	politica, err := armarPolitica(reg != nil, limite)
+	if err != nil {
+		return err
+	}
+
 	manejador := api.Nuevo(api.Config{
 		Servicio: srv, PorMinuto: limite, Version: version,
 		TokenMCP: *tokenMCP, SinMCP: *sinMCP, SinWeb: *sinWeb,
+		Registro: reg, Politica: politica,
 	})
 
 	http := &http.Server{
@@ -258,7 +289,8 @@ func servir(args []string) error {
 		slog.Info("notarum escuchando",
 			"puerto", *puerto, "almacen", srv.Almacen().Metricas().Motor,
 			"indice_local", srv.TieneIndice(), "por_minuto", limite,
-			"mcp", !*sinMCP, "lector", !*sinWeb, "version", version)
+			"mcp", !*sinMCP, "lector", !*sinWeb, "cuentas", reg != nil,
+			"acceso", politica.Modo, "version", version)
 		errores <- http.ListenAndServe()
 	}()
 
@@ -308,6 +340,77 @@ func servirMCP(args []string) error {
 	ctx, cancelar := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancelar()
 	return mcp.Nuevo(srv, version).ServirStdio(ctx, os.Stdin, os.Stdout)
+}
+
+// -------------------------------------------------------------- usuarios
+
+func administrarUsuarios(args []string) error {
+	if len(args) == 0 || args[0] != "crear" {
+		return errors.New("uso: notarum usuarios crear <nombre> [--rol admin|persona]")
+	}
+	args = args[1:]
+	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
+		return errors.New("falta el nombre: notarum usuarios crear <nombre>")
+	}
+	nombre := args[0]
+
+	fs := flag.NewFlagSet("usuarios crear", flag.ContinueOnError)
+	rol := fs.String("rol", "admin", "admin o persona")
+	dirCache := fs.String("cache", entorno("NOTARUM_CACHE", "/datos/cache"), "directorio de caché (motor disco)")
+	motor := fs.String("almacen", entorno("NOTARUM_ALMACEN", "disco"), "dónde guardar: disco, sqlite o postgres")
+	rutaDB := fs.String("db", entorno("NOTARUM_DB", "/datos/notarum.db"), "archivo de la base (motor sqlite)")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	armarLog("text")
+
+	alm, err := armarAlmacen(*motor, *dirCache, *rutaDB)
+	if err != nil {
+		return err
+	}
+	defer alm.Cerrar()
+
+	reg, err := armarRegistro(alm)
+	if err != nil {
+		return err
+	}
+
+	// La clave se pide por teclado: pasarla como argumento la dejaría en el
+	// historial del shell y en la lista de procesos de la máquina.
+	clave, err := pedirClave("Clave para " + nombre + ": ")
+	if err != nil {
+		return err
+	}
+	repetida, err := pedirClave("Repetila: ")
+	if err != nil {
+		return err
+	}
+	if clave != repetida {
+		return errors.New("las claves no coinciden")
+	}
+
+	u, err := reg.CrearUsuario(nombre, clave, cuentas.Rol(*rol))
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Listo: %s (%s).\nEntrá en /entrar y creá tus tokens desde /cuenta.\n", u.Nombre, u.Rol)
+	return nil
+}
+
+// teclado es uno solo para todo el proceso. Un bufio.Reader nuevo por llamada
+// se lleva en su buffer lo que todavía no se leyó, y la segunda lectura no
+// encuentra nada.
+var teclado = bufio.NewReader(os.Stdin)
+
+// pedirClave lee una línea del teclado.
+func pedirClave(mensaje string) (string, error) {
+	fmt.Print(mensaje)
+	linea, err := teclado.ReadString('\n')
+	fmt.Println()
+	if err != nil && linea == "" {
+		return "", err
+	}
+	return strings.TrimRight(linea, "\r\n"), nil
 }
 
 // --------------------------------------------------------------- infoleg
@@ -485,4 +588,71 @@ func rellenarSeccion(ctx context.Context, srv *servicio.Servicio, sec boletin.Se
 		return fmt.Errorf("quedaron %d días sin bajar en la sección %s: volvé a correr el relleno", fallidas, sec)
 	}
 	return nil
+}
+
+// armarRegistro prepara las cuentas.
+//
+// El secreto firma las sesiones. Si no se configura uno, se genera al vuelo y
+// se guarda junto al resto: así el login sobrevive a un reinicio sin pedirle
+// nada a nadie. Definir NOTARUM_SECRETO_SESION tiene sentido cuando corren
+// varias instancias contra la misma base y las sesiones tienen que valer en
+// todas, o para poder rotarlo y cerrar todas las sesiones de una.
+func armarRegistro(alm almacen.Almacen) (*cuentas.Registro, error) {
+	if s := entorno("NOTARUM_SECRETO_SESION", ""); s != "" {
+		if len(s) < 32 {
+			return nil, errors.New("NOTARUM_SECRETO_SESION necesita al menos 32 caracteres")
+		}
+		return cuentas.NuevoRegistro(alm, []byte(s))
+	}
+
+	const clave = "cuentas/_secreto"
+	if guardado, hay := alm.Leer(clave); hay && len(guardado) >= 32 {
+		return cuentas.NuevoRegistro(alm, guardado)
+	}
+	secreto := make([]byte, 32)
+	if _, err := rand.Read(secreto); err != nil {
+		return nil, err
+	}
+	if err := alm.Guardar(clave, secreto, almacen.SinVencimiento); err != nil {
+		return nil, err
+	}
+	return cuentas.NuevoRegistro(alm, secreto)
+}
+
+// armarPolitica arma la política de acceso de esta instancia.
+//
+// Quien opera decide: una cátedra puede querer su copia abierta, un estudio la
+// suya cerrada, y un organismo el lector público con la API por token. Por
+// defecto se cierra en cuanto hay cuentas, y se queda abierta mientras no
+// haya ninguna, porque sin cuentas no habría con qué entrar.
+func armarPolitica(hayUsuarios bool, porMinuto int) (cuentas.Politica, error) {
+	p := cuentas.PoliticaPorDefecto(hayUsuarios)
+	if s := entorno("NOTARUM_ACCESO", ""); s != "" {
+		m, err := cuentas.ParseModo(s)
+		if err != nil {
+			return p, err
+		}
+		p.Modo = m
+	}
+	if porMinuto > 0 {
+		p.Anonimo = porMinuto
+	}
+	for _, c := range []struct {
+		variable string
+		destino  *int
+	}{
+		{"NOTARUM_CUOTA_PERSONA", &p.Persona},
+		{"NOTARUM_CUOTA_ADMIN", &p.Admin},
+		{"NOTARUM_CUOTA_LECTOR", &p.Lector},
+		{"NOTARUM_CUOTA_LOGIN", &p.Login},
+	} {
+		if v := entorno(c.variable, ""); v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil || n < 0 {
+				return p, fmt.Errorf("%s inválido: %q", c.variable, v)
+			}
+			*c.destino = n
+		}
+	}
+	return p, nil
 }

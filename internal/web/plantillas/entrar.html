@@ -1,0 +1,50 @@
+{{define "titulo"}}Entrar{{end}}
+{{define "cuerpo"}}
+
+<div class="entrar">
+  <h1>Entrar</h1>
+  <p class="bajada">
+    En esta instancia, {{.Explicacion}}. Entrar sirve además para tener tus
+    propios tokens: subir tu límite de pedidos y usar el MCP.
+  </p>
+
+  {{if .Error}}<div class="aviso-error">{{.Error}}</div>{{end}}
+
+  <form method="post" action="/entrar" class="formulario">
+    <label class="campo">
+      <span class="campo-nombre">Usuario</span>
+      <input type="text" name="usuario" value="{{.Usuario}}" autocomplete="username"
+             autocapitalize="none" spellcheck="false" required autofocus>
+    </label>
+
+    <label class="campo">
+      <span class="campo-nombre">Clave</span>
+      <span class="clave-caja">
+        <input type="password" name="clave" id="clave" autocomplete="current-password" required>
+        <button type="button" class="ojo" id="ojo" aria-label="Mostrar la clave" aria-pressed="false">👁</button>
+      </span>
+    </label>
+
+    <button class="boton" type="submit">Entrar</button>
+  </form>
+</div>
+
+<script>
+// Lo único con JavaScript en todo el sitio: mostrar u ocultar la clave.
+// Sin esto no se puede revisar lo que uno escribió, y escribir a ciegas una
+// frase larga es la mejor forma de trabarse afuera.
+(function () {
+  var campo = document.getElementById('clave');
+  var ojo = document.getElementById('ojo');
+  if (!campo || !ojo) return;
+  ojo.addEventListener('click', function () {
+    var oculta = campo.type === 'password';
+    campo.type = oculta ? 'text' : 'password';
+    ojo.textContent = oculta ? '🙈' : '👁';
+    ojo.setAttribute('aria-pressed', oculta ? 'true' : 'false');
+    ojo.setAttribute('aria-label', oculta ? 'Ocultar la clave' : 'Mostrar la clave');
+    campo.focus();
+  });
+})();
+</script>
+{{end}}

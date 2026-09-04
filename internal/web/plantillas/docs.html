@@ -4,16 +4,57 @@
 <h1>Documentación</h1>
 <p class="bajada">
   Lo mismo que ves acá, para que lo lea un programa o un modelo.
-  Todo de sólo lectura, sin clave, con un límite de pedidos por IP.
+  Todo de sólo lectura, con un límite de pedidos por minuto.
 </p>
 
 <nav class="docs-indice">
+  <a href="#acceso">Acceso</a>
   <a href="#api">API</a>
   <a href="#formas">Formas</a>
   <a href="#mcp">MCP</a>
   <a href="#errores">Errores</a>
   <a href="/v1/openapi.json">openapi.json</a>
 </nav>
+
+<h2 id="acceso">Acceso</h2>
+<div class="modo-acceso">
+  <span class="marca-chica">acceso {{.Politica.Modo}}</span>
+  <span class="modo-explicacion">{{.Politica.Explicacion}}</span>
+</div>
+<p class="docs-parrafo">
+  Quien la opera decide esto: notarum es de quien lo levanta, y otra instancia
+  puede estar configurada de otra manera.
+{{if eq (printf "%s" .Politica.Modo) "abierto"}}
+  Acá no hace falta identificarse para leer; un token sirve para tener más
+  cuota y para el MCP.
+{{else}}
+  Acá hace falta un token{{if eq (printf "%s" .Politica.Modo) "mixto"}} para la API y el MCP{{end}}.
+  {{if .Cuentas}}Se crean desde <a href="/cuenta">tu cuenta</a>, después de
+  <a href="/entrar">entrar</a>.{{else}}Las cuentas todavía no están habilitadas
+  en esta instancia.{{end}}
+{{end}}
+</p>
+<p class="docs-parrafo">El token va en la cabecera, así:</p>
+<pre class="docs-bloque"><code>curl -H "Authorization: Bearer TU_TOKEN"   {{.Base}}/v1/ediciones/primera/{{.FechaActual}}</code></pre>
+
+<h3 class="docs-grupo">Cuotas</h3>
+<p class="docs-parrafo">
+  Son pedidos por minuto. Se cuentan por separado según de dónde vengan: mirar
+  el sitio no te gasta la cuota de la API, y los intentos de entrada tienen la
+  suya. Cada respuesta trae <code>X-RateLimit-Limit</code> y
+  <code>X-RateLimit-Remaining</code>; al pasarse, un <code>429</code> con
+  <code>Retry-After</code>.
+</p>
+<table class="docs-tabla">
+  <thead><tr><th>quién</th><th>por minuto</th></tr></thead>
+  <tbody>
+    <tr><td>sin identificarse</td><td class="dato-mono">{{.Politica.Anonimo}}</td></tr>
+    <tr><td>con token o sesión</td><td class="dato-mono">{{.Politica.Persona}}</td></tr>
+    <tr><td>quien administra</td><td class="dato-mono">{{.Politica.Admin}}</td></tr>
+    <tr><td>el lector web</td><td class="dato-mono">{{.Politica.Lector}}</td></tr>
+    <tr><td>intentos de entrada</td><td class="dato-mono">{{.Politica.Login}}</td></tr>
+  </tbody>
+</table>
 
 <h2 id="api">API</h2>
 <p class="docs-parrafo">

@@ -10,6 +10,7 @@ import (
 	"github.com/diegoparras/notarum/internal/almacen"
 	"github.com/diegoparras/notarum/internal/boletin"
 	"github.com/diegoparras/notarum/internal/contrato"
+	"github.com/diegoparras/notarum/internal/cuentas"
 	"github.com/diegoparras/notarum/internal/mcp"
 	"github.com/diegoparras/notarum/internal/servicio"
 	"github.com/diegoparras/notarum/internal/web"
@@ -27,28 +28,44 @@ type Config struct {
 	SinMCP bool
 	// SinWeb apaga el lector web y deja sólo la API.
 	SinWeb bool
+	// Registro habilita las cuentas. Sin él no hay login ni tokens.
+	Registro *cuentas.Registro
+	// Politica dice qué puede hacer quien no se identificó y cuánta cuota
+	// tiene cada rol. La define quien opera la instancia.
+	Politica cuentas.Politica
 }
 
 // Servidor atiende las rutas de /v1.
 type Servidor struct {
-	srv     *servicio.Servicio
-	version string
-	mux     *http.ServeMux
-	handler http.Handler
-	inicio  time.Time
-	mcp     http.Handler
-	conMCP  bool
-	web     http.Handler
-	conWeb  bool
+	srv      *servicio.Servicio
+	version  string
+	mux      *http.ServeMux
+	handler  http.Handler
+	inicio   time.Time
+	mcp      http.Handler
+	conMCP   bool
+	web      http.Handler
+	conWeb   bool
+	politica cuentas.Politica
 }
 
 // Nuevo arma el servidor con sus rutas y middlewares.
 func Nuevo(cfg Config) *Servidor {
+	politica := cfg.Politica
+	if !politica.Modo.Valido() {
+		politica = cuentas.PoliticaPorDefecto(cfg.Registro != nil && cfg.Registro.HayUsuarios())
+		// PorMinuto es la forma corta de fijar la cuota anónima sin armar una
+		// política entera; se sigue usando en los tests y en el arranque.
+		if cfg.PorMinuto > 0 {
+			politica.Anonimo = cfg.PorMinuto
+		}
+	}
 	s := &Servidor{
-		srv:     cfg.Servicio,
-		version: cfg.Version,
-		mux:     http.NewServeMux(),
-		inicio:  time.Now(),
+		srv:      cfg.Servicio,
+		version:  cfg.Version,
+		mux:      http.NewServeMux(),
+		inicio:   time.Now(),
+		politica: politica,
 	}
 	if !cfg.SinMCP {
 		s.mcp = mcp.Nuevo(cfg.Servicio, cfg.Version).Handler(cfg.TokenMCP)
@@ -61,11 +78,11 @@ func Nuevo(cfg Config) *Servidor {
 			// vale más enterarse al arrancar que servir páginas rotas.
 			panic("no se pudo armar el lector web: " + err.Error())
 		}
-		s.web = sitio.ConMCP(!cfg.SinMCP)
+		s.web = sitio.ConMCP(!cfg.SinMCP).ConCuentas(cfg.Registro, politica)
 		s.conWeb = true
 	}
 	s.rutas()
-	s.handler = conPanico(conLog(conCORS(conLimite(nuevoLimitador(cfg.PorMinuto), s.mux))))
+	s.handler = conPanico(conLog(conCORS(nuevaGuardia(cfg.Registro, s.politica).envolver(s.mux))))
 	return s
 }
 

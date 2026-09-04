@@ -1,0 +1,84 @@
+{{define "titulo"}}Tu cuenta{{end}}
+{{define "cuerpo"}}
+
+<h1>Tu cuenta</h1>
+<p class="bajada">
+  {{.Cuenta.Nombre}}{{if eq .Cuenta.Rol "admin"}} · administra esta instancia{{end}} ·
+  <a href="/salir">cerrar sesión</a>
+</p>
+
+{{if .Error}}<div class="aviso-error">{{.Error}}</div>{{end}}
+
+<div class="modo-acceso">
+  <span class="marca-chica">acceso {{.Modo}}</span>
+  <span class="modo-explicacion">{{.Explicacion}}</span>
+  <span class="modo-cuota">
+    tu cuota: {{.PorMinutoConToken}} pedidos por minuto · sin identificar: {{.PorMinuto}}
+  </span>
+</div>
+
+{{if .TokenNuevo}}
+<div class="token-nuevo">
+  <div class="token-nuevo-titulo">Este es tu token. Copialo ahora.</div>
+  <p class="token-nuevo-nota">
+    Es la única vez que se muestra: de acá en más queda guardada sólo su huella,
+    así que ni notarum puede recuperarlo. Si lo perdés, revocalo y hacé otro.
+  </p>
+  <div class="token-valor"><code>{{.TokenNuevo}}</code></div>
+  <p class="token-nuevo-nota">Se manda así:</p>
+  <pre class="docs-bloque"><code>curl -H "Authorization: Bearer {{.TokenNuevo}}" \
+  {{.Base}}/v1/ediciones/primera/{{.Hoy}}</code></pre>
+</div>
+{{end}}
+
+<h2>Tokens</h2>
+<p class="docs-parrafo">
+  Un token te da <strong>{{.PorMinutoConToken}} pedidos por minuto</strong> en
+  lugar de los {{.PorMinuto}} que tiene una dirección anónima, y su cuota es
+  tuya: que otro comparta tu salida a internet ya no te consume el cupo.
+</p>
+
+<form method="post" action="/cuenta/tokens" class="barra">
+  <input type="text" name="nombre" placeholder="Para qué es (mi script, la notebook…)"
+         maxlength="60" required style="flex:1 1 240px">
+  <select name="alcance" aria-label="Para qué sirve">
+    <option value="api">API</option>
+    <option value="mcp">MCP</option>
+  </select>
+  <button class="boton" type="submit">Crear token</button>
+</form>
+
+{{if .Tokens}}
+<table class="docs-tabla">
+  <thead><tr><th>nombre</th><th>para</th><th>token</th><th>creado</th><th>último uso</th><th></th></tr></thead>
+  <tbody>
+  {{range .Tokens}}
+    <tr{{if not .Activo}} class="fila-revocada"{{end}}>
+      <td>{{.Nombre}}</td>
+      <td class="dato-mono">{{.Alcance}}</td>
+      <td class="dato-mono">{{.Prefijo}}…</td>
+      <td class="dato-mono">{{.CreadoTexto}}</td>
+      <td class="dato-mono">{{if .UltimoUsoTexto}}{{.UltimoUsoTexto}}{{else}}nunca{{end}}</td>
+      <td>
+        {{if .Activo}}
+          <form method="post" action="/cuenta/tokens/{{.ID}}/revocar">
+            <button class="boton suave" type="submit">Revocar</button>
+          </form>
+        {{else}}
+          <span class="marca-chica gris">revocado {{.RevocadoTexto}}</span>
+        {{end}}
+      </td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+<p class="docs-parrafo" style="margin-top:14px">
+  Un token revocado deja de servir en el acto y queda en la lista, para que se
+  vea que existió y cuándo se dio de baja.
+</p>
+{{else}}
+<div class="vacio"><strong>Todavía no tenés tokens</strong>
+Creá uno arriba. Nombralo por lo que va a hacer: cuando tengas varios, es lo
+único que te va a decir cuál revocar.</div>
+{{end}}
+{{end}}

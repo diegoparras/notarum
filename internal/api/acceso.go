@@ -1,0 +1,184 @@
+package api
+
+import (
+	"errors"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/diegoparras/notarum/internal/cuentas"
+)
+
+// zona dice qué parte del servicio se está pidiendo. Cada una tiene su propia
+// cuota, porque son usos distintos: una persona mirando el sitio hace muchos
+// más pedidos que un programa bien escrito, y mezclarlas dejaba la interfaz
+// inusable apenas se bajaba el límite de la API.
+type zona int
+
+const (
+	zonaLector zona = iota
+	zonaAPI
+	zonaMCP
+	zonaLogin
+	zonaLibre // salud y archivos estáticos: no se limitan
+)
+
+func zonaDe(r *http.Request) zona {
+	p := r.URL.Path
+	switch {
+	case p == "/v1/salud" || strings.HasPrefix(p, "/estatico/"):
+		return zonaLibre
+	case p == "/entrar" && r.Method == http.MethodPost:
+		return zonaLogin
+	case strings.HasPrefix(p, "/mcp"):
+		return zonaMCP
+	case strings.HasPrefix(p, "/v1/"):
+		return zonaAPI
+	}
+	return zonaLector
+}
+
+// guardia aplica la política de la instancia: quién puede pedir qué y cuánto.
+type guardia struct {
+	reg      *cuentas.Registro
+	politica cuentas.Politica
+	limite   *limitador
+}
+
+func nuevaGuardia(reg *cuentas.Registro, p cuentas.Politica) *guardia {
+	return &guardia{reg: reg, politica: p, limite: nuevoLimitador(0)}
+}
+
+// quienEs identifica a quien hace el pedido: por token si trae uno, o por la
+// cookie de sesión si viene del navegador.
+//
+// Devuelve un error sólo cuando el token vino y era inválido: eso hay que
+// decirlo, no tratarlo como anónimo, porque quien lo usa tiene que enterarse.
+func (g *guardia) quienEs(r *http.Request, z zona) (*cuentas.Usuario, error) {
+	if g.reg == nil {
+		return nil, nil
+	}
+	if valor := cuentas.TokenDeCabecera(r.Header.Get("Authorization")); valor != "" {
+		alcance := cuentas.AlcanceAPI
+		if z == zonaMCP {
+			alcance = cuentas.AlcanceMCP
+		}
+		_, u, err := g.reg.VerificarToken(valor, alcance)
+		if err != nil {
+			return nil, err
+		}
+		return u, nil
+	}
+	// Sin token, la sesión del navegador.
+	if c, err := r.Cookie(nombreCookieSesion); err == nil && c.Value != "" {
+		if u, err := g.reg.LeerSesion(c.Value); err == nil {
+			return u, nil
+		}
+	}
+	return nil, nil
+}
+
+// nombreCookieSesion tiene que ser el mismo que usa el lector.
+const nombreCookieSesion = "notarum_sesion"
+
+func (g *guardia) envolver(siguiente http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		z := zonaDe(r)
+		if z == zonaLibre {
+			siguiente.ServeHTTP(w, r)
+			return
+		}
+
+		u, err := g.quienEs(r, z)
+		if err != nil {
+			g.rechazarToken(w, r, z, err)
+			return
+		}
+
+		if !g.permite(u, z) {
+			g.pedirIdentificacion(w, r, z)
+			return
+		}
+
+		quien, cuota := g.cupoDe(r, u, z)
+		ok, quedan := g.limite.permitirCon(quien, cuota)
+		if cuota > 0 && z != zonaLector {
+			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(cuota))
+			w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(quedan))
+		}
+		if !ok {
+			g.rechazarPorCuota(w, r, z, cuota)
+			return
+		}
+		siguiente.ServeHTTP(w, r)
+	})
+}
+
+func (g *guardia) permite(u *cuentas.Usuario, z zona) bool {
+	switch z {
+	case zonaAPI:
+		return g.politica.PermiteAPI(u)
+	case zonaMCP:
+		return g.politica.PermiteMCP(u)
+	case zonaLector:
+		return g.politica.PermiteLector(u)
+	}
+	return true // el login siempre se puede intentar
+}
+
+// cupoDe dice contra qué cubo se cuenta este pedido y cuánto le toca.
+func (g *guardia) cupoDe(r *http.Request, u *cuentas.Usuario, z zona) (string, int) {
+	ip := ipDe(r)
+	switch z {
+	case zonaLogin:
+		// Los intentos de entrada se cuentan por dirección y aparte: es el
+		// único límite pensado para frenar a alguien.
+		return "login:" + ip, g.politica.Login
+	case zonaLector:
+		if u != nil {
+			return "lector:" + u.Nombre, g.politica.Lector
+		}
+		return "lector:" + ip, g.politica.Lector
+	}
+	if u != nil {
+		// Identificado: la cuota es suya y no la comparte con quien salga por
+		// la misma dirección.
+		return "api:" + u.Nombre, g.politica.CuotaDe(u)
+	}
+	return "api:" + ip, g.politica.Anonimo
+}
+
+func (g *guardia) rechazarToken(w http.ResponseWriter, r *http.Request, z zona, err error) {
+	mensaje, detalle := "token inválido", "revisá el valor, o creá uno nuevo desde tu cuenta"
+	if errors.Is(err, cuentas.ErrRevocado) {
+		mensaje, detalle = "token revocado", "creá uno nuevo desde tu cuenta"
+	}
+	if z == zonaLector {
+		http.Redirect(w, r, "/entrar", http.StatusFound)
+		return
+	}
+	escribirError(w, r, http.StatusUnauthorized, OrigenPedido, mensaje, detalle)
+}
+
+func (g *guardia) pedirIdentificacion(w http.ResponseWriter, r *http.Request, z zona) {
+	if z == zonaLector {
+		http.Redirect(w, r, "/entrar", http.StatusFound)
+		return
+	}
+	w.Header().Set("WWW-Authenticate", `Bearer realm="notarum"`)
+	escribirError(w, r, http.StatusUnauthorized, OrigenPedido,
+		"esta instancia pide identificarse",
+		"mandá un token en Authorization: Bearer. Se crean desde /cuenta.")
+}
+
+func (g *guardia) rechazarPorCuota(w http.ResponseWriter, r *http.Request, z zona, cuota int) {
+	w.Header().Set("Retry-After", "60")
+	if z == zonaLogin {
+		escribirError(w, r, http.StatusTooManyRequests, OrigenPedido,
+			"demasiados intentos de entrada",
+			"esperá un minuto antes de volver a probar")
+		return
+	}
+	escribirError(w, r, http.StatusTooManyRequests, OrigenPedido, "demasiados pedidos",
+		"el límite es de "+strconv.Itoa(cuota)+" pedidos por minuto")
+}

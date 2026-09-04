@@ -168,6 +168,12 @@ h2 { font-size: 17px; font-weight: 600; margin: 32px 0 12px; }
 
 /* -------------------------------------------------------------------- varios */
 
+/* El modo de acceso de la instancia, arriba de la cuenta: quien la opera
+   tiene que poder verlo sin abrir la configuración. */
+.modo-acceso { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; background: var(--crema-hondo); border-radius: var(--radio); padding: 14px 18px; margin-bottom: 26px; }
+.modo-explicacion { color: var(--tinta-suave); font-size: 14px; }
+.modo-cuota { color: var(--tinta-tenue); font-size: 13px; font-family: var(--mono); margin-left: auto; }
+
 .vacio { background: var(--crema-hondo); border-radius: var(--radio); padding: 28px; text-align: center; color: var(--tinta-suave); font-size: 14px; }
 .vacio strong { display: block; color: var(--tinta); font-size: 16px; margin-bottom: 5px; }
 
@@ -268,3 +274,40 @@ h2 { font-size: 17px; font-weight: 600; margin: 32px 0 12px; }
   padding: 14px 18px; overflow-x: auto; margin: 0 0 18px;
 }
 .docs-bloque code { font-family: var(--mono); font-size: 12.5px; color: var(--tinta-suave); white-space: pre; }
+
+/* ------------------------------------------------------------- cuentas */
+
+.entrar { max-width: 380px; margin: 0 auto; }
+.formulario { display: flex; flex-direction: column; gap: 14px; margin-top: 24px; }
+.campo { display: flex; flex-direction: column; gap: 5px; }
+.campo-nombre { font-size: 13px; color: var(--tinta-suave); }
+.campo input { width: 100%; }
+
+.clave-caja { position: relative; display: block; }
+.clave-caja input { width: 100%; padding-right: 44px; }
+.ojo {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  background: none; border: 0; cursor: pointer; font-size: 16px;
+  padding: 6px 8px; line-height: 1; border-radius: 8px;
+}
+.ojo:hover { background: var(--crema-hondo); }
+
+.aviso-error {
+  background: rgba(224, 106, 58, 0.12); color: #8c2f14;
+  border-radius: 12px; padding: 11px 15px; font-size: 13.5px; margin-bottom: 4px;
+}
+
+.token-nuevo {
+  background: var(--crema-hondo); border-radius: var(--radio);
+  border-left: 3px solid var(--terracota); padding: 16px 18px; margin-bottom: 26px;
+}
+.token-nuevo-titulo { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.token-nuevo-nota { margin: 0 0 10px; font-size: 13px; color: var(--tinta-suave); line-height: 1.55; }
+.token-valor {
+  background: var(--crema); border-radius: 10px; padding: 12px 14px;
+  margin-bottom: 12px; overflow-x: auto;
+}
+.token-valor code { font-family: var(--mono); font-size: 13px; color: var(--tinta); white-space: pre; }
+
+.fila-revocada td { opacity: 0.55; }
+.docs-tabla form { margin: 0; }

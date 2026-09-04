@@ -22,6 +22,7 @@ import (
 	"github.com/diegoparras/notarum/internal/almacen"
 	"github.com/diegoparras/notarum/internal/boletin"
 	"github.com/diegoparras/notarum/internal/contrato"
+	"github.com/diegoparras/notarum/internal/cuentas"
 	"github.com/diegoparras/notarum/internal/infoleg"
 	"github.com/diegoparras/notarum/internal/mcp"
 	"github.com/diegoparras/notarum/internal/servicio"
@@ -42,6 +43,17 @@ type Sitio struct {
 	// conMCP dice si esta instancia expone el endpoint MCP, para no documentar
 	// algo que está apagado.
 	conMCP bool
+	// registro habilita las cuentas. Sin él no hay login ni tokens, y notarum
+	// se comporta como siempre.
+	registro *cuentas.Registro
+	politica cuentas.Politica
+}
+
+// ConCuentas habilita el login y la gestión de tokens.
+func (s *Sitio) ConCuentas(reg *cuentas.Registro, p cuentas.Politica) *Sitio {
+	s.registro = reg
+	s.politica = p
+	return s
 }
 
 // ConMCP le avisa al lector que el endpoint MCP está encendido.
@@ -58,8 +70,11 @@ func Nuevo(srv *servicio.Servicio, version string) (*Sitio, error) {
 		version:   version,
 		mux:       http.NewServeMux(),
 		plantilla: map[string]*template.Template{},
+		// Sin cuentas no hay nada que pedir, pero la documentación igual tiene
+		// que decir en qué modo está: sin este piso mostraría cuotas en cero.
+		politica: cuentas.PoliticaPorDefecto(false),
 	}
-	for _, nombre := range []string{"edicion", "aviso", "buscar", "calendario", "norma", "docs", "error"} {
+	for _, nombre := range []string{"edicion", "aviso", "buscar", "calendario", "norma", "docs", "entrar", "cuenta", "error"} {
 		t, err := template.New("base").Funcs(funciones).ParseFS(archivosPlantillas,
 			"plantillas/base.html", "plantillas/"+nombre+".html")
 		if err != nil {
@@ -82,6 +97,12 @@ func (s *Sitio) rutas() {
 	s.mux.HandleFunc("GET /norma/{id}", s.norma)
 	s.mux.HandleFunc("GET /buscar", s.buscar)
 	s.mux.HandleFunc("GET /docs", s.docs)
+	s.mux.HandleFunc("GET /entrar", s.verEntrar)
+	s.mux.HandleFunc("POST /entrar", s.hacerEntrar)
+	s.mux.HandleFunc("GET /salir", s.salir)
+	s.mux.HandleFunc("GET /cuenta", s.verCuenta)
+	s.mux.HandleFunc("POST /cuenta/tokens", s.crearToken)
+	s.mux.HandleFunc("POST /cuenta/tokens/{id}/revocar", s.revocarToken)
 	s.mux.HandleFunc("GET /ir", s.ir)
 	s.mux.HandleFunc("GET /ir-calendario", s.irCalendario)
 }
@@ -111,7 +132,10 @@ func conMayuscula(s string) string {
 
 // comun es lo que toda página necesita para dibujar la cabecera y el pie.
 type comun struct {
-	Version     string
+	Version string
+	// Cuentas dice si esta instancia tiene login, y Yo quién está mirando.
+	Cuentas     bool
+	Yo          string
 	Seccion     boletin.Seccion
 	Secciones   []boletin.Seccion
 	FechaActual string
@@ -127,7 +151,18 @@ func (s *Sitio) base(sec boletin.Seccion, fecha string) comun {
 		Seccion:     sec,
 		Secciones:   boletin.SeccionesValidas,
 		FechaActual: fecha,
+		Cuentas:     s.registro != nil,
 	}
+}
+
+// baseCon arma lo común sabiendo quién mira, para que la cabecera muestre su
+// nombre en vez de "entrar".
+func (s *Sitio) baseCon(r *http.Request, sec boletin.Seccion, fecha string) comun {
+	c := s.base(sec, fecha)
+	if u := s.yo(r); u != nil {
+		c.Yo = u.Nombre
+	}
+	return c
 }
 
 func (s *Sitio) mostrar(w http.ResponseWriter, r *http.Request, nombre string, datos any, codigo int) {
@@ -258,7 +293,7 @@ func (s *Sitio) edicion(w http.ResponseWriter, r *http.Request) {
 	rubro := strings.TrimSpace(r.URL.Query().Get("rubro"))
 
 	d := datosEdicion{
-		comun:      s.base(sec, fecha.API()),
+		comun:      s.baseCon(r, sec, fecha.API()),
 		FechaLarga: conMayuscula(fechaLarga(fecha)),
 		Anio:       fecha.Year(),
 		Rubro:      rubro,
@@ -356,7 +391,7 @@ func (s *Sitio) aviso(w http.ResponseWriter, r *http.Request) {
 	}
 
 	datos := datosAviso{
-		comun:      s.base(sec, fecha.API()),
+		comun:      s.baseCon(r, sec, fecha.API()),
 		FechaLarga: fechaLarga(fecha),
 		Detalle:    d,
 		// El HTML ya viene saneado del parser: sin scripts, sin estilos y sin
@@ -411,7 +446,7 @@ func (s *Sitio) buscar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	d := datosBuscar{
-		comun: s.base(sec, hoy.API()),
+		comun: s.baseCon(r, sec, hoy.API()),
 		Texto: q.Get("texto"),
 		Desde: desde,
 		Hasta: hasta,
@@ -519,7 +554,7 @@ func (s *Sitio) calendario(w http.ResponseWriter, r *http.Request) {
 	}
 
 	d := datosCalendario{
-		comun: s.base(sec, boletin.HoyEnArgentina().API()),
+		comun: s.baseCon(r, sec, boletin.HoyEnArgentina().API()),
 		Anio:  anio,
 	}
 	if anio > 1990 {
@@ -649,6 +684,10 @@ type datosDocs struct {
 	ConMCP       bool
 	TokenMCP     bool
 	Base         string
+	// Politica se muestra tal como está configurada: qué deja hacer esta
+	// instancia no es algo que la documentación pueda dar por sabido, porque
+	// lo decide quien la levanta.
+	Politica cuentas.Politica
 }
 
 // docs dibuja la documentación de la API y del MCP.
@@ -664,10 +703,12 @@ func (s *Sitio) docs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := datosDocs{
-		comun:  s.base("", ""),
+		comun:  s.baseCon(r, "", ""),
 		Doc:    doc,
 		ConMCP: s.conMCP,
 		Base:   baseVisible(r),
+
+		Politica: s.politica,
 	}
 	for _, h := range mcp.Herramientas() {
 		d.Herramientas = append(d.Herramientas, aHerramientaDoc(h))

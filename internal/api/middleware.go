@@ -1,14 +1,35 @@
 package api
 
 import (
+	"context"
 	"log/slog"
 	"net"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/diegoparras/notarum/internal/cuentas"
 )
+
+// claveContexto evita que otra cosa pise lo que se guarda en el contexto.
+type claveContexto int
+
+const (
+	claveUsuario claveContexto = iota
+	claveToken
+)
+
+func conUsuario(ctx context.Context, u *cuentas.Usuario, t *cuentas.Token) context.Context {
+	ctx = context.WithValue(ctx, claveUsuario, u)
+	return context.WithValue(ctx, claveToken, t)
+}
+
+// UsuarioDe devuelve quién hizo el pedido, si vino con un token válido.
+func UsuarioDe(ctx context.Context) *cuentas.Usuario {
+	u, _ := ctx.Value(claveUsuario).(*cuentas.Usuario)
+	return u
+}
 
 // limitador reparte permisos por IP con un cubo que se rellena solo.
 type limitador struct {
@@ -43,13 +64,20 @@ func (l *limitador) limpiar() {
 
 // permitir devuelve si el pedido pasa y cuántas fichas quedan.
 func (l *limitador) permitir(ip string) (bool, int) {
-	if l.porMinuto <= 0 {
+	return l.permitirCon(ip, l.porMinuto)
+}
+
+// permitirCon usa un cupo propio para ese cubo: una IP anónima y un token
+// identificado no tienen por qué tener el mismo.
+func (l *limitador) permitirCon(quien string, porMinuto int) (bool, int) {
+	if porMinuto <= 0 {
 		return true, 0
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	max := float64(l.porMinuto)
+	ip := quien
+	max := float64(porMinuto)
 	c, ok := l.cubos[ip]
 	if !ok {
 		c = &cubo{fichas: max, ultimo: time.Now()}
@@ -87,27 +115,6 @@ func ipDe(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return ip
-}
-
-func conLimite(l *limitador, siguiente http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/salud" { // el chequeo de salud nunca se limita
-			siguiente.ServeHTTP(w, r)
-			return
-		}
-		ok, quedan := l.permitir(ipDe(r))
-		if l.porMinuto > 0 {
-			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(l.porMinuto))
-			w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(quedan))
-		}
-		if !ok {
-			w.Header().Set("Retry-After", "60")
-			escribirError(w, r, http.StatusTooManyRequests, OrigenPedido,
-				"demasiados pedidos", "el límite es de "+strconv.Itoa(l.porMinuto)+" pedidos por minuto por IP")
-			return
-		}
-		siguiente.ServeHTTP(w, r)
-	})
 }
 
 // conCORS deja que cualquiera lea la API desde el navegador: es abierta.

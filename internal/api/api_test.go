@@ -361,6 +361,7 @@ func TestLimitePorIP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Con 3 por minuto, el cuarto pedido a la API tiene que rebotar.
 	api := Nuevo(Config{Servicio: servicio.Nuevo(cli, c), PorMinuto: 3})
 	srv := httptest.NewServer(api)
 	defer srv.Close()
