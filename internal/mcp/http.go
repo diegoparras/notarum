@@ -28,10 +28,10 @@ func (s *Servidor) Handler(token string) http.Handler {
 		case http.MethodGet:
 			// Un GET sirve para saber que el endpoint está y cómo hablarle.
 			escribir(w, http.StatusOK, map[string]any{
-				"servidor":  "notarum",
-				"protocolo": VersionProtocolo,
-				"transporte": "JSON-RPC 2.0 por POST",
-				"metodos":   []string{"initialize", "tools/list", "tools/call", "ping"},
+				"servidor":       "notarum",
+				"protocolo":      VersionProtocolo,
+				"transporte":     "JSON-RPC 2.0 por POST",
+				"metodos":        []string{"initialize", "tools/list", "tools/call", "ping"},
 				"requiere_token": token != "",
 			})
 			return
