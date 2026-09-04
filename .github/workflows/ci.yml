@@ -1,0 +1,59 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probar:
+    name: Suite completa
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: Formato
+        run: |
+          sin_formatear=$(gofmt -l .)
+          if [ -n "$sin_formatear" ]; then
+            echo "Estos archivos no están formateados:"
+            echo "$sin_formatear"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      # Los tests de unidad usan fixtures HTML reales guardados en el repo:
+      # no salen a la red, así que corren igual de rápido acá que en local.
+      - name: Tests
+        run: go test -race ./...
+
+      - name: Que la imagen se construya
+        run: docker build -t notarum:ci .
+
+  # Los tests con la etiqueta `red` pegan al sitio real del Boletín Oficial.
+  # No corren en cada push: se disparan a mano o una vez por día, y sirven para
+  # enterarse de que el sitio cambió de forma antes de que lo note quien
+  # consume la API. Que fallen no rompe un pull request.
+  contra-el-sitio:
+    name: Contra el sitio real
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+      - run: go test -tags red -v -timeout 10m ./internal/boletin/
