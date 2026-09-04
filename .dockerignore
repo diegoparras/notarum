@@ -1,0 +1,10 @@
+.git
+.gitignore
+*.md
+!README.md
+docs/
+.github/
+notarum
+notarum.exe
+datos/
+cache/

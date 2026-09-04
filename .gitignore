@@ -1,0 +1,9 @@
+# binarios
+notarum
+notarum.exe
+/out/
+
+# datos locales
+/datos/
+/cache/
+*.log

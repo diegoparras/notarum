@@ -1,0 +1,24 @@
+services:
+  notarum:
+    build:
+      context: .
+      args:
+        VERSION: "1.0.0"
+    image: notarum:1.0.0
+    container_name: notarum
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - notarum-datos:/datos
+    environment:
+      NOTARUM_PUERTO: "8080"
+      NOTARUM_CACHE: /datos/cache
+      NOTARUM_POR_MINUTO: "60"
+      NOTARUM_INTERVALO: 500ms
+      NOTARUM_LOG: json
+      # Poné acá una URL de contacto real: el sitio del Boletín es público.
+      NOTARUM_USER_AGENT: notarum/1.0 (+https://github.com/diegoparras/notarum)
+
+volumes:
+  notarum-datos:
