@@ -1,9 +1,13 @@
-# binarios
-notarum
-notarum.exe
+# Binarios compilados en la raíz. El "/" delante importa: sin él, el patrón
+# también tapa cmd/notarum/, que es código.
+/notarum
+/notarum.exe
 /out/
 
-# datos locales
+# Datos locales
 /datos/
 /cache/
 *.log
+*.db
+*.db-shm
+*.db-wal

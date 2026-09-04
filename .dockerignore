@@ -1,10 +1,18 @@
 .git
 .gitignore
+.github
 *.md
 !README.md
 docs/
-.github/
-notarum
-notarum.exe
-datos/
-cache/
+
+# Binarios compilados en la raíz. El "/" delante importa: sin él, el patrón
+# también tapa cmd/notarum/ y el build se queda sin código.
+/notarum
+/notarum.exe
+/out/
+
+# Datos locales
+/datos/
+/cache/
+*.log
+*.db
