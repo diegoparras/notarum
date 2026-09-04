@@ -11,23 +11,41 @@ En tu proyecto de EasyPanel, **+ Service → App**.
 
 ### Source
 
-Dos opciones, según de dónde salga la imagen.
-
-**a) Desde el repositorio (EasyPanel construye)**
-
-- Type: `Git`
-- Repository: `https://github.com/diegoparras/notarum`
-- Branch: `main`
-- Build method: `Dockerfile`
-- Dockerfile path: `Dockerfile`
-
-**b) Desde una imagen ya construida**
+**Desde una imagen ya construida**, que es como se despliega este proyecto:
 
 - Type: `Image`
-- Image: `ghcr.io/diegoparras/notarum:1.0.0`
+- Image: `ghcr.io/diegoparras/notarum:1.1.0`
 
 Fijá siempre una versión concreta en vez de `latest`: así sabés qué está
 corriendo cuando algo cambia.
+
+Un paquete recién publicado en ghcr.io nace **privado**. Para que EasyPanel
+pueda bajarlo hay dos caminos:
+
+- Hacerlo público, que es lo razonable para un proyecto MIT: en
+  `github.com/users/diegoparras/packages` → notarum → *Package settings* →
+  *Change visibility* → Public.
+- O dejarlo privado y cargar en EasyPanel unas **Registry credentials**: usuario
+  de GitHub y un token con `read:packages`.
+
+Como alternativa, EasyPanel también puede construir desde el repositorio
+(Type: `Git`, Build method: `Dockerfile`), pero eso requiere que el código esté
+en GitHub.
+
+### Publicar una versión nueva
+
+```bash
+docker build -t ghcr.io/diegoparras/notarum:1.2.0 --build-arg VERSION=1.2.0 .
+docker push ghcr.io/diegoparras/notarum:1.2.0
+```
+
+El `docker login ghcr.io` necesita un token con `write:packages`. Si usás el de
+la CLI de GitHub, el permiso se amplía una sola vez:
+
+```bash
+gh auth refresh -h github.com -s write:packages
+gh auth token | docker login ghcr.io -u diegoparras --password-stdin
+```
 
 ## 2. Environment
 
