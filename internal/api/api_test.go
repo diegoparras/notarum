@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/diegoparras/notarum/internal/almacen"
 	"github.com/diegoparras/notarum/internal/boletin"
-	"github.com/diegoparras/notarum/internal/cache"
 	"github.com/diegoparras/notarum/internal/servicio"
 )
 
@@ -68,7 +68,7 @@ func servidorDePrueba(t *testing.T) *httptest.Server {
 	cli := boletin.NuevoCliente(boletin.Opciones{
 		Base: origen.URL, Intervalo: time.Millisecond, EsperaBase: time.Millisecond,
 	})
-	c, err := cache.NuevoDisco(t.TempDir())
+	c, err := almacen.NuevoDisco(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,12 +293,16 @@ func TestBuscar(t *testing.T) {
 	if res.StatusCode != 200 {
 		t.Fatalf("codigo = %d: %s", res.StatusCode, cuerpo)
 	}
-	var r boletin.ResultadoBusqueda
+	var r servicio.Busqueda
 	if err := json.Unmarshal(cuerpo, &r); err != nil {
 		t.Fatal(err)
 	}
-	if r.Cantidad == 0 {
+	if r.Total == 0 {
 		t.Error("la búsqueda no devolvió avisos")
+	}
+	// Sin motor sqlite no hay índice: la búsqueda tiene que ir al sitio.
+	if r.Fuente != servicio.FuenteSitio {
+		t.Errorf("fuente = %q, se esperaba sitio", r.Fuente)
 	}
 }
 
@@ -352,7 +356,7 @@ func TestLimitePorIP(t *testing.T) {
 	origen := httptest.NewServer(h)
 	defer origen.Close()
 	cli := boletin.NuevoCliente(boletin.Opciones{Base: origen.URL, Intervalo: time.Millisecond})
-	c, err := cache.NuevoDisco(t.TempDir())
+	c, err := almacen.NuevoDisco(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}

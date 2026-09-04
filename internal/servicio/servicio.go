@@ -10,11 +10,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
+	"github.com/diegoparras/notarum/internal/almacen"
 	"github.com/diegoparras/notarum/internal/boletin"
-	"github.com/diegoparras/notarum/internal/cache"
 )
 
 // TTLHoy es cuánto vale la edición del día en curso antes de volver a mirar.
@@ -35,21 +36,31 @@ var ErrSinEdicion = boletin.ErrSinEdicion
 // cuando hace falta.
 type Servicio struct {
 	cli   *boletin.Cliente
-	cache *cache.Disco
+	cache almacen.Almacen
+	// indice es el mismo almacén, cuando el motor sabe buscar por su cuenta.
+	// Con disco es nil; con SQLite, no.
+	indice almacen.Indexador
 }
 
-func Nuevo(cli *boletin.Cliente, c *cache.Disco) *Servicio {
-	return &Servicio{cli: cli, cache: c}
+func Nuevo(cli *boletin.Cliente, c almacen.Almacen) *Servicio {
+	s := &Servicio{cli: cli, cache: c}
+	if ix, ok := c.(almacen.Indexador); ok {
+		s.indice = ix
+	}
+	return s
 }
 
 func (s *Servicio) Cliente() *boletin.Cliente { return s.cli }
-func (s *Servicio) Cache() *cache.Disco       { return s.cache }
+func (s *Servicio) Almacen() almacen.Almacen  { return s.cache }
+
+// TieneIndice dice si este servicio puede buscar sin pedirle nada al Boletín.
+func (s *Servicio) TieneIndice() bool { return s.indice != nil }
 
 // ttlPara decide cuánto dura lo que se acaba de leer: una edición pasada no
 // cambia nunca; la de hoy (o una futura) sí.
 func ttlPara(fecha boletin.Fecha) time.Duration {
 	if fecha.API() < boletin.HoyEnArgentina().API() {
-		return cache.SinVencimiento
+		return almacen.SinVencimiento
 	}
 	return TTLHoy
 }
@@ -85,6 +96,7 @@ func (s *Servicio) Edicion(ctx context.Context, sec boletin.Seccion, fecha bolet
 	if crudo, err := json.Marshal(ed); err == nil {
 		_ = s.cache.Guardar(clave, crudo, ttlPara(fecha))
 	}
+	s.indexar(ed)
 	return filtrarPorRubro(ed, rubro), nil
 }
 
@@ -132,6 +144,7 @@ func (s *Servicio) Aviso(ctx context.Context, sec boletin.Seccion, id string, fe
 	if crudo, err := json.Marshal(d); err == nil {
 		_ = s.cache.Guardar(clave, crudo, ttlPara(fecha))
 	}
+	s.indexarDetalle(d)
 	return d, nil
 }
 
@@ -148,7 +161,7 @@ func (s *Servicio) Calendario(ctx context.Context, sec boletin.Seccion, anio int
 	if err != nil {
 		return nil, err
 	}
-	ttl := cache.SinVencimiento
+	ttl := almacen.SinVencimiento
 	if anio >= boletin.HoyEnArgentina().Year() {
 		ttl = TTLCalendarioEnCurso
 	}
@@ -289,7 +302,7 @@ func (s *Servicio) Anexo(ctx context.Context, sec boletin.Seccion, nro, id strin
 		return nil, err
 	}
 	if crudo, err := json.Marshal(base64.StdEncoding.EncodeToString(pdf)); err == nil {
-		_ = s.cache.Guardar(clave, crudo, cache.SinVencimiento)
+		_ = s.cache.Guardar(clave, crudo, almacen.SinVencimiento)
 	}
 	return pdf, nil
 }
@@ -324,4 +337,133 @@ func sanear(s string) string {
 func huella(s string) string {
 	h := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(h[:16])
+}
+
+// ------------------------------------------------------------ búsqueda local
+
+// Fuente dice de dónde salieron los resultados de una búsqueda.
+type Fuente string
+
+const (
+	// FuenteIndice: se respondió con el índice local, sin tocar el Boletín.
+	FuenteIndice Fuente = "indice"
+	// FuenteSitio: se le preguntó a la búsqueda avanzada del sitio.
+	FuenteSitio Fuente = "sitio"
+)
+
+// Busqueda es el resultado de buscar, venga de donde venga.
+type Busqueda struct {
+	Fuente Fuente          `json:"fuente"`
+	Total  int             `json:"total"`
+	Pagina int             `json:"pagina"`
+	HayMas bool            `json:"hay_mas"`
+	Avisos []boletin.Aviso `json:"avisos"`
+	// DiasIndexados y DiasConEdicion dicen cuánta historia del rango tiene el
+	// índice. Si no coinciden, la búsqueda local vio menos de lo que hay.
+	DiasIndexados  int `json:"dias_indexados,omitempty"`
+	DiasConEdicion int `json:"dias_con_edicion,omitempty"`
+}
+
+// PuedeBuscarLocal dice si el índice cubre el rango entero de una sección.
+// Con cobertura parcial se puede buscar igual, pero el resultado avisa.
+func (s *Servicio) PuedeBuscarLocal(ctx context.Context, sec boletin.Seccion, desde, hasta boletin.Fecha) (indexados, conEdicion int, ok bool) {
+	if s.indice == nil {
+		return 0, 0, false
+	}
+	indexados, err := s.indice.Cobertura(sec, desde, hasta)
+	if err != nil {
+		return 0, 0, false
+	}
+	// La cobertura es informativa: se calcula con el calendario que ya esté
+	// guardado. Buscar en el índice no puede terminar pidiéndole nada al
+	// Boletín, que es justamente lo que el índice viene a evitar.
+	return indexados, s.diasConEdicionEnCache(sec, desde, hasta), indexados > 0
+}
+
+// diasConEdicionEnCache cuenta los días con edición de un rango usando sólo
+// los calendarios ya guardados. Devuelve 0 si no hay ninguno.
+func (s *Servicio) diasConEdicionEnCache(sec boletin.Seccion, desde, hasta boletin.Fecha) int {
+	var n int
+	for anio := desde.Year(); anio <= hasta.Year(); anio++ {
+		crudo, ok := s.cache.Leer(fmt.Sprintf("calendarios/%s/%d", sec, anio))
+		if !ok {
+			continue
+		}
+		var cal boletin.Calendario
+		if err := json.Unmarshal(crudo, &cal); err != nil {
+			continue
+		}
+		for _, f := range cal.Fechas {
+			if f.API() >= desde.API() && f.API() <= hasta.API() {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// BuscarEnIndice busca sobre lo que está indexado, sin pedirle nada al sitio.
+func (s *Servicio) BuscarEnIndice(ctx context.Context, q almacen.ConsultaLocal, pagina int) (*Busqueda, error) {
+	if s.indice == nil {
+		return nil, errors.New("esta instancia no tiene índice local: se levantó con el almacén de disco")
+	}
+	if pagina < 1 {
+		pagina = 1
+	}
+	if q.Limite <= 0 {
+		q.Limite = 50
+	}
+	q.Desplazamiento = (pagina - 1) * q.Limite
+
+	res, err := s.indice.BuscarLocal(q)
+	if err != nil {
+		return nil, err
+	}
+	b := &Busqueda{
+		Fuente: FuenteIndice,
+		Total:  res.Total,
+		Pagina: pagina,
+		HayMas: res.Desplazamiento+len(res.Avisos) < res.Total,
+		Avisos: res.Avisos,
+	}
+	b.DiasIndexados, b.DiasConEdicion, _ = s.PuedeBuscarLocal(ctx, q.Seccion, q.Desde, q.Hasta)
+	return b, nil
+}
+
+// BuscarEnSitio consulta la búsqueda avanzada del Boletín.
+func (s *Servicio) BuscarEnSitio(ctx context.Context, q boletin.ConsultaBusqueda) (*Busqueda, error) {
+	r, err := s.Buscar(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	return &Busqueda{
+		Fuente: FuenteSitio,
+		Total:  r.Cantidad,
+		Pagina: r.Pagina,
+		HayMas: r.HayMas,
+		Avisos: r.Avisos,
+	}, nil
+}
+
+// indexarDetalle suma el texto completo de un aviso al índice de búsqueda.
+func (s *Servicio) indexarDetalle(d *boletin.Detalle) {
+	if s.indice == nil || d == nil {
+		return
+	}
+	if err := s.indice.IndexarDetalle(d); err != nil {
+		slog.Warn("no se pudo indexar el texto del aviso",
+			"seccion", d.Seccion, "id", d.ID, "err", err)
+	}
+}
+
+// indexar vuelca una edición al índice, si hay uno. Un fallo del índice no
+// puede tumbar la lectura: la edición ya está guardada y se sirve igual.
+func (s *Servicio) indexar(ed *boletin.Edicion) {
+	if s.indice == nil || ed == nil {
+		return
+	}
+	if err := s.indice.IndexarEdicion(ed); err != nil {
+		slog.Warn("no se pudo indexar la edición",
+			"seccion", ed.Seccion, "fecha", ed.Fecha.API(), "err", err)
+	}
 }

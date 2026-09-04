@@ -4,20 +4,45 @@
     "title": "notarum",
     "version": "1.0.0",
     "description": "API abierta de sólo lectura del Boletín Oficial de la República Argentina. Entrega el calendario de ediciones, cada edición por sección y fecha con sus avisos, cada aviso con su texto, los anexos en PDF y el catálogo de rubros. No opina, no clasifica, no puntúa: entrega el dato crudo y bien tipado.\n\nSin clave para leer. Límite de pedidos por IP. Los datos son del Boletín Oficial; notarum es sólo una caché legible.",
-    "license": { "name": "MIT", "url": "https://opensource.org/licenses/MIT" },
-    "contact": { "name": "notarum", "url": "https://github.com/diegoparras/notarum" }
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    },
+    "contact": {
+      "name": "notarum",
+      "url": "https://github.com/diegoparras/notarum"
+    }
   },
-  "servers": [{ "url": "/", "description": "esta instancia" }],
+  "servers": [
+    {
+      "url": "/",
+      "description": "esta instancia"
+    }
+  ],
   "tags": [
-    { "name": "ediciones", "description": "Sumarios por sección y fecha" },
-    { "name": "avisos", "description": "Textos completos y anexos" },
-    { "name": "catalogo", "description": "Calendario, secciones y rubros" },
-    { "name": "servicio", "description": "Estado del servicio" }
+    {
+      "name": "ediciones",
+      "description": "Sumarios por sección y fecha"
+    },
+    {
+      "name": "avisos",
+      "description": "Textos completos y anexos"
+    },
+    {
+      "name": "catalogo",
+      "description": "Calendario, secciones y rubros"
+    },
+    {
+      "name": "servicio",
+      "description": "Estado del servicio"
+    }
   ],
   "paths": {
     "/v1/secciones": {
       "get": {
-        "tags": ["catalogo"],
+        "tags": [
+          "catalogo"
+        ],
         "summary": "Secciones publicables",
         "operationId": "verSecciones",
         "responses": {
@@ -29,11 +54,26 @@
                   "type": "array",
                   "items": {
                     "type": "object",
-                    "required": ["id", "nombre", "descripcion"],
+                    "required": [
+                      "id",
+                      "nombre",
+                      "descripcion"
+                    ],
                     "properties": {
-                      "id": { "type": "string", "enum": ["primera", "segunda", "tercera"] },
-                      "nombre": { "type": "string" },
-                      "descripcion": { "type": "string" }
+                      "id": {
+                        "type": "string",
+                        "enum": [
+                          "primera",
+                          "segunda",
+                          "tercera"
+                        ]
+                      },
+                      "nombre": {
+                        "type": "string"
+                      },
+                      "descripcion": {
+                        "type": "string"
+                      }
                     }
                   }
                 }
@@ -45,190 +85,462 @@
     },
     "/v1/calendario/{anio}/{seccion}": {
       "get": {
-        "tags": ["catalogo"],
+        "tags": [
+          "catalogo"
+        ],
         "summary": "Días con edición de un año",
         "operationId": "verCalendario",
         "parameters": [
-          { "name": "anio", "in": "path", "required": true, "schema": { "type": "integer", "minimum": 1990 }, "example": 2026 },
-          { "$ref": "#/components/parameters/Seccion" }
+          {
+            "name": "anio",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1990
+            },
+            "example": 2026
+          },
+          {
+            "$ref": "#/components/parameters/Seccion"
+          }
         ],
         "responses": {
           "200": {
             "description": "El calendario del año",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Calendario" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Calendario"
+                }
+              }
+            }
           },
-          "400": { "$ref": "#/components/responses/PedidoInvalido" },
-          "502": { "$ref": "#/components/responses/FalloDelSitio" }
+          "400": {
+            "$ref": "#/components/responses/PedidoInvalido"
+          },
+          "502": {
+            "$ref": "#/components/responses/FalloDelSitio"
+          }
         }
       }
     },
     "/v1/ediciones/{seccion}/{fecha}": {
       "get": {
-        "tags": ["ediciones"],
+        "tags": [
+          "ediciones"
+        ],
         "summary": "Edición de una sección en una fecha",
         "description": "El sumario completo de ese día. Si ese día no hubo edición devuelve 404 con `sin_edicion: true`, que no es una falla.",
         "operationId": "verEdicion",
         "parameters": [
-          { "$ref": "#/components/parameters/Seccion" },
-          { "$ref": "#/components/parameters/Fecha" },
+          {
+            "$ref": "#/components/parameters/Seccion"
+          },
+          {
+            "$ref": "#/components/parameters/Fecha"
+          },
           {
             "name": "rubro",
             "in": "query",
             "required": false,
             "description": "Filtra por nombre de rubro; acepta el nombre exacto o un prefijo, sin distinguir mayúsculas.",
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "example": "DECRETOS"
           }
         ],
         "responses": {
           "200": {
             "description": "La edición",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Edicion" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Edicion"
+                }
+              }
+            }
           },
-          "400": { "$ref": "#/components/responses/PedidoInvalido" },
+          "400": {
+            "$ref": "#/components/responses/PedidoInvalido"
+          },
           "404": {
             "description": "Ese día no hubo edición",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           },
-          "502": { "$ref": "#/components/responses/FalloDelSitio" }
+          "502": {
+            "$ref": "#/components/responses/FalloDelSitio"
+          }
         }
       }
     },
     "/v1/ediciones/{seccion}": {
       "get": {
-        "tags": ["ediciones"],
+        "tags": [
+          "ediciones"
+        ],
         "summary": "Resúmenes de un rango de fechas",
         "description": "Devuelve un resumen por día (sin avisos) para las ediciones que ya están en la caché local. Las que todavía no se bajaron se listan en `faltantes`: se llenan con `notarum rellenar`, porque la API no baja un año entero adentro de un pedido HTTP. El tope del rango son 366 días.",
         "operationId": "verRango",
         "parameters": [
-          { "$ref": "#/components/parameters/Seccion" },
-          { "name": "desde", "in": "query", "required": true, "schema": { "type": "string", "format": "date" }, "example": "2026-09-01" },
-          { "name": "hasta", "in": "query", "required": true, "schema": { "type": "string", "format": "date" }, "example": "2026-09-30" }
+          {
+            "$ref": "#/components/parameters/Seccion"
+          },
+          {
+            "name": "desde",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": "2026-09-01"
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": "2026-09-30"
+          }
         ],
         "responses": {
           "200": {
             "description": "Los resúmenes disponibles",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Rango" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Rango"
+                }
+              }
+            }
           },
-          "400": { "$ref": "#/components/responses/PedidoInvalido" },
-          "502": { "$ref": "#/components/responses/FalloDelSitio" }
+          "400": {
+            "$ref": "#/components/responses/PedidoInvalido"
+          },
+          "502": {
+            "$ref": "#/components/responses/FalloDelSitio"
+          }
         }
       }
     },
     "/v1/avisos/{seccion}/{id}/{fecha}": {
       "get": {
-        "tags": ["avisos"],
+        "tags": [
+          "avisos"
+        ],
         "summary": "Un aviso con su texto completo",
         "operationId": "verAviso",
         "parameters": [
-          { "$ref": "#/components/parameters/Seccion" },
+          {
+            "$ref": "#/components/parameters/Seccion"
+          },
           {
             "name": "id",
             "in": "path",
             "required": true,
             "description": "El id del aviso. En la primera sección es numérico; en la segunda y la tercera puede ser alfanumérico (por ejemplo A1522579).",
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "example": "346633"
           },
-          { "$ref": "#/components/parameters/Fecha" }
+          {
+            "$ref": "#/components/parameters/Fecha"
+          }
         ],
         "responses": {
           "200": {
             "description": "El aviso",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Detalle" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Detalle"
+                }
+              }
+            }
           },
-          "400": { "$ref": "#/components/responses/PedidoInvalido" },
-          "404": { "$ref": "#/components/responses/NoEncontrado" },
-          "502": { "$ref": "#/components/responses/FalloDelSitio" }
+          "400": {
+            "$ref": "#/components/responses/PedidoInvalido"
+          },
+          "404": {
+            "$ref": "#/components/responses/NoEncontrado"
+          },
+          "502": {
+            "$ref": "#/components/responses/FalloDelSitio"
+          }
         }
       }
     },
     "/v1/anexos/{seccion}/{nro}/{id}/{fecha}": {
       "get": {
-        "tags": ["avisos"],
+        "tags": [
+          "avisos"
+        ],
         "summary": "El PDF de un anexo",
         "description": "Devuelve el archivo tal como lo publica el Boletín. La ruta es la que viene en el campo `url` de cada anexo del detalle; admite el sufijo `.pdf` en la fecha.",
         "operationId": "verAnexo",
         "parameters": [
-          { "$ref": "#/components/parameters/Seccion" },
-          { "name": "nro", "in": "path", "required": true, "schema": { "type": "string" }, "example": "12" },
-          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" }, "example": "7756488" },
-          { "name": "fecha", "in": "path", "required": true, "schema": { "type": "string" }, "example": "20260901.pdf" }
+          {
+            "$ref": "#/components/parameters/Seccion"
+          },
+          {
+            "name": "nro",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "12"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "7756488"
+          },
+          {
+            "name": "fecha",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "20260901.pdf"
+          }
         ],
         "responses": {
           "200": {
             "description": "El PDF",
-            "content": { "application/pdf": { "schema": { "type": "string", "format": "binary" } } }
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
           },
-          "400": { "$ref": "#/components/responses/PedidoInvalido" },
-          "502": { "$ref": "#/components/responses/FalloDelSitio" }
+          "400": {
+            "$ref": "#/components/responses/PedidoInvalido"
+          },
+          "502": {
+            "$ref": "#/components/responses/FalloDelSitio"
+          }
         }
       }
     },
     "/v1/rubros/{seccion}": {
       "get": {
-        "tags": ["catalogo"],
+        "tags": [
+          "catalogo"
+        ],
         "summary": "Catálogo de rubros de una sección",
         "operationId": "verRubros",
-        "parameters": [{ "$ref": "#/components/parameters/Seccion" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Seccion"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Los rubros",
             "content": {
               "application/json": {
-                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Rubro" } }
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Rubro"
+                  }
+                }
               }
             }
           },
-          "400": { "$ref": "#/components/responses/PedidoInvalido" },
-          "502": { "$ref": "#/components/responses/FalloDelSitio" }
+          "400": {
+            "$ref": "#/components/responses/PedidoInvalido"
+          },
+          "502": {
+            "$ref": "#/components/responses/FalloDelSitio"
+          }
         }
       }
     },
     "/v1/buscar": {
       "get": {
-        "tags": ["avisos"],
+        "tags": [
+          "avisos"
+        ],
         "summary": "Búsqueda por texto y fecha",
-        "description": "Consulta la búsqueda avanzada del sitio. Devuelve una página de resultados; se pagina con `pagina`.",
+        "description": "Busca avisos por texto y fecha. Con el motor de almacenamiento sqlite hay un índice local: `fuente=indice` busca sobre él sin pedirle nada al Boletín (más rápido, sin tope de rango); `fuente=sitio` siempre consulta la búsqueda avanzada del Boletín; `fuente=auto` (por defecto) usa el índice cuando tiene historia del rango y si no va al sitio. La respuesta dice cuál se usó.",
         "operationId": "buscar",
         "parameters": [
-          { "name": "seccion", "in": "query", "required": true, "schema": { "type": "string", "enum": ["primera", "segunda", "tercera"] } },
-          { "name": "texto", "in": "query", "required": false, "schema": { "type": "string" }, "example": "decreto" },
-          { "name": "desde", "in": "query", "required": true, "schema": { "type": "string", "format": "date" }, "example": "2026-09-01" },
-          { "name": "hasta", "in": "query", "required": true, "schema": { "type": "string", "format": "date" }, "example": "2026-09-03" },
-          { "name": "rubro", "in": "query", "required": false, "schema": { "type": "string" } },
-          { "name": "pagina", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "default": 1 } },
-          { "name": "todas", "in": "query", "required": false, "description": "Exigir todas las palabras del texto.", "schema": { "type": "boolean", "default": false } }
+          {
+            "name": "seccion",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "primera",
+                "segunda",
+                "tercera"
+              ]
+            }
+          },
+          {
+            "name": "texto",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "decreto"
+          },
+          {
+            "name": "desde",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": "2026-09-01"
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "example": "2026-09-03"
+          },
+          {
+            "name": "rubro",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "fuente",
+            "in": "query",
+            "required": false,
+            "description": "De dónde traer los resultados.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "indice",
+                "sitio"
+              ],
+              "default": "auto"
+            }
+          },
+          {
+            "name": "limite",
+            "in": "query",
+            "required": false,
+            "description": "Resultados por página; sólo con fuente indice.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "name": "todas",
+            "in": "query",
+            "required": false,
+            "description": "Exigir todas las palabras; sólo con fuente sitio.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
         ],
         "responses": {
           "200": {
             "description": "Los resultados",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ResultadoBusqueda" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Busqueda"
+                }
+              }
+            }
           },
-          "400": { "$ref": "#/components/responses/PedidoInvalido" },
-          "502": { "$ref": "#/components/responses/FalloDelSitio" }
+          "400": {
+            "$ref": "#/components/responses/PedidoInvalido"
+          },
+          "502": {
+            "$ref": "#/components/responses/FalloDelSitio"
+          }
         }
       }
     },
     "/v1/salud": {
       "get": {
-        "tags": ["servicio"],
+        "tags": [
+          "servicio"
+        ],
         "summary": "Estado del servicio",
         "operationId": "verSalud",
         "responses": {
           "200": {
             "description": "El estado",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Salud" } } }
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Salud"
+                }
+              }
+            }
           }
         }
       }
     },
     "/v1/openapi.json": {
       "get": {
-        "tags": ["servicio"],
+        "tags": [
+          "servicio"
+        ],
         "summary": "Este contrato",
         "operationId": "verOpenAPI",
-        "responses": { "200": { "description": "El contrato", "content": { "application/json": {} } } }
+        "responses": {
+          "200": {
+            "description": "El contrato",
+            "content": {
+              "application/json": {}
+            }
+          }
+        }
       }
     }
   },
@@ -238,184 +550,516 @@
         "name": "seccion",
         "in": "path",
         "required": true,
-        "schema": { "type": "string", "enum": ["primera", "segunda", "tercera"] },
+        "schema": {
+          "type": "string",
+          "enum": [
+            "primera",
+            "segunda",
+            "tercera"
+          ]
+        },
         "example": "primera"
       },
       "Fecha": {
         "name": "fecha",
         "in": "path",
         "required": true,
-        "schema": { "type": "string", "format": "date" },
+        "schema": {
+          "type": "string",
+          "format": "date"
+        },
         "example": "2026-09-01"
       }
     },
     "responses": {
       "PedidoInvalido": {
         "description": "El pedido está mal armado",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
       },
       "NoEncontrado": {
         "description": "No existe",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
       },
       "FalloDelSitio": {
         "description": "El Boletín Oficial no contestó o cambió de forma",
-        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
       }
     },
     "schemas": {
       "Error": {
         "type": "object",
-        "required": ["error", "origen"],
+        "required": [
+          "error",
+          "origen"
+        ],
         "properties": {
-          "error": { "type": "string" },
-          "detalle": { "type": "string" },
+          "error": {
+            "type": "string"
+          },
+          "detalle": {
+            "type": "string"
+          },
           "origen": {
             "type": "string",
-            "enum": ["sitio", "notarum", "pedido"],
+            "enum": [
+              "sitio",
+              "notarum",
+              "pedido"
+            ],
             "description": "De quién es la culpa: del Boletín Oficial, de notarum, o de cómo se armó el pedido."
           },
-          "sin_edicion": { "type": "boolean", "description": "Ese día no hubo edición." }
+          "sin_edicion": {
+            "type": "boolean",
+            "description": "Ese día no hubo edición."
+          }
         }
       },
       "Aviso": {
         "type": "object",
-        "required": ["id", "seccion", "fecha", "rubro", "organismo", "tiene_anexos", "repetido", "suplemento", "url"],
+        "required": [
+          "id",
+          "seccion",
+          "fecha",
+          "rubro",
+          "organismo",
+          "tiene_anexos",
+          "repetido",
+          "suplemento",
+          "url"
+        ],
         "properties": {
-          "id": { "type": "string", "example": "346633" },
-          "seccion": { "type": "string", "enum": ["primera", "segunda", "tercera"] },
-          "fecha": { "type": "string", "format": "date" },
-          "rubro": { "type": "string", "example": "DECRETOS" },
-          "organismo": { "type": "string", "example": "PODER EJECUTIVO" },
-          "norma": { "type": "string", "example": "Decreto 845/2026" },
-          "referencia": { "type": "string", "example": "DECTO-2026-845-APN-PTE" },
-          "sintesis": { "type": "string", "example": "Disposiciones." },
-          "tiene_anexos": { "type": "boolean" },
+          "id": {
+            "type": "string",
+            "example": "346633"
+          },
+          "seccion": {
+            "type": "string",
+            "enum": [
+              "primera",
+              "segunda",
+              "tercera"
+            ]
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date"
+          },
+          "rubro": {
+            "type": "string",
+            "example": "DECRETOS"
+          },
+          "organismo": {
+            "type": "string",
+            "example": "PODER EJECUTIVO"
+          },
+          "norma": {
+            "type": "string",
+            "example": "Decreto 845/2026"
+          },
+          "referencia": {
+            "type": "string",
+            "example": "DECTO-2026-845-APN-PTE"
+          },
+          "sintesis": {
+            "type": "string",
+            "example": "Disposiciones."
+          },
+          "tiene_anexos": {
+            "type": "boolean"
+          },
           "repetido": {
             "type": "boolean",
             "description": "El aviso viene de un rubro \"ANTERIOR\": ya se publicó en una edición previa."
           },
-          "suplemento": { "type": "boolean", "description": "El aviso salió en el suplemento de ese día." },
-          "url": { "type": "string", "format": "uri", "description": "El aviso en el sitio oficial." }
+          "suplemento": {
+            "type": "boolean",
+            "description": "El aviso salió en el suplemento de ese día."
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "El aviso en el sitio oficial."
+          }
         }
       },
       "Detalle": {
         "allOf": [
-          { "$ref": "#/components/schemas/Aviso" },
+          {
+            "$ref": "#/components/schemas/Aviso"
+          },
           {
             "type": "object",
-            "required": ["texto", "html", "anexos"],
+            "required": [
+              "texto",
+              "html",
+              "anexos"
+            ],
             "properties": {
-              "texto": { "type": "string", "description": "El cuerpo en texto plano, párrafos separados por línea en blanco." },
-              "html": { "type": "string", "description": "El cuerpo en HTML saneado: sin estilos ni scripts, con las tablas conservadas." },
-              "anexos": { "type": "array", "items": { "$ref": "#/components/schemas/Anexo" } },
-              "fecha_publicacion": { "type": "string", "format": "date", "description": "La fecha impresa al pie del aviso." }
+              "texto": {
+                "type": "string",
+                "description": "El cuerpo en texto plano, párrafos separados por línea en blanco."
+              },
+              "html": {
+                "type": "string",
+                "description": "El cuerpo en HTML saneado: sin estilos ni scripts, con las tablas conservadas."
+              },
+              "anexos": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Anexo"
+                }
+              },
+              "fecha_publicacion": {
+                "type": "string",
+                "format": "date",
+                "description": "La fecha impresa al pie del aviso."
+              }
             }
           }
         ]
       },
       "Anexo": {
         "type": "object",
-        "required": ["id", "numero", "nombre", "url"],
+        "required": [
+          "id",
+          "numero",
+          "nombre",
+          "url"
+        ],
         "properties": {
-          "id": { "type": "string", "example": "7756488" },
-          "numero": { "type": "string", "example": "12" },
-          "nombre": { "type": "string", "example": "Anexo - 12" },
-          "url": { "type": "string", "description": "Ruta en esta API para bajar el PDF.", "example": "/v1/anexos/primera/12/7756488/20260901.pdf" }
+          "id": {
+            "type": "string",
+            "example": "7756488"
+          },
+          "numero": {
+            "type": "string",
+            "example": "12"
+          },
+          "nombre": {
+            "type": "string",
+            "example": "Anexo - 12"
+          },
+          "url": {
+            "type": "string",
+            "description": "Ruta en esta API para bajar el PDF.",
+            "example": "/v1/anexos/primera/12/7756488/20260901.pdf"
+          }
         }
       },
       "Edicion": {
         "type": "object",
-        "required": ["seccion", "fecha", "cantidad", "por_rubro", "avisos"],
+        "required": [
+          "seccion",
+          "fecha",
+          "cantidad",
+          "por_rubro",
+          "avisos"
+        ],
         "properties": {
-          "seccion": { "type": "string", "enum": ["primera", "segunda", "tercera"] },
-          "fecha": { "type": "string", "format": "date" },
-          "cantidad": { "type": "integer" },
-          "por_rubro": { "type": "object", "additionalProperties": { "type": "integer" } },
-          "con_suplemento": { "type": "boolean" },
-          "avisos": { "type": "array", "items": { "$ref": "#/components/schemas/Aviso" } }
+          "seccion": {
+            "type": "string",
+            "enum": [
+              "primera",
+              "segunda",
+              "tercera"
+            ]
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date"
+          },
+          "cantidad": {
+            "type": "integer"
+          },
+          "por_rubro": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "con_suplemento": {
+            "type": "boolean"
+          },
+          "avisos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Aviso"
+            }
+          }
         }
       },
       "Resumen": {
         "type": "object",
-        "required": ["seccion", "fecha", "cantidad", "por_rubro"],
+        "required": [
+          "seccion",
+          "fecha",
+          "cantidad",
+          "por_rubro"
+        ],
         "properties": {
-          "seccion": { "type": "string" },
-          "fecha": { "type": "string", "format": "date" },
-          "cantidad": { "type": "integer" },
-          "por_rubro": { "type": "object", "additionalProperties": { "type": "integer" } },
-          "con_suplemento": { "type": "boolean" }
+          "seccion": {
+            "type": "string"
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date"
+          },
+          "cantidad": {
+            "type": "integer"
+          },
+          "por_rubro": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "con_suplemento": {
+            "type": "boolean"
+          }
         }
       },
       "Rango": {
         "type": "object",
-        "required": ["seccion", "desde", "hasta", "ediciones", "faltantes"],
+        "required": [
+          "seccion",
+          "desde",
+          "hasta",
+          "ediciones",
+          "faltantes"
+        ],
         "properties": {
-          "seccion": { "type": "string" },
-          "desde": { "type": "string", "format": "date" },
-          "hasta": { "type": "string", "format": "date" },
-          "ediciones": { "type": "array", "items": { "$ref": "#/components/schemas/Resumen" } },
+          "seccion": {
+            "type": "string"
+          },
+          "desde": {
+            "type": "string",
+            "format": "date"
+          },
+          "hasta": {
+            "type": "string",
+            "format": "date"
+          },
+          "ediciones": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Resumen"
+            }
+          },
           "faltantes": {
             "type": "array",
-            "items": { "type": "string", "format": "date" },
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
             "description": "Días con edición que todavía no están en la caché local."
           }
         }
       },
       "Calendario": {
         "type": "object",
-        "required": ["anio", "seccion", "fechas"],
+        "required": [
+          "anio",
+          "seccion",
+          "fechas"
+        ],
         "properties": {
-          "anio": { "type": "integer" },
-          "seccion": { "type": "string" },
-          "fechas": { "type": "array", "items": { "type": "string", "format": "date" } },
-          "con_suplemento": { "type": "array", "items": { "type": "string", "format": "date" } }
+          "anio": {
+            "type": "integer"
+          },
+          "seccion": {
+            "type": "string"
+          },
+          "fechas": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          "con_suplemento": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "date"
+            }
+          }
         }
       },
       "Rubro": {
         "type": "object",
-        "required": ["id", "nombre"],
+        "required": [
+          "id",
+          "nombre"
+        ],
         "properties": {
-          "id": { "type": "string" },
-          "nombre": { "type": "string" }
+          "id": {
+            "type": "string"
+          },
+          "nombre": {
+            "type": "string"
+          }
         }
       },
       "ResultadoBusqueda": {
         "type": "object",
-        "required": ["pagina", "cantidad", "hay_mas", "avisos"],
+        "required": [
+          "pagina",
+          "cantidad",
+          "hay_mas",
+          "avisos"
+        ],
         "properties": {
-          "pagina": { "type": "integer" },
-          "cantidad": { "type": "integer" },
-          "hay_mas": { "type": "boolean" },
-          "avisos": { "type": "array", "items": { "$ref": "#/components/schemas/Aviso" } }
+          "pagina": {
+            "type": "integer"
+          },
+          "cantidad": {
+            "type": "integer"
+          },
+          "hay_mas": {
+            "type": "boolean"
+          },
+          "avisos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Aviso"
+            }
+          }
         }
       },
       "Salud": {
         "type": "object",
-        "required": ["ok", "en_pie_desde", "sitio_responde", "sitio", "cache"],
+        "required": [
+          "ok",
+          "en_pie_desde",
+          "sitio_responde",
+          "sitio",
+          "cache"
+        ],
         "properties": {
-          "ok": { "type": "boolean" },
-          "version": { "type": "string" },
-          "en_pie_desde": { "type": "string", "format": "date-time" },
-          "sitio_responde": { "type": "boolean" },
-          "ultima_lectura": { "type": "string", "format": "date-time" },
+          "ok": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "string"
+          },
+          "en_pie_desde": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sitio_responde": {
+            "type": "boolean"
+          },
+          "ultima_lectura": {
+            "type": "string",
+            "format": "date-time"
+          },
           "sitio": {
             "type": "object",
             "properties": {
-              "lecturas": { "type": "integer" },
-              "errores": { "type": "integer" },
-              "ultimo_pedido_ok": { "type": "boolean" },
-              "ultima_lectura": { "type": "string", "format": "date-time" }
+              "lecturas": {
+                "type": "integer"
+              },
+              "errores": {
+                "type": "integer"
+              },
+              "ultimo_pedido_ok": {
+                "type": "boolean"
+              },
+              "ultima_lectura": {
+                "type": "string",
+                "format": "date-time"
+              }
             }
           },
           "cache": {
             "type": "object",
             "properties": {
-              "aciertos": { "type": "integer" },
-              "fallos": { "type": "integer" },
-              "escritos": { "type": "integer" },
-              "entradas": { "type": "integer" }
+              "aciertos": {
+                "type": "integer"
+              },
+              "fallos": {
+                "type": "integer"
+              },
+              "escritos": {
+                "type": "integer"
+              },
+              "entradas": {
+                "type": "integer"
+              },
+              "motor": {
+                "type": "string",
+                "enum": [
+                  "disco",
+                  "sqlite"
+                ]
+              },
+              "avisos": {
+                "type": "integer",
+                "description": "Avisos en el índice local."
+              }
             }
+          }
+        }
+      },
+      "Busqueda": {
+        "type": "object",
+        "required": [
+          "fuente",
+          "total",
+          "pagina",
+          "hay_mas",
+          "avisos"
+        ],
+        "properties": {
+          "fuente": {
+            "type": "string",
+            "enum": [
+              "indice",
+              "sitio"
+            ],
+            "description": "De dónde salieron los resultados. El índice local busca en el sumario y, para los avisos cuyo texto ya se bajó, también en el cuerpo; la búsqueda del Boletín busca en el texto completo pero pagina de a 100 y no informa totales."
+          },
+          "total": {
+            "type": "integer",
+            "description": "Con fuente indice, el total de avisos que coinciden. Con fuente sitio, cuántos vinieron en esta página: el Boletín no informa un total, y por eso hay que mirar hay_mas."
+          },
+          "pagina": {
+            "type": "integer"
+          },
+          "hay_mas": {
+            "type": "boolean"
+          },
+          "avisos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Aviso"
+            }
+          },
+          "dias_indexados": {
+            "type": "integer",
+            "description": "Días del rango que están en el índice local."
+          },
+          "dias_con_edicion": {
+            "type": "integer",
+            "description": "Días del rango que tuvieron edición. Si es mayor que dias_indexados, el índice vio menos de lo que hay."
           }
         }
       }

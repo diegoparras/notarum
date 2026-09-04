@@ -8,7 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/diegoparras/notarum/internal/almacen"
 	"github.com/diegoparras/notarum/internal/boletin"
+	"github.com/diegoparras/notarum/internal/mcp"
 	"github.com/diegoparras/notarum/internal/servicio"
 )
 
@@ -20,6 +22,11 @@ type Config struct {
 	Servicio  *servicio.Servicio
 	PorMinuto int    // pedidos por minuto por IP; 0 desactiva el límite
 	Version   string // se informa en /v1/salud
+	// TokenMCP, si no está vacío, exige Bearer en /mcp. Vacío lo deja abierto,
+	// como el resto de la API.
+	TokenMCP string
+	// SinMCP apaga el endpoint /mcp.
+	SinMCP bool
 }
 
 // Servidor atiende las rutas de /v1.
@@ -29,6 +36,8 @@ type Servidor struct {
 	mux     *http.ServeMux
 	handler http.Handler
 	inicio  time.Time
+	mcp     http.Handler
+	conMCP  bool
 }
 
 // Nuevo arma el servidor con sus rutas y middlewares.
@@ -38,6 +47,10 @@ func Nuevo(cfg Config) *Servidor {
 		version: cfg.Version,
 		mux:     http.NewServeMux(),
 		inicio:  time.Now(),
+	}
+	if !cfg.SinMCP {
+		s.mcp = mcp.Nuevo(cfg.Servicio, cfg.Version).Handler(cfg.TokenMCP)
+		s.conMCP = true
 	}
 	s.rutas()
 	s.handler = conPanico(conLog(conCORS(conLimite(nuevoLimitador(cfg.PorMinuto), s.mux))))
@@ -60,6 +73,10 @@ func (s *Servidor) rutas() {
 	m.HandleFunc("GET /v1/secciones", s.verSecciones)
 	m.HandleFunc("GET /v1/salud", s.verSalud)
 	m.HandleFunc("GET /v1/openapi.json", s.verOpenAPI)
+	if s.mcp != nil {
+		m.Handle("/mcp", s.mcp)
+		m.Handle("/mcp/", s.mcp)
+	}
 	m.HandleFunc("GET /v1/{$}", s.verIndice)
 	m.HandleFunc("GET /{$}", s.verIndice)
 	m.HandleFunc("/", s.noEncontrado)
@@ -255,21 +272,66 @@ func (s *Servidor) buscar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pagina, _ := strconv.Atoi(q.Get("pagina"))
-	var rubros []string
-	if v := q.Get("rubro"); v != "" {
-		rubros = []string{v}
+	rubro := q.Get("rubro")
+
+	// fuente: "indice" busca sin tocar el Boletín (necesita el motor sqlite),
+	// "sitio" siempre le pregunta al Boletín, y "auto" (por defecto) usa el
+	// índice cuando tiene historia del rango.
+	fuente := strings.ToLower(strings.TrimSpace(q.Get("fuente")))
+	if fuente == "" {
+		fuente = "auto"
 	}
-	res, err := s.srv.Buscar(r.Context(), boletin.ConsultaBusqueda{
-		Texto:            q.Get("texto"),
-		Seccion:          sec,
-		Rubros:           rubros,
-		Desde:            desde,
-		Hasta:            hasta,
-		Pagina:           pagina,
-		TodasLasPalabras: q.Get("todas") == "true" || q.Get("todas") == "1",
-	})
-	if err != nil {
-		escribirErrorDeLectura(w, r, err)
+	switch fuente {
+	case "indice", "sitio", "auto":
+	default:
+		escribirError(w, r, http.StatusBadRequest, OrigenPedido, "fuente inválida",
+			`se esperaba indice, sitio o auto`)
+		return
+	}
+	if fuente == "indice" && !s.srv.TieneIndice() {
+		escribirError(w, r, http.StatusBadRequest, OrigenPedido,
+			"esta instancia no tiene índice local",
+			"se levantó con el almacén de disco; para buscar sin pegarle al Boletín, arrancá con NOTARUM_ALMACEN=sqlite y llená la historia con `notarum rellenar`")
+		return
+	}
+
+	usarIndice := fuente == "indice"
+	if fuente == "auto" && s.srv.TieneIndice() {
+		_, _, hayCobertura := s.srv.PuedeBuscarLocal(r.Context(), sec, desde, hasta)
+		usarIndice = hayCobertura
+	}
+
+	var (
+		res  *servicio.Busqueda
+		errB error
+	)
+	if usarIndice {
+		limite, _ := strconv.Atoi(q.Get("limite"))
+		res, errB = s.srv.BuscarEnIndice(r.Context(), almacen.ConsultaLocal{
+			Texto:   q.Get("texto"),
+			Seccion: sec,
+			Rubro:   rubro,
+			Desde:   desde,
+			Hasta:   hasta,
+			Limite:  limite,
+		}, pagina)
+	} else {
+		var rubros []string
+		if rubro != "" {
+			rubros = []string{rubro}
+		}
+		res, errB = s.srv.BuscarEnSitio(r.Context(), boletin.ConsultaBusqueda{
+			Texto:            q.Get("texto"),
+			Seccion:          sec,
+			Rubros:           rubros,
+			Desde:            desde,
+			Hasta:            hasta,
+			Pagina:           pagina,
+			TodasLasPalabras: q.Get("todas") == "true" || q.Get("todas") == "1",
+		})
+	}
+	if errB != nil {
+		escribirErrorDeLectura(w, r, errB)
 		return
 	}
 	escribirJSON(w, r, http.StatusOK, res, "public, max-age=300")
@@ -308,7 +370,7 @@ func (s *Servidor) verSalud(w http.ResponseWriter, r *http.Request) {
 		SitioResponde: m.SitioResponde || m.Lecturas == 0,
 		UltimaLectura: m.UltimaLectura,
 		Sitio:         m,
-		Cache:         s.srv.Cache().Metricas(),
+		Cache:         s.srv.Almacen().Metricas(),
 	}
 	escribirJSON(w, r, http.StatusOK, salud, "no-store")
 }
@@ -338,8 +400,23 @@ func (s *Servidor) verIndice(w http.ResponseWriter, r *http.Request) {
 			"/v1/buscar?seccion=&texto=&desde=&hasta=",
 			"/v1/salud",
 		},
+		"mcp":     mapaMCP(s.conMCP),
 		"ejemplo": "/v1/ediciones/primera/" + hoy,
 	}, "public, max-age=3600")
+}
+
+// mapaMCP describe el endpoint MCP en el índice, para que quien llega a la
+// raíz sepa que además de la API hay herramientas para un modelo.
+func mapaMCP(activo bool) any {
+	if !activo {
+		return map[string]any{"activo": false}
+	}
+	return map[string]any{
+		"activo":    true,
+		"ruta":      "/mcp",
+		"protocolo": mcp.VersionProtocolo,
+		"como":      "JSON-RPC 2.0 por POST; probá con initialize y tools/list",
+	}
 }
 
 func (s *Servidor) noEncontrado(w http.ResponseWriter, r *http.Request) {

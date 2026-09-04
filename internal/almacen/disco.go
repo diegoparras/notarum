@@ -1,6 +1,4 @@
-// Package cache guarda en disco lo que ya se leyó del Boletín. Una edición
-// pasada no cambia nunca: se baja una vez y se sirve para siempre.
-package cache
+package almacen
 
 import (
 	"encoding/json"
@@ -13,9 +11,6 @@ import (
 	"sync/atomic"
 	"time"
 )
-
-// SinVencimiento marca una entrada que no caduca.
-const SinVencimiento time.Duration = 0
 
 type sobre struct {
 	GuardadoEn time.Time       `json:"guardado_en"`
@@ -42,16 +37,9 @@ func NuevoDisco(raiz string) (*Disco, error) {
 	return &Disco{raiz: raiz}, nil
 }
 
-// Metricas informa el uso de la caché.
-type Metricas struct {
-	Aciertos int64 `json:"aciertos"`
-	Fallos   int64 `json:"fallos"`
-	Escritos int64 `json:"escritos"`
-	Entradas int64 `json:"entradas"`
-}
-
 func (d *Disco) Metricas() Metricas {
 	m := Metricas{
+		Motor:    "disco",
 		Aciertos: d.aciertos.Load(),
 		Fallos:   d.fallos.Load(),
 		Escritos: d.escritos.Load(),
@@ -176,3 +164,7 @@ func (d *Disco) Borrar(clave string) error {
 	}
 	return nil
 }
+
+// Cerrar existe para cumplir la interfaz: el almacén de disco no mantiene
+// nada abierto entre operaciones.
+func (d *Disco) Cerrar() error { return nil }

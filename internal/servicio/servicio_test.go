@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/diegoparras/notarum/internal/almacen"
 	"github.com/diegoparras/notarum/internal/boletin"
-	"github.com/diegoparras/notarum/internal/cache"
 )
 
 func fixture(t *testing.T, nombre string) []byte {
@@ -35,7 +35,7 @@ func armar(t *testing.T, h http.Handler) (*Servicio, *int32) {
 	cli := boletin.NuevoCliente(boletin.Opciones{
 		Base: srv.URL, Intervalo: time.Millisecond, EsperaBase: time.Millisecond,
 	})
-	c, err := cache.NuevoDisco(t.TempDir())
+	c, err := almacen.NuevoDisco(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestEdicionPasadaSeLeeUnaSolaVez(t *testing.T) {
 	if *pedidos != 1 {
 		t.Errorf("pedidos al sitio = %d, se esperaba 1", *pedidos)
 	}
-	if m := s.Cache().Metricas(); m.Aciertos != 2 {
+	if m := s.Almacen().Metricas(); m.Aciertos != 2 {
 		t.Errorf("aciertos de caché = %d, se esperaban 2", m.Aciertos)
 	}
 }
@@ -235,7 +235,7 @@ func TestAnexoSeCacheaYVuelvePDF(t *testing.T) {
 
 func TestTTLPara(t *testing.T) {
 	ayer, _ := boletin.ParseFecha("2020-01-02")
-	if ttlPara(ayer) != cache.SinVencimiento {
+	if ttlPara(ayer) != almacen.SinVencimiento {
 		t.Error("una edición pasada no debería vencer")
 	}
 	if ttlPara(boletin.HoyEnArgentina()) != TTLHoy {

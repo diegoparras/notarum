@@ -1,4 +1,4 @@
-package cache
+package almacen
 
 import (
 	"testing"
@@ -33,13 +33,13 @@ func TestGuardarYLeer(t *testing.T) {
 
 func TestVencimiento(t *testing.T) {
 	d := nueva(t)
-	if err := d.Guardar("hoy", []byte(`{"a":1}`), time.Millisecond); err != nil {
+	if err := d.Guardar("hoy", []byte(`{"a":1}`), 150*time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := d.Leer("hoy"); !ok {
 		t.Fatal("debería estar vigente")
 	}
-	time.Sleep(5 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 	if _, ok := d.Leer("hoy"); ok {
 		t.Error("la entrada venció y se devolvió igual")
 	}
@@ -53,7 +53,7 @@ func TestSinVencimientoNoCaduca(t *testing.T) {
 	if err := d.Guardar("pasada", []byte(`1`), SinVencimiento); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(5 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 	if _, ok := d.Leer("pasada"); !ok {
 		t.Error("una edición pasada no debería caducar")
 	}
