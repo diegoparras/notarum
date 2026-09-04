@@ -1,0 +1,57 @@
+{{define "titulo"}}{{.Seccion}} · {{.FechaLarga}}{{end}}
+{{define "cuerpo"}}
+
+<h1><span class="fecha-larga">{{.FechaLarga}}</span></h1>
+<p class="bajada">Sección {{.Seccion}}{{if .Edicion}} · {{.Edicion.Cantidad}} aviso{{if ne .Edicion.Cantidad 1}}s{{end}}{{if .Edicion.ConSuplemento}} · con suplemento{{end}}{{end}}</p>
+
+<form class="barra" method="get" action="/ir">
+  <input type="hidden" name="seccion" value="{{.Seccion}}">
+  <input type="date" name="fecha" value="{{.FechaActual}}" aria-label="Fecha">
+  <button class="boton" type="submit">Ver ese día</button>
+  {{if .Anterior}}<a class="boton suave" href="/ed/{{.Seccion}}/{{.Anterior}}">← anterior</a>{{end}}
+  {{if .Siguiente}}<a class="boton suave" href="/ed/{{.Seccion}}/{{.Siguiente}}">siguiente →</a>{{end}}
+  <a class="boton suave" href="/calendario/{{.Seccion}}/{{.Anio}}">calendario</a>
+</form>
+
+{{if .SinEdicion}}
+  <div class="vacio">
+    <strong>No hubo edición este día</strong>
+    Fue feriado o fin de semana. Mirá el <a href="/calendario/{{.Seccion}}/{{.Anio}}">calendario</a> para ver qué días sí hubo.
+  </div>
+{{else if .Error}}
+  <div class="vacio"><strong>No se pudo leer la edición</strong>{{.Error}}</div>
+{{else}}
+
+  {{if .Rubros}}
+  <div class="rubros-nube">
+    <a class="rubro-pastilla{{if not .Rubro}} activa{{end}}" href="/ed/{{.Seccion}}/{{.FechaActual}}">todos<span class="n">{{.Total}}</span></a>
+    {{range .Rubros}}
+      <a class="rubro-pastilla{{if eq .Nombre $.Rubro}} activa{{end}}" href="/ed/{{$.Seccion}}/{{$.FechaActual}}?rubro={{.Nombre}}">{{.Nombre}}<span class="n">{{.Cantidad}}</span></a>
+    {{end}}
+  </div>
+  {{end}}
+
+  {{$rubroPrevio := ""}}
+  {{range .Edicion.Avisos}}
+    {{if ne .Rubro $rubroPrevio}}
+      <h2 class="rubro-titulo">{{.Rubro}}</h2>
+      {{$rubroPrevio = .Rubro}}
+    {{end}}
+    <a class="aviso" href="/av/{{.Seccion}}/{{.ID}}/{{.Fecha.API}}">
+      {{if .Organismo}}<div class="aviso-organismo">{{.Organismo}}</div>{{end}}
+      {{if .Norma}}<div class="aviso-norma">{{.Norma}}</div>{{end}}
+      {{if .Sintesis}}<div class="aviso-sintesis">{{.Sintesis}}</div>{{end}}
+      {{if or .TieneAnexos .Repetido .Suplemento .Referencia}}
+      <div class="aviso-pie">
+        {{if .Referencia}}<span class="dato-mono">{{.Referencia}}</span>{{end}}
+        {{if .TieneAnexos}}<span class="marca-chica">anexos</span>{{end}}
+        {{if .Suplemento}}<span class="marca-chica terracota">suplemento</span>{{end}}
+        {{if .Repetido}}<span class="marca-chica gris">ya publicado</span>{{end}}
+      </div>
+      {{end}}
+    </a>
+  {{else}}
+    <div class="vacio"><strong>Nada en este rubro</strong>Probá con otro, o mirá la edición completa.</div>
+  {{end}}
+{{end}}
+{{end}}

@@ -1,0 +1,38 @@
+{{define "titulo"}}Calendario {{.Anio}} · {{.Seccion}}{{end}}
+{{define "cuerpo"}}
+
+<h1>Calendario {{.Anio}}</h1>
+<p class="bajada">Días con edición de la sección {{.Seccion}}. La línea naranja marca los días con suplemento.</p>
+
+<form class="barra" method="get" action="/ir-calendario">
+  <input type="hidden" name="seccion" value="{{.Seccion}}">
+  <input type="text" name="anio" value="{{.Anio}}" inputmode="numeric" pattern="[0-9]{4}" style="width:96px" aria-label="Año">
+  <button class="boton" type="submit">Ver</button>
+  {{if .AnioPrevio}}<a class="boton suave" href="/calendario/{{.Seccion}}/{{.AnioPrevio}}">← {{.AnioPrevio}}</a>{{end}}
+  {{if .AnioSiguiente}}<a class="boton suave" href="/calendario/{{.Seccion}}/{{.AnioSiguiente}}">{{.AnioSiguiente}} →</a>{{end}}
+</form>
+
+{{if .Error}}
+  <div class="vacio"><strong>No se pudo leer el calendario</strong>{{.Error}}</div>
+{{else}}
+  <div class="metricas">
+    <div class="metrica"><div class="metrica-cifra">{{.TotalDias}}</div><div class="metrica-nombre">días con edición</div></div>
+    <div class="metrica"><div class="metrica-cifra">{{.TotalSuplementos}}</div><div class="metrica-nombre">con suplemento</div></div>
+  </div>
+
+  <div class="meses">
+    {{range .Meses}}
+    <div class="mes">
+      <div class="mes-nombre">{{.Nombre}}</div>
+      <div class="dias">
+        {{range .Dias}}
+          {{if not .Numero}}<span class="dia"></span>
+          {{else if .Hay}}<a class="dia hay{{if .Suplemento}} suplemento{{end}}" href="/ed/{{$.Seccion}}/{{.Fecha}}" title="{{.Fecha}}">{{.Numero}}</a>
+          {{else}}<span class="dia">{{.Numero}}</span>{{end}}
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+  </div>
+{{end}}
+{{end}}

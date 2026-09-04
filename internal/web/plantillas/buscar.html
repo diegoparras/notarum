@@ -1,0 +1,53 @@
+{{define "titulo"}}Buscar{{end}}
+{{define "cuerpo"}}
+
+<h1>Buscar en el Boletín</h1>
+<p class="bajada">Por palabras, dentro de un rango de fechas. No hace falta poner los acentos.</p>
+
+<form class="barra" method="get" action="/buscar">
+  <input type="search" name="texto" value="{{.Texto}}" placeholder="decreto, licitación, un organismo…" aria-label="Texto a buscar" autofocus>
+  <select name="seccion" aria-label="Sección">
+    {{$sec := .Seccion}}
+    {{range .Secciones}}<option value="{{.}}"{{if eq . $sec}} selected{{end}}>{{.}}</option>{{end}}
+  </select>
+  <input type="date" name="desde" value="{{.Desde}}" aria-label="Desde">
+  <input type="date" name="hasta" value="{{.Hasta}}" aria-label="Hasta">
+  <button class="boton" type="submit">Buscar</button>
+</form>
+
+{{if .Error}}
+  <div class="vacio"><strong>No se pudo buscar</strong>{{.Error}}</div>
+{{else if .Resultado}}
+  <div class="aviso-nota">
+    {{.Resultado.Total}} resultado{{if ne .Resultado.Total 1}}s{{end}}
+    {{if eq .Resultado.Fuente "indice"}}
+      del índice local, sin consultar el Boletín{{if .Resultado.DiasConEdicion}} ({{.Resultado.DiasIndexados}} de {{.Resultado.DiasConEdicion}} días del rango están guardados){{end}}.
+    {{else}}
+      de la búsqueda del Boletín Oficial{{if .Resultado.HayMas}}; hay más páginas{{end}}.
+    {{end}}
+  </div>
+
+  {{range .Resultado.Avisos}}
+    <a class="aviso" href="/av/{{.Seccion}}/{{.ID}}/{{.Fecha.API}}">
+      {{if .Organismo}}<div class="aviso-organismo">{{.Organismo}}</div>{{end}}
+      {{if .Norma}}<div class="aviso-norma">{{.Norma}}</div>{{end}}
+      {{if .Sintesis}}<div class="aviso-sintesis">{{.Sintesis}}</div>{{end}}
+      <div class="aviso-pie">
+        <span class="dato-mono">{{.Fecha.API}}</span>
+        {{if .Rubro}}<span class="dato-mono">{{.Rubro}}</span>{{end}}
+        {{if .TieneAnexos}}<span class="marca-chica">anexos</span>{{end}}
+      </div>
+    </a>
+  {{else}}
+    <div class="vacio"><strong>Sin resultados</strong>Probá con menos palabras, o con un rango de fechas más amplio.</div>
+  {{end}}
+
+  {{if or .PaginaPrevia .PaginaSiguiente}}
+  <div class="navegar">
+    <span>{{if .PaginaPrevia}}<a href="{{.PaginaPrevia}}">← anterior</a>{{end}}</span>
+    <span class="dato-mono">página {{.Resultado.Pagina}}</span>
+    <span>{{if .PaginaSiguiente}}<a href="{{.PaginaSiguiente}}">siguiente →</a>{{end}}</span>
+  </div>
+  {{end}}
+{{end}}
+{{end}}

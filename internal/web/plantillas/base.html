@@ -1,0 +1,42 @@
+{{define "base"}}<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{template "titulo" .}} · notarum</title>
+<meta name="description" content="Lector abierto del Boletín Oficial de la República Argentina.">
+<link rel="stylesheet" href="/estatico/estilo.css?v={{.Version}}">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%231f5f8b'/></svg>">
+</head>
+<body>
+
+<header class="cabecera">
+  <div class="contenedor cabecera-fila">
+    <a class="marca" href="/">
+      <span class="marca-punto" aria-hidden="true"></span>
+      notarum
+      <span class="marca-nota">Boletín Oficial</span>
+    </a>
+    <nav class="secciones">
+      {{$sec := .Seccion}}
+      {{range .Secciones}}
+        <a class="seccion-enlace{{if eq . $sec}} activa{{end}}" href="/ed/{{.}}/{{$.FechaActual}}">{{.}}</a>
+      {{end}}
+      <a class="seccion-enlace" href="/buscar?seccion={{if $sec}}{{$sec}}{{else}}primera{{end}}">buscar</a>
+    </nav>
+  </div>
+</header>
+
+<main class="contenedor{{if .Angosto}} angosto{{end}}">
+{{template "cuerpo" .}}
+</main>
+
+<footer class="contenedor pie">
+  <span>Datos del <a href="https://www.boletinoficial.gob.ar">Boletín Oficial de la República Argentina</a>.</span>
+  <span><a href="/v1/openapi.json">API</a></span>
+  <span><a href="/v1/salud">estado</a></span>
+  <span>notarum {{.Version}}</span>
+</footer>
+
+</body>
+</html>{{end}}

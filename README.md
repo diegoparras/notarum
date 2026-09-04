@@ -1,6 +1,7 @@
 # notarum
 
-API abierta, de sólo lectura, del **Boletín Oficial de la República Argentina**.
+Lector, API y herramientas MCP del **Boletín Oficial de la República Argentina**,
+abiertos y de sólo lectura.
 
 Expone como JSON el calendario de ediciones, cada edición por sección y fecha
 con sus avisos, cada aviso con su texto completo, los anexos en PDF y el
@@ -13,12 +14,42 @@ estudio jurídico, un investigador, un sistema que lo consuma por programa.
 
 Sin clave para leer. Límite de pedidos por IP. Licencia MIT.
 
+Tres caras sobre los mismos datos:
+
+- **Un lector web** en `/`, para leer el Boletín como se lee un diario:
+  la edición del día, navegación por fecha y rubro, el aviso con sus anexos,
+  búsqueda y un calendario del año.
+- **Una API JSON** en `/v1`, para que lo consuma un programa.
+- **Un servidor MCP** en `/mcp` y por entrada estándar, para que lo consulte
+  un modelo como una herramienta más.
+
 ```bash
 docker run -d -p 8080:8080 -v notarum-datos:/datos ghcr.io/diegoparras/notarum:1.0.0
+open http://localhost:8080/
 curl http://localhost:8080/v1/ediciones/primera/2026-09-01
 ```
 
-## Rutas
+## El lector
+
+| Ruta | Qué muestra |
+|---|---|
+| `/` | la última edición publicada |
+| `/ed/{sección}/{fecha}` | la edición de ese día, con sus rubros |
+| `/ed/{sección}/{fecha}?rubro=DECRETOS` | la misma, filtrada |
+| `/av/{sección}/{id}/{fecha}` | el aviso completo con sus anexos |
+| `/buscar` | búsqueda por texto y fechas |
+| `/calendario/{sección}/{año}` | qué días hubo edición |
+
+Sigue el sistema visual del Ecosistema Escriba: crema `#fff8f3`, tinta
+`#2a1b14`, cards planas de radio 18, y azul tinta `#1f5f8b` como color propio
+de notarum. Se cambia en una línea, en la variable `--acento` de
+[estilo.css](internal/web/estatico/estilo.css).
+
+Todo se arma en el servidor: no hay build de JavaScript ni recursos de
+terceros, y las páginas viajan embebidas en el binario. Se apaga con
+`NOTARUM_SIN_WEB=1` si sólo se quiere la API.
+
+## La API
 
 Base `/v1`. Fechas en `AAAA-MM-DD`. Secciones: `primera`, `segunda`, `tercera`.
 
@@ -33,6 +64,7 @@ Base `/v1`. Fechas en `AAAA-MM-DD`. Secciones: `primera`, `segunda`, `tercera`.
 | `GET /v1/anexos/{sección}/{nro}/{id}/{fecha}.pdf` | el PDF del anexo |
 | `GET /v1/rubros/{sección}` | el catálogo de rubros |
 | `GET /v1/buscar?sección=&texto=&desde=&hasta=` | búsqueda por texto y fecha |
+| `GET /v1/buscar?…&fuente=indice` | la misma, contra el índice local |
 | `GET /v1/salud` | estado del servicio y de la caché |
 | `GET /v1/openapi.json` | el contrato |
 
@@ -58,6 +90,21 @@ Base `/v1`. Fechas en `AAAA-MM-DD`. Secciones: `primera`, `segunda`, `tercera`.
 El detalle agrega `texto` (plano, párrafos separados por línea en blanco),
 `html` (saneado: sin estilos ni scripts, con las tablas conservadas) y
 `anexos`, cada uno con la ruta para bajar su PDF por esta misma API.
+
+### Buscar
+
+`/v1/buscar` toma `fuente`:
+
+- **`indice`** busca en el índice local, sin pedirle nada al Boletín. Requiere
+  el motor `sqlite` (más abajo).
+- **`sitio`** consulta la búsqueda avanzada del Boletín Oficial.
+- **`auto`**, por defecto, usa el índice cuando tiene historia del rango y si
+  no va al sitio.
+
+La respuesta dice cuál se usó y cuántos días del rango tiene indexados, así que
+se puede saber si vio todo o parte. Los totales no son comparables entre
+fuentes: el Boletín pagina de a 100 y no informa un total, mientras que el
+índice sí lo sabe.
 
 ### Cosas que conviene saber
 
@@ -109,11 +156,34 @@ Todo por variable de entorno (o por bandera, con el mismo nombre en minúscula):
 | Variable | Por defecto | Qué hace |
 |---|---|---|
 | `NOTARUM_PUERTO` | `8080` | puerto HTTP |
-| `NOTARUM_CACHE` | `/datos/cache` | directorio de la caché |
+| `NOTARUM_ALMACEN` | `disco` | `disco` o `sqlite` |
+| `NOTARUM_CACHE` | `/datos/cache` | directorio de la caché, con el motor `disco` |
+| `NOTARUM_DB` | `/datos/notarum.db` | archivo de la base, con el motor `sqlite` |
 | `NOTARUM_POR_MINUTO` | `60` | pedidos por minuto por IP; `0` desactiva el límite |
 | `NOTARUM_INTERVALO` | `500ms` | espera entre pedidos al sitio del Boletín |
 | `NOTARUM_USER_AGENT` | `notarum/1.0 (+…)` | User-Agent hacia el sitio |
 | `NOTARUM_LOG` | `json` | `json` o `text` |
+| `NOTARUM_MCP_TOKEN` | vacío | si se pone, `/mcp` exige `Authorization: Bearer` |
+| `NOTARUM_SIN_MCP` | vacío | con cualquier valor, apaga `/mcp` |
+| `NOTARUM_SIN_WEB` | vacío | con cualquier valor, apaga el lector web |
+
+### Dónde se guarda
+
+Dos motores, la misma interfaz:
+
+- **`disco`** (por defecto): un archivo JSON por clave. Alcanza para servir por
+  fecha y no tiene dependencias.
+- **`sqlite`**: un solo archivo, y además **indexa los avisos** para poder
+  buscarlos sin pedirle nada al Boletín. Usa `modernc.org/sqlite`, que es Go
+  puro: el binario sigue siendo estático y la imagen no crece.
+
+El índice busca sin acentos —`energia` encuentra `SECRETARÍA DE ENERGÍA`—, sobre
+el sumario de todos los avisos y sobre el cuerpo de aquellos cuyo texto ya se
+bajó (con `rellenar --con-avisos`).
+
+```bash
+NOTARUM_ALMACEN=sqlite notarum servir
+```
 
 ### Llenar la historia
 
@@ -140,18 +210,54 @@ docker run --rm -v notarum-datos:/datos notarum:1.0.0 \
 en la caché y lista en `faltantes` los días que todavía no se bajaron: la API no
 baja un año entero adentro de un pedido HTTP.
 
+## MCP
+
+Para que un modelo consulte el Boletín como una herramienta. Seis: `edicion`,
+`aviso`, `buscar`, `calendario`, `rubros` y `estado`.
+
+**Por HTTP**, en la instancia desplegada: `POST /mcp` con JSON-RPC 2.0. Con
+`NOTARUM_MCP_TOKEN` exige `Authorization: Bearer`; sin él queda abierto, como
+el resto de la API.
+
+**Por entrada estándar**, para un cliente local:
+
+```bash
+notarum mcp --almacen sqlite --db ~/notarum.db
+```
+
+En Claude Desktop o Claude Code, apuntando al binario:
+
+```json
+{
+  "mcpServers": {
+    "notarum": {
+      "command": "notarum",
+      "args": ["mcp", "--almacen", "sqlite", "--db", "/ruta/notarum.db"]
+    }
+  }
+}
+```
+
+Las herramientas están pensadas para un modelo, no para una persona: una
+edición se recorta a 40 avisos y lo dice, en vez de llenar la ventana de
+contexto en silencio; un feriado se explica en palabras en vez de devolver un
+error; y el aviso entrega el texto plano sin el HTML, que sólo gasta contexto.
+
 ## Cómo está hecho
 
-Go sin framework: `net/http` para servir, `golang.org/x/net/html` para parsear,
-`bluemonday` para sanear el HTML de los avisos. Un binario estático de ~29 MB
-en la imagen final, sin root.
+Go sin framework: `net/http` para servir, `html/template` para las páginas,
+`golang.org/x/net/html` para parsear, `bluemonday` para sanear el HTML de los
+avisos y `modernc.org/sqlite` para el motor de base. Un binario estático, sin
+root en la imagen final.
 
 ```
-cmd/notarum        servir y rellenar
+cmd/notarum        servir, rellenar y mcp
 internal/boletin   lectura del sitio: cliente con ritmo y parseo
-internal/cache     caché de archivos JSON, escritura atómica
+internal/almacen   dónde se guarda: archivos o SQLite, con su índice
 internal/servicio  qué se lee de nuevo y qué ya está guardado
 internal/api       rutas, errores, límite por IP, contrato OpenAPI
+internal/mcp       herramientas para un modelo, por stdio y por HTTP
+internal/web       el lector, con sus plantillas y su hoja de estilo
 ```
 
 **Trato con el sitio.** Un pedido cada 500 ms por proceso, reintento con espera
@@ -166,7 +272,7 @@ edición de hace tres años.
 ## Pruebas
 
 ```bash
-go test ./...                              # unidad, contrato y handlers
+go test ./...                              # unidad, contrato, handlers y páginas
 go test ./internal/boletin/ -tags red -v   # contra el sitio real
 ```
 

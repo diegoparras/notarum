@@ -13,7 +13,8 @@ services:
       - notarum-datos:/datos
     environment:
       NOTARUM_PUERTO: "8080"
-      NOTARUM_CACHE: /datos/cache
+      NOTARUM_ALMACEN: sqlite
+      NOTARUM_DB: /datos/notarum.db
       NOTARUM_POR_MINUTO: "60"
       NOTARUM_INTERVALO: 500ms
       NOTARUM_LOG: json

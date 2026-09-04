@@ -33,7 +33,8 @@ corriendo cuando algo cambia.
 
 ```
 NOTARUM_PUERTO=8080
-NOTARUM_CACHE=/datos/cache
+NOTARUM_ALMACEN=sqlite
+NOTARUM_DB=/datos/notarum.db
 NOTARUM_POR_MINUTO=60
 NOTARUM_INTERVALO=500ms
 NOTARUM_LOG=json
@@ -42,6 +43,15 @@ NOTARUM_USER_AGENT=notarum/1.0 (+https://tu-dominio.example)
 
 Poné en `NOTARUM_USER_AGENT` una URL de contacto real. Es un sitio público del
 Estado: que sepan quién los está leyendo y cómo avisarte si molesta.
+
+`NOTARUM_ALMACEN=sqlite` es lo que conviene en un servidor: guarda todo en un
+archivo e indexa los avisos, con lo que la búsqueda del lector responde sin
+pedirle nada al Boletín. Con `disco` funciona igual pero la búsqueda siempre
+va al sitio.
+
+Si querés reservar el MCP, agregá `NOTARUM_MCP_TOKEN` con un secreto: `/mcp`
+va a exigir `Authorization: Bearer`. Para apagar piezas están
+`NOTARUM_SIN_MCP=1` y `NOTARUM_SIN_WEB=1`.
 
 ## 3. Volumes
 
@@ -66,11 +76,13 @@ real y no al proxy.
 
 ## 5. Deploy
 
-Botón **Deploy**. Cuando termine:
+Botón **Deploy**. Cuando termine, entrá a `https://boletin.tu-dominio.com/` y
+tendría que aparecer la última edición publicada. Y desde la consola:
 
 ```bash
 curl https://boletin.tu-dominio.com/v1/salud
 curl https://boletin.tu-dominio.com/v1/ediciones/primera/2026-09-01
+curl -X POST https://boletin.tu-dominio.com/mcp   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
 `/v1/salud` devuelve `{"ok":true,...}` con los contadores de lecturas al sitio y
@@ -99,12 +111,25 @@ notarum rellenar --seccion todas --desde $(date -d '7 days ago' +%%F) --log text
 No es necesario: la API baja el día que le pidan. Sirve si querés que el primer
 pedido de la mañana ya salga de la caché.
 
+## 7. Conectar el MCP
+
+La instancia desplegada habla MCP en `POST /mcp`, con JSON-RPC 2.0. Un cliente
+que soporte MCP por HTTP apunta ahí; si pusiste `NOTARUM_MCP_TOKEN`, va con
+`Authorization: Bearer <token>`.
+
+Para un cliente local que sólo hable por entrada estándar, el mismo binario
+sirve sin servidor:
+
+```bash
+notarum mcp --almacen sqlite --db /ruta/notarum.db
+```
+
 ## Recursos
 
-Es un servicio chico: alcanza con 128 MB de memoria y poco CPU. Lo que crece es
-el volumen, y despacio: una edición de la primera sección ocupa unos 80 KB de
-JSON, así que un año completo de las tres secciones ronda los 100 MB. Si bajás
-también el texto de cada aviso (`--con-avisos`), contá bastante más.
+Es un servicio chico: alcanza con 256 MB de memoria y poco CPU. Lo que crece es
+el volumen, y despacio: una edición de la primera sección ocupa unos 80 KB, así
+que un año completo de las tres secciones ronda los 100 MB. Si bajás también el
+texto de cada aviso (`--con-avisos`), contá bastante más.
 
 ## Actualizar
 

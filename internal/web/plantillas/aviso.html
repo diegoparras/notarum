@@ -1,0 +1,34 @@
+{{define "titulo"}}{{if .Detalle.Organismo}}{{.Detalle.Organismo}}{{else}}{{.Detalle.Norma}}{{end}}{{end}}
+{{define "cuerpo"}}
+
+<article>
+  <div class="aviso-cabecera">
+    <p class="bajada" style="margin-bottom:10px">
+      <a href="/ed/{{.Seccion}}/{{.Detalle.Fecha.API}}">← {{.Seccion}} · <span class="fecha-larga">{{.FechaLarga}}</span></a>
+      {{if .Detalle.Rubro}} · {{.Detalle.Rubro}}{{end}}
+    </p>
+    <h1>{{if .Detalle.Organismo}}{{.Detalle.Organismo}}{{else}}{{.Detalle.Norma}}{{end}}</h1>
+    {{if .Detalle.Norma}}<p class="aviso-norma" style="font-size:15px;margin:0 0 6px">{{.Detalle.Norma}}</p>{{end}}
+    {{if .Detalle.Sintesis}}<p class="bajada" style="margin:0">{{.Detalle.Sintesis}}</p>{{end}}
+    <div class="aviso-pie">
+      {{if .Detalle.Referencia}}<span class="dato-mono">{{.Detalle.Referencia}}</span>{{end}}
+      <span class="dato-mono">id {{.Detalle.ID}}</span>
+      {{if .Detalle.Repetido}}<span class="marca-chica gris">ya publicado</span>{{end}}
+      {{if .Detalle.Suplemento}}<span class="marca-chica terracota">suplemento</span>{{end}}
+    </div>
+  </div>
+
+  {{if .Detalle.Anexos}}
+  <div class="anexos">
+    {{range .Detalle.Anexos}}<a class="anexo" href="{{.URL}}">{{.Nombre}} (PDF)</a>{{end}}
+  </div>
+  {{end}}
+
+  <div class="cuerpo" style="margin-top:22px">{{.Cuerpo}}</div>
+
+  <div class="navegar">
+    <a href="/ed/{{.Seccion}}/{{.Detalle.Fecha.API}}">← volver a la edición</a>
+    <a href="{{.Detalle.URL}}">verlo en el sitio oficial →</a>
+  </div>
+</article>
+{{end}}

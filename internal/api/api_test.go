@@ -321,9 +321,10 @@ func TestRangoListaFaltantes(t *testing.T) {
 	}
 }
 
+// El índice de la API vive en /v1/: la raíz es del lector web.
 func TestIndiceYOpenAPI(t *testing.T) {
 	srv := servidorDePrueba(t)
-	for _, ruta := range []string{"/", "/v1/", "/v1/openapi.json"} {
+	for _, ruta := range []string{"/v1/", "/v1/openapi.json"} {
 		res, cuerpo := pedir(t, srv, ruta)
 		if res.StatusCode != 200 {
 			t.Errorf("%s: codigo = %d", ruta, res.StatusCode)

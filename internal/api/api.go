@@ -12,6 +12,7 @@ import (
 	"github.com/diegoparras/notarum/internal/boletin"
 	"github.com/diegoparras/notarum/internal/mcp"
 	"github.com/diegoparras/notarum/internal/servicio"
+	"github.com/diegoparras/notarum/internal/web"
 )
 
 //go:embed openapi.json
@@ -27,6 +28,8 @@ type Config struct {
 	TokenMCP string
 	// SinMCP apaga el endpoint /mcp.
 	SinMCP bool
+	// SinWeb apaga el lector web y deja sólo la API.
+	SinWeb bool
 }
 
 // Servidor atiende las rutas de /v1.
@@ -38,6 +41,8 @@ type Servidor struct {
 	inicio  time.Time
 	mcp     http.Handler
 	conMCP  bool
+	web     http.Handler
+	conWeb  bool
 }
 
 // Nuevo arma el servidor con sus rutas y middlewares.
@@ -51,6 +56,16 @@ func Nuevo(cfg Config) *Servidor {
 	if !cfg.SinMCP {
 		s.mcp = mcp.Nuevo(cfg.Servicio, cfg.Version).Handler(cfg.TokenMCP)
 		s.conMCP = true
+	}
+	if !cfg.SinWeb {
+		sitio, err := web.Nuevo(cfg.Servicio, cfg.Version)
+		if err != nil {
+			// Una plantilla rota es un error de programa, no de configuración:
+			// vale más enterarse al arrancar que servir páginas rotas.
+			panic("no se pudo armar el lector web: " + err.Error())
+		}
+		s.web = sitio
+		s.conWeb = true
 	}
 	s.rutas()
 	s.handler = conPanico(conLog(conCORS(conLimite(nuevoLimitador(cfg.PorMinuto), s.mux))))
@@ -78,8 +93,16 @@ func (s *Servidor) rutas() {
 		m.Handle("/mcp/", s.mcp)
 	}
 	m.HandleFunc("GET /v1/{$}", s.verIndice)
-	m.HandleFunc("GET /{$}", s.verIndice)
-	m.HandleFunc("/", s.noEncontrado)
+	// Una ruta desconocida bajo /v1 sigue siendo un error de la API, con su
+	// JSON: quien la pidió es un programa, no alguien mirando páginas.
+	m.HandleFunc("/v1/", s.noEncontrado)
+	if s.conWeb {
+		// El lector se queda con la raíz; la API vive bajo /v1.
+		m.Handle("/", s.web)
+	} else {
+		m.HandleFunc("GET /{$}", s.verIndice)
+		m.HandleFunc("/", s.noEncontrado)
+	}
 }
 
 // --------------------------------------------------------------- parámetros
@@ -417,6 +440,14 @@ func mapaMCP(activo bool) any {
 		"protocolo": mcp.VersionProtocolo,
 		"como":      "JSON-RPC 2.0 por POST; probá con initialize y tools/list",
 	}
+}
+
+// mapaWeb describe el lector en el índice de la API.
+func mapaWeb(activo bool) any {
+	if !activo {
+		return map[string]any{"activo": false}
+	}
+	return map[string]any{"activo": true, "ruta": "/"}
 }
 
 func (s *Servidor) noEncontrado(w http.ResponseWriter, r *http.Request) {
