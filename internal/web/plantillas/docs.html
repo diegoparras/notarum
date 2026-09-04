@@ -1,0 +1,165 @@
+{{define "titulo"}}Documentación{{end}}
+{{define "cuerpo"}}
+
+<h1>Documentación</h1>
+<p class="bajada">
+  Lo mismo que ves acá, para que lo lea un programa o un modelo.
+  Todo de sólo lectura, sin clave, con un límite de pedidos por IP.
+</p>
+
+<nav class="docs-indice">
+  <a href="#api">API</a>
+  <a href="#formas">Formas</a>
+  <a href="#mcp">MCP</a>
+  <a href="#errores">Errores</a>
+  <a href="/v1/openapi.json">openapi.json</a>
+</nav>
+
+<h2 id="api">API</h2>
+<p class="docs-parrafo">
+  Base <code>/v1</code>. Las fechas van en <code>AAAA-MM-DD</code> y las
+  respuestas son JSON en UTF-8. Cada respuesta trae <code>ETag</code>: si lo
+  mandás de vuelta en <code>If-None-Match</code>, recibís un <code>304</code>
+  sin cuerpo. Una edición pasada se declara inmutable por un año, porque no
+  cambia nunca.
+</p>
+
+{{range .Doc.Grupos}}
+<h3 class="docs-grupo">{{.Nombre}}</h3>
+{{if .Descripcion}}<p class="docs-parrafo">{{.Descripcion}}</p>{{end}}
+
+{{range .Rutas}}
+<div class="ruta">
+  <div class="ruta-linea">
+    <span class="ruta-metodo">{{.Metodo}}</span>
+    <code class="ruta-camino">{{.Camino}}</code>
+  </div>
+  <p class="ruta-resumen">{{.Resumen}}</p>
+  {{if .Descripcion}}<p class="ruta-detalle">{{.Descripcion}}</p>{{end}}
+
+  {{if .Parametros}}
+  <table class="docs-tabla">
+    <thead><tr><th>parámetro</th><th>dónde</th><th>tipo</th><th></th></tr></thead>
+    <tbody>
+    {{range .Parametros}}
+      <tr>
+        <td><code>{{.Nombre}}</code>{{if .Obligatorio}} <span class="marca-chica">obligatorio</span>{{end}}</td>
+        <td class="dato-mono">{{.En}}</td>
+        <td class="dato-mono">{{.Tipo}}{{if .PorDefecto}} · por defecto {{.PorDefecto}}{{end}}</td>
+        <td>
+          {{if .Descripcion}}{{.Descripcion}}{{end}}
+          {{if .Opciones}}<div class="docs-opciones">{{range .Opciones}}<code>{{.}}</code>{{end}}</div>{{end}}
+        </td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{end}}
+
+  {{if .Ejemplo}}<div class="ruta-ejemplo"><code>curl {{$.Base}}{{.Ejemplo}}</code></div>{{end}}
+
+  <div class="ruta-respuestas">
+    {{range .Respuestas}}<span class="respuesta"><b>{{.Codigo}}</b> {{.Descripcion}}</span>{{end}}
+  </div>
+</div>
+{{end}}
+{{end}}
+
+<h2 id="formas">Las formas que devuelve</h2>
+{{range .Doc.Esquemas}}
+<details class="esquema">
+  <summary><code>{{.Nombre}}</code>{{if .Descripcion}} — {{.Descripcion}}{{end}}</summary>
+  <table class="docs-tabla">
+    <tbody>
+    {{range .Campos}}
+      <tr>
+        <td><code>{{.Nombre}}</code>{{if .Obligatorio}} <span class="marca-chica">siempre</span>{{end}}</td>
+        <td class="dato-mono">{{.Tipo}}</td>
+        <td>
+          {{if .Descripcion}}{{.Descripcion}}{{end}}
+          {{if .Opciones}}<div class="docs-opciones">{{range .Opciones}}<code>{{.}}</code>{{end}}</div>{{end}}
+        </td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+</details>
+{{end}}
+
+<h2 id="mcp">MCP</h2>
+<p class="docs-parrafo">
+  Para que un modelo consulte el Boletín como una herramienta más.
+  {{if .ConMCP}}
+    Habla JSON-RPC 2.0 en <code>POST {{.Base}}/mcp</code>{{if .TokenMCP}}, con
+    <code>Authorization: Bearer</code>{{end}}, y el mismo binario también lo
+    habla por entrada estándar, para un cliente local:
+  {{else}}
+    En esta instancia el endpoint HTTP está apagado
+    (<code>NOTARUM_SIN_MCP</code>), pero el binario lo habla igual por entrada
+    estándar, que es como lo usa un cliente local:
+  {{end}}
+</p>
+
+<pre class="docs-bloque"><code>{
+  "mcpServers": {
+    "notarum": {
+      "command": "notarum",
+      "args": ["mcp", "--almacen", "sqlite", "--db", "/ruta/notarum.db"]
+    }
+  }
+}</code></pre>
+
+<p class="docs-parrafo">Estas son las herramientas, tal como las recibe el modelo:</p>
+
+{{range .Herramientas}}
+<div class="ruta">
+  <div class="ruta-linea">
+    <span class="ruta-metodo mcp">tool</span>
+    <code class="ruta-camino">{{.Nombre}}</code>
+    {{if .Titulo}}<span class="ruta-titulo">{{.Titulo}}</span>{{end}}
+  </div>
+  <p class="ruta-detalle">{{.Descripcion}}</p>
+  {{if .Argumentos}}
+  <table class="docs-tabla">
+    <thead><tr><th>argumento</th><th>tipo</th><th></th></tr></thead>
+    <tbody>
+    {{range .Argumentos}}
+      <tr>
+        <td><code>{{.Nombre}}</code>{{if .Obligatorio}} <span class="marca-chica">obligatorio</span>{{end}}</td>
+        <td class="dato-mono">{{.Tipo}}{{if .PorDefecto}} · por defecto {{.PorDefecto}}{{end}}</td>
+        <td>
+          {{if .Descripcion}}{{.Descripcion}}{{end}}
+          {{if .Opciones}}<div class="docs-opciones">{{range .Opciones}}<code>{{.}}</code>{{end}}</div>{{end}}
+        </td>
+      </tr>
+    {{end}}
+    </tbody>
+  </table>
+  {{end}}
+</div>
+{{end}}
+
+{{if .ConMCP}}
+<p class="docs-parrafo">Para probarlo de una:</p>
+<pre class="docs-bloque"><code>curl -X POST {{.Base}}/mcp \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'</code></pre>
+{{end}}
+
+<h2 id="errores">Errores</h2>
+<p class="docs-parrafo">
+  Todo error viene como JSON y dice <strong>de quién es la culpa</strong>, para
+  que sepas a quién mirar antes de empezar a buscar.
+</p>
+<pre class="docs-bloque"><code>{ "error": "el Boletín Oficial no devolvió lo esperado", "origen": "sitio" }</code></pre>
+<table class="docs-tabla">
+  <tbody>
+    <tr><td><code>sitio</code></td><td>el Boletín Oficial no contestó o cambió de forma</td></tr>
+    <tr><td><code>notarum</code></td><td>falló algo de este servicio</td></tr>
+    <tr><td><code>pedido</code></td><td>el pedido está mal armado</td></tr>
+  </tbody>
+</table>
+<p class="docs-parrafo">
+  Un día sin edición devuelve <code>404</code> con <code>"sin_edicion": true</code>.
+  No es una falla: es un feriado.
+</p>
+{{end}}

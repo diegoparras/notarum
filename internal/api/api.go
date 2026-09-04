@@ -2,7 +2,6 @@
 package api
 
 import (
-	_ "embed"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,13 +9,11 @@ import (
 
 	"github.com/diegoparras/notarum/internal/almacen"
 	"github.com/diegoparras/notarum/internal/boletin"
+	"github.com/diegoparras/notarum/internal/contrato"
 	"github.com/diegoparras/notarum/internal/mcp"
 	"github.com/diegoparras/notarum/internal/servicio"
 	"github.com/diegoparras/notarum/internal/web"
 )
-
-//go:embed openapi.json
-var contratoOpenAPI []byte
 
 // Config configura el servidor HTTP.
 type Config struct {
@@ -64,7 +61,7 @@ func Nuevo(cfg Config) *Servidor {
 			// vale más enterarse al arrancar que servir páginas rotas.
 			panic("no se pudo armar el lector web: " + err.Error())
 		}
-		s.web = sitio
+		s.web = sitio.ConMCP(!cfg.SinMCP)
 		s.conWeb = true
 	}
 	s.rutas()
@@ -401,7 +398,7 @@ func (s *Servidor) verSalud(w http.ResponseWriter, r *http.Request) {
 func (s *Servidor) verOpenAPI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
-	_, _ = w.Write(contratoOpenAPI)
+	_, _ = w.Write(contrato.JSON())
 }
 
 func (s *Servidor) verIndice(w http.ResponseWriter, r *http.Request) {

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/diegoparras/notarum/internal/contrato"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers/gorillamux"
@@ -15,7 +16,7 @@ import (
 // Si el contrato y el código se separan, este test lo dice.
 func TestContrato(t *testing.T) {
 	cargador := &openapi3.Loader{Context: context.Background(), IsExternalRefsAllowed: false}
-	doc, err := cargador.LoadFromData(contratoOpenAPI)
+	doc, err := cargador.LoadFromData(contrato.JSON())
 	if err != nil {
 		t.Fatalf("openapi.json no se pudo cargar: %v", err)
 	}
@@ -90,7 +91,7 @@ func TestContrato(t *testing.T) {
 // El contrato tiene que documentar todas las rutas que el servidor atiende.
 func TestContratoCubreTodasLasRutas(t *testing.T) {
 	cargador := &openapi3.Loader{Context: context.Background()}
-	doc, err := cargador.LoadFromData(contratoOpenAPI)
+	doc, err := cargador.LoadFromData(contrato.JSON())
 	if err != nil {
 		t.Fatal(err)
 	}

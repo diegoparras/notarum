@@ -8,6 +8,7 @@ package web
 import (
 	"embed"
 	"errors"
+	"fmt"
 	"html/template"
 	"log/slog"
 	"net/http"
@@ -20,7 +21,9 @@ import (
 
 	"github.com/diegoparras/notarum/internal/almacen"
 	"github.com/diegoparras/notarum/internal/boletin"
+	"github.com/diegoparras/notarum/internal/contrato"
 	"github.com/diegoparras/notarum/internal/infoleg"
+	"github.com/diegoparras/notarum/internal/mcp"
 	"github.com/diegoparras/notarum/internal/servicio"
 )
 
@@ -36,6 +39,15 @@ type Sitio struct {
 	version   string
 	mux       *http.ServeMux
 	plantilla map[string]*template.Template
+	// conMCP dice si esta instancia expone el endpoint MCP, para no documentar
+	// algo que está apagado.
+	conMCP bool
+}
+
+// ConMCP le avisa al lector que el endpoint MCP está encendido.
+func (s *Sitio) ConMCP(activo bool) *Sitio {
+	s.conMCP = activo
+	return s
 }
 
 // Nuevo arma el sitio. Devuelve error si una plantilla no compila: mejor no
@@ -47,7 +59,7 @@ func Nuevo(srv *servicio.Servicio, version string) (*Sitio, error) {
 		mux:       http.NewServeMux(),
 		plantilla: map[string]*template.Template{},
 	}
-	for _, nombre := range []string{"edicion", "aviso", "buscar", "calendario", "norma", "error"} {
+	for _, nombre := range []string{"edicion", "aviso", "buscar", "calendario", "norma", "docs", "error"} {
 		t, err := template.New("base").Funcs(funciones).ParseFS(archivosPlantillas,
 			"plantillas/base.html", "plantillas/"+nombre+".html")
 		if err != nil {
@@ -69,6 +81,7 @@ func (s *Sitio) rutas() {
 	s.mux.HandleFunc("GET /calendario/{seccion}/{anio}", s.calendario)
 	s.mux.HandleFunc("GET /norma/{id}", s.norma)
 	s.mux.HandleFunc("GET /buscar", s.buscar)
+	s.mux.HandleFunc("GET /docs", s.docs)
 	s.mux.HandleFunc("GET /ir", s.ir)
 	s.mux.HandleFunc("GET /ir-calendario", s.irCalendario)
 }
@@ -608,4 +621,126 @@ func (s *Sitio) norma(w http.ResponseWriter, r *http.Request) {
 	// El HTML ya viene saneado del cliente de InfoLEG.
 	d.Cuerpo = template.HTML(texto.HTML)
 	s.mostrar(w, r, "norma", d, http.StatusOK)
+}
+
+// ---------------------------------------------------------- documentación
+
+// argumentoDoc es un argumento de una herramienta MCP, listo para dibujar.
+type argumentoDoc struct {
+	Nombre      string
+	Tipo        string
+	Obligatorio bool
+	PorDefecto  string
+	Descripcion string
+	Opciones    []string
+}
+
+type herramientaDoc struct {
+	Nombre      string
+	Titulo      string
+	Descripcion string
+	Argumentos  []argumentoDoc
+}
+
+type datosDocs struct {
+	comun
+	Doc          *contrato.Documento
+	Herramientas []herramientaDoc
+	ConMCP       bool
+	TokenMCP     bool
+	Base         string
+}
+
+// docs dibuja la documentación de la API y del MCP.
+//
+// Sale de las mismas fuentes que usan la API y el servidor MCP —el contrato
+// OpenAPI embebido y la lista de herramientas—, así que no puede quedar
+// desactualizada: si se agrega una ruta o una herramienta, aparece sola.
+func (s *Sitio) docs(w http.ResponseWriter, r *http.Request) {
+	doc, err := contrato.Leer()
+	if err != nil {
+		s.fallo(w, r, http.StatusInternalServerError, "No se pudo leer el contrato",
+			"El archivo openapi.json que viene con esta versión no se pudo interpretar.")
+		return
+	}
+	d := datosDocs{
+		comun:  s.base("", ""),
+		Doc:    doc,
+		ConMCP: s.conMCP,
+		Base:   baseVisible(r),
+	}
+	for _, h := range mcp.Herramientas() {
+		d.Herramientas = append(d.Herramientas, aHerramientaDoc(h))
+	}
+	s.mostrar(w, r, "docs", d, http.StatusOK)
+}
+
+// baseVisible arma la dirección tal como la ve quien está mirando, para que
+// los ejemplos se puedan copiar y funcionen.
+func baseVisible(r *http.Request) string {
+	esquema := "http"
+	if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+		esquema = "https"
+	}
+	host := r.Host
+	if reenviado := r.Header.Get("X-Forwarded-Host"); reenviado != "" {
+		host = reenviado
+	}
+	if host == "" {
+		return ""
+	}
+	return esquema + "://" + host
+}
+
+// aHerramientaDoc traduce el esquema JSON de una herramienta a algo que se
+// pueda poner en una tabla.
+func aHerramientaDoc(h mcp.Herramienta) herramientaDoc {
+	out := herramientaDoc{Nombre: h.Nombre, Titulo: h.Titulo, Descripcion: h.Descripcion}
+
+	esquema, ok := h.Esquema.(map[string]any)
+	if !ok {
+		return out
+	}
+	props, ok := esquema["properties"].(map[string]any)
+	if !ok {
+		return out
+	}
+	obligatorios := map[string]bool{}
+	if req, ok := esquema["required"].([]string); ok {
+		for _, r := range req {
+			obligatorios[r] = true
+		}
+	}
+
+	nombres := make([]string, 0, len(props))
+	for n := range props {
+		nombres = append(nombres, n)
+	}
+	// Primero los obligatorios, después el resto, cada grupo alfabético: es el
+	// orden en que conviene leerlos.
+	sort.Slice(nombres, func(i, j int) bool {
+		if obligatorios[nombres[i]] != obligatorios[nombres[j]] {
+			return obligatorios[nombres[i]]
+		}
+		return nombres[i] < nombres[j]
+	})
+
+	for _, n := range nombres {
+		prop, _ := props[n].(map[string]any)
+		a := argumentoDoc{Nombre: n, Obligatorio: obligatorios[n]}
+		if t, ok := prop["type"].(string); ok {
+			a.Tipo = t
+		}
+		if d, ok := prop["description"].(string); ok {
+			a.Descripcion = d
+		}
+		if v, hay := prop["default"]; hay {
+			a.PorDefecto = fmt.Sprint(v)
+		}
+		if op, ok := prop["enum"].([]string); ok {
+			a.Opciones = op
+		}
+		out.Argumentos = append(out.Argumentos, a)
+	}
+	return out
 }

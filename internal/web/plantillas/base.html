@@ -23,6 +23,7 @@
         <a class="seccion-enlace{{if eq . $sec}} activa{{end}}" href="/ed/{{.}}/{{$.FechaActual}}">{{.}}</a>
       {{end}}
       <a class="seccion-enlace" href="/buscar?seccion={{if $sec}}{{$sec}}{{else}}primera{{end}}">buscar</a>
+      <a class="seccion-enlace" href="/docs">API</a>
     </nav>
   </div>
 </header>
@@ -33,7 +34,8 @@
 
 <footer class="contenedor pie">
   <span>Datos del <a href="https://www.boletinoficial.gob.ar">Boletín Oficial de la República Argentina</a>.</span>
-  <span><a href="/v1/openapi.json">API</a></span>
+  <span><a href="/docs">documentación</a></span>
+  <span><a href="/v1/openapi.json">openapi.json</a></span>
   <span><a href="/v1/salud">estado</a></span>
   <span>notarum {{.Version}}</span>
 </footer>

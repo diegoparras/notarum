@@ -62,7 +62,7 @@ func (s *Servidor) Atender(ctx context.Context, crudo []byte) *Respuesta {
 		return respuestaOK(p.ID, map[string]any{})
 
 	case "tools/list":
-		return respuestaOK(p.ID, map[string]any{"tools": herramientas()})
+		return respuestaOK(p.ID, map[string]any{"tools": Herramientas()})
 
 	case "tools/call":
 		if p.esNotificacion() {

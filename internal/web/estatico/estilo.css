@@ -205,3 +205,66 @@ h2 { font-size: 17px; font-weight: 600; margin: 32px 0 12px; }
 .infoleg-nota { margin: 0; font-size: 13px; color: var(--tinta-suave); line-height: 1.55; }
 .infoleg-enlaces { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .infoleg-enlaces .boton { font-size: 13px; padding: 6px 13px; min-height: 0; }
+
+/* --------------------------------------------------------- documentación */
+
+.docs-indice {
+  display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 30px;
+  padding-bottom: 18px; border-bottom: 1px solid var(--linea);
+}
+.docs-indice a {
+  font-size: 13px; padding: 5px 12px; border-radius: 99px;
+  background: var(--crema-hondo); color: var(--tinta-suave);
+}
+.docs-indice a:hover { background: var(--acento); color: var(--crema); text-decoration: none; }
+
+.docs-parrafo { font-size: 14.5px; color: var(--tinta-suave); line-height: 1.65; margin: 0 0 18px; max-width: 66ch; }
+.docs-parrafo code, .docs-tabla code { font-family: var(--mono); font-size: 12.5px; color: var(--acento); }
+
+.docs-grupo {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--acento); margin: 34px 0 14px;
+}
+
+.ruta { background: var(--crema-hondo); border-radius: var(--radio); padding: 15px 18px; margin-bottom: 12px; }
+.ruta-linea { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.ruta-metodo {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 500; letter-spacing: 0.05em;
+  background: var(--acento); color: var(--crema); padding: 3px 8px; border-radius: 5px;
+}
+.ruta-metodo.mcp { background: var(--terracota); }
+.ruta-camino { font-family: var(--mono); font-size: 13.5px; color: var(--tinta); word-break: break-all; }
+.ruta-titulo { font-size: 12.5px; color: var(--tinta-tenue); }
+.ruta-resumen { margin: 0 0 4px; font-size: 14px; font-weight: 500; }
+.ruta-detalle { margin: 0 0 10px; font-size: 13px; color: var(--tinta-suave); line-height: 1.6; max-width: 70ch; }
+
+.ruta-ejemplo {
+  margin: 12px 0 0; padding: 9px 12px; background: var(--crema);
+  border-radius: 9px; overflow-x: auto;
+}
+.ruta-ejemplo code { font-family: var(--mono); font-size: 12.5px; color: var(--tinta-suave); white-space: pre; }
+
+.ruta-respuestas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 11px; }
+.respuesta { font-size: 12px; color: var(--tinta-tenue); }
+.respuesta b { font-family: var(--mono); color: var(--tinta-suave); font-weight: 500; }
+
+.docs-tabla { width: 100%; border-collapse: collapse; margin: 11px 0 0; font-size: 13px; display: block; overflow-x: auto; }
+.docs-tabla th {
+  text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--tinta-tenue); padding: 0 10px 6px 0; white-space: nowrap;
+}
+.docs-tabla td { padding: 6px 10px 6px 0; border-top: 1px solid var(--linea); vertical-align: top; color: var(--tinta-suave); }
+.docs-tabla td:first-child { white-space: nowrap; }
+.docs-opciones { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.docs-opciones code { background: var(--crema); padding: 1px 6px; border-radius: 4px; }
+
+.esquema { background: var(--crema-hondo); border-radius: var(--radio); padding: 12px 18px; margin-bottom: 9px; }
+.esquema summary { cursor: pointer; font-size: 14px; color: var(--tinta-suave); }
+.esquema summary code { font-size: 13.5px; font-weight: 500; color: var(--tinta); }
+.esquema[open] summary { margin-bottom: 4px; }
+
+.docs-bloque {
+  background: var(--crema-hondo); border-radius: var(--radio);
+  padding: 14px 18px; overflow-x: auto; margin: 0 0 18px;
+}
+.docs-bloque code { font-family: var(--mono); font-size: 12.5px; color: var(--tinta-suave); white-space: pre; }

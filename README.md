@@ -58,6 +58,18 @@ los sirve como archivos.
 Qué días hubo edición, de un vistazo. La línea naranja marca los que tuvieron
 suplemento. Sirve para saber dónde mirar antes de recorrer un rango de fechas.
 
+### La documentación
+
+![La documentación de la API dentro del propio lector](docs/img/docs.png)
+
+En `/docs`, la API y el MCP documentados **dentro del propio servicio**, con la
+dirección de tu instancia en cada ejemplo para que se puedan copiar y pegar.
+
+No es un texto escrito aparte: se dibuja del mismo `openapi.json` que sirve la
+API y de la misma lista de herramientas que recibe el modelo. Si mañana se
+agrega una ruta o una herramienta, aparece sola — y hay tests que fallan si
+alguna queda sin documentar.
+
 ### La búsqueda
 
 ![Búsqueda de "energia" mostrando resultados del índice local](docs/img/buscar.png)

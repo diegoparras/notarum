@@ -1,9 +1,12 @@
 package mcp
 
-// herramientas describe lo que el modelo puede pedir. Las descripciones están
+// Herramientas describe lo que el modelo puede pedir. Las descripciones están
 // escritas para que sepa cuándo usar cada una y qué esperar, no sólo qué
 // argumentos toma.
-func herramientas() []Herramienta {
+//
+// Es pública para que la documentación de la interfaz salga de esta misma
+// lista y no de una copia que se desactualiza.
+func Herramientas() []Herramienta {
 	seccion := map[string]any{
 		"type":        "string",
 		"enum":        []string{"primera", "segunda", "tercera"},
