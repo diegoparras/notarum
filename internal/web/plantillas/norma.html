@@ -1,0 +1,35 @@
+{{define "titulo"}}{{if .Norma}}{{.Norma.Tipo}} {{.Norma.Numero}}{{else}}Norma{{end}} · InfoLEG{{end}}
+{{define "cuerpo"}}
+
+{{if .Error}}
+  <div class="vacio"><strong>No se pudo leer la norma</strong>{{.Error}}</div>
+{{else}}
+<article>
+  <div class="aviso-cabecera">
+    {{if .Volver}}<p class="bajada" style="margin-bottom:10px"><a href="{{.Volver}}">← volver al aviso</a></p>{{end}}
+    <h1>{{.Norma.Tipo}} {{.Norma.Numero}}{{if .Norma.Anio}}/{{.Norma.Anio}}{{end}}</h1>
+    {{if .Norma.TituloResumido}}<p class="aviso-norma" style="font-size:15px;margin:0 0 6px">{{.Norma.TituloResumido}}</p>{{end}}
+    {{if .Norma.Organismo}}<p class="bajada" style="margin:0">{{.Norma.Organismo}}</p>{{end}}
+    <div class="aviso-pie">
+      {{if .Norma.FechaBoletin}}<span class="dato-mono">BO {{.Norma.FechaBoletin}}</span>{{end}}
+      {{if .Norma.FechaSancion}}<span class="dato-mono">sancionada {{.Norma.FechaSancion}}</span>{{end}}
+      <span class="dato-mono">InfoLEG {{.Norma.ID}}</span>
+      {{if .Norma.ModificadaPor}}<span class="marca-chica terracota">modificada {{.Norma.ModificadaPor}} vez{{if ne .Norma.ModificadaPor 1}}ces{{end}}</span>{{end}}
+    </div>
+  </div>
+
+  <div class="aviso-nota">
+    Este es el texto que publica <a href="{{.Norma.URLFicha}}">InfoLEG</a>, que lo
+    mantiene actualizado. Para leerlo <strong>tal como salió publicado</strong>,
+    mirá el aviso del Boletín Oficial de ese día.
+  </div>
+
+  <div class="cuerpo">{{.Cuerpo}}</div>
+
+  <div class="navegar">
+    {{if .Volver}}<a href="{{.Volver}}">← volver al aviso</a>{{else}}<span></span>{{end}}
+    <a href="{{.Norma.URLFicha}}">verla en InfoLEG →</a>
+  </div>
+</article>
+{{end}}
+{{end}}

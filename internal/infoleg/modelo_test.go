@@ -124,3 +124,40 @@ func TestAnio(t *testing.T) {
 		t.Errorf("= %d", a)
 	}
 }
+
+// La clave del catálogo y la que sale de un aviso tienen que coincidir: si no,
+// el cruce no encuentra nada.
+func TestClaveCoincideEntreCatalogoYAviso(t *testing.T) {
+	// Como lo guarda el catálogo de InfoLEG.
+	n := Norma{Tipo: "Decreto", Numero: "845", FechaBoletin: "2026-09-01"}
+	// Como lo nombra el Boletín en el aviso.
+	ref, ok := ParsearNorma("Decreto 845/2026")
+	if !ok {
+		t.Fatal("no se reconoció la norma del aviso")
+	}
+	if n.ClaveDe() != ref.Clave() {
+		t.Errorf("catálogo = %q, aviso = %q: no se van a cruzar", n.ClaveDe(), ref.Clave())
+	}
+	if ref.Clave() != "normas/decreto/845/2026" {
+		t.Errorf("clave = %q", ref.Clave())
+	}
+}
+
+func TestClaveNormalizaElTipo(t *testing.T) {
+	conAcento := Norma{Tipo: "Resolución", Numero: "210", FechaBoletin: "2026-08-20"}
+	ref, _ := ParsearNorma("Resolucion 210/2026")
+	if conAcento.ClaveDe() != ref.Clave() {
+		t.Errorf("con acento = %q, sin acento = %q", conAcento.ClaveDe(), ref.Clave())
+	}
+	// Los tipos de dos palabras no pueden partir la clave en dos niveles.
+	r2 := Referencia{Tipo: "Decisión Administrativa", Numero: "44", Anio: 2026}
+	if r2.Clave() != "normas/decision-administrativa/44/2026" {
+		t.Errorf("clave = %q", r2.Clave())
+	}
+}
+
+func TestClaveVaciaSiNoHayNorma(t *testing.T) {
+	if (Referencia{}).Clave() != "" {
+		t.Error("una referencia vacía no puede dar clave")
+	}
+}

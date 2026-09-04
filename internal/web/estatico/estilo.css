@@ -187,3 +187,21 @@ h2 { font-size: 17px; font-weight: 600; margin: 32px 0 12px; }
   .secciones { margin-left: 0; width: 100%; }
   h1 { font-size: 21px; }
 }
+
+/* ------------------------------------------------------- InfoLEG en el aviso */
+
+.infoleg {
+  margin: 22px 0 4px;
+  padding: 15px 18px;
+  background: var(--crema-hondo);
+  border-radius: var(--radio);
+  border-left: 3px solid var(--acento);
+}
+.infoleg-titulo {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--acento); margin-bottom: 7px;
+}
+.infoleg-tema { margin: 0 0 6px; font-size: 14px; font-weight: 600; }
+.infoleg-nota { margin: 0; font-size: 13px; color: var(--tinta-suave); line-height: 1.55; }
+.infoleg-enlaces { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.infoleg-enlaces .boton { font-size: 13px; padding: 6px 13px; min-height: 0; }

@@ -6,28 +6,14 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/microcosm-cc/bluemonday"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
+
+	"github.com/diegoparras/notarum/internal/htmltexto"
 )
 
 // BaseSitio es el origen del que se leen las páginas.
 const BaseSitio = "https://www.boletinoficial.gob.ar"
-
-// politicaHTML deja pasar sólo lo que hace falta para leer un aviso: texto,
-// estructura de párrafos y tablas. Nada de estilos, scripts ni atributos.
-var politicaHTML = func() *bluemonday.Policy {
-	p := bluemonday.NewPolicy()
-	p.AllowElements(
-		"p", "br", "b", "strong", "i", "em", "u", "sup", "sub", "span", "div",
-		"ul", "ol", "li", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre",
-		"table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption", "col", "colgroup",
-	)
-	p.AllowAttrs("colspan", "rowspan").OnElements("td", "th")
-	// El cuerpo del Boletín trae <style> en línea: se descarta con su contenido.
-	p.SkipElementsContent("style", "script", "head", "title")
-	return p
-}()
 
 var (
 	reHrefAviso  = regexp.MustCompile(`^/detalleAviso/([a-z]+)/([A-Za-z0-9._-]+)/(\d{8})`)
@@ -329,8 +315,8 @@ func ParsearDetalle(cuerpo []byte, sec Seccion, id string, fecha Fecha) (*Detall
 
 	if cuerpoNodo := buscarPrimero(doc, porID("cuerpoDetalleAviso")); cuerpoNodo != nil {
 		crudo := renderInterior(cuerpoNodo)
-		d.HTML = strings.TrimSpace(politicaHTML.Sanitize(crudo))
-		d.Texto = textoPlano(d.HTML)
+		d.HTML = htmltexto.Sanear(crudo)
+		d.Texto = htmltexto.APlano(d.HTML)
 	}
 
 	d.Anexos = extraerAnexos(doc, sec, fecha)
@@ -394,52 +380,6 @@ func extraerAnexos(doc *html.Node, sec Seccion, fecha Fecha) []Anexo {
 		})
 	})
 	return anexos
-}
-
-// textoPlano convierte el HTML limpio en párrafos separados por línea en
-// blanco, conservando el orden de lectura.
-func textoPlano(limpio string) string {
-	doc, err := html.Parse(strings.NewReader(limpio))
-	if err != nil {
-		return ""
-	}
-	var sb strings.Builder
-	var rec func(*html.Node)
-	rec = func(n *html.Node) {
-		switch {
-		case n.Type == html.TextNode:
-			sb.WriteString(n.Data)
-		case n.Type == html.ElementNode && n.DataAtom == atom.Br:
-			sb.WriteString("\n")
-		case n.Type == html.ElementNode && esBloque(n.DataAtom):
-			sb.WriteString("\n\n")
-		case n.Type == html.ElementNode && (n.DataAtom == atom.Td || n.DataAtom == atom.Th):
-			sb.WriteString("\t")
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			rec(c)
-		}
-		if n.Type == html.ElementNode && (esBloque(n.DataAtom) || n.DataAtom == atom.Tr) {
-			sb.WriteString("\n")
-		}
-	}
-	rec(doc)
-
-	var lineas []string
-	for _, l := range strings.Split(sb.String(), "\n") {
-		lineas = append(lineas, strings.TrimSpace(strings.ReplaceAll(l, " ", " ")))
-	}
-	out := reLineasMult.ReplaceAllString(strings.Join(lineas, "\n"), "\n\n")
-	return strings.TrimSpace(out)
-}
-
-func esBloque(a atom.Atom) bool {
-	switch a {
-	case atom.P, atom.Div, atom.Li, atom.H1, atom.H2, atom.H3, atom.H4, atom.H5,
-		atom.H6, atom.Blockquote, atom.Pre, atom.Table, atom.Caption:
-		return true
-	}
-	return false
 }
 
 // ---------------------------------------------------------------- calendario

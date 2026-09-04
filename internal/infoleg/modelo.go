@@ -208,3 +208,23 @@ func normalizar(s string) string {
 	}
 	return strings.Join(strings.Fields(sb.String()), " ")
 }
+
+// Clave identifica a una norma dentro del almacén. Se normaliza el tipo para
+// que "Resolución" y "resolucion" den la misma, y así la referencia que sale
+// de un aviso encuentra lo que guardó el catálogo.
+func (r Referencia) Clave() string {
+	if r.Tipo == "" || r.Numero == "" {
+		return ""
+	}
+	base := "normas/" + strings.ReplaceAll(normalizar(r.Tipo), " ", "-") + "/" + r.Numero
+	if r.Anio > 0 {
+		return base + "/" + strconv.Itoa(r.Anio)
+	}
+	return base
+}
+
+// ClaveDe arma la clave de una norma del catálogo, con el año en que salió en
+// el Boletín.
+func (n Norma) ClaveDe() string {
+	return Referencia{Tipo: n.Tipo, Numero: n.Numero, Anio: n.Anio()}.Clave()
+}

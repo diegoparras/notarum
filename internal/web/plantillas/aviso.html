@@ -24,6 +24,34 @@
   </div>
   {{end}}
 
+  {{if .Norma}}
+  <aside class="infoleg">
+    <div class="infoleg-titulo">También en InfoLEG</div>
+    {{if .Norma.TituloResumido}}<p class="infoleg-tema">{{.Norma.TituloResumido}}</p>{{end}}
+    <p class="infoleg-nota">
+      Acá abajo está el texto <strong>tal como se publicó</strong> ese día.
+      {{if .Norma.TieneTexto}}
+        InfoLEG mantiene esta norma actualizada{{if eq .Norma.ModificadaPor 1}}, con 1 modificación posterior{{else if gt .Norma.ModificadaPor 1}}, con {{.Norma.ModificadaPor}} modificaciones posteriores{{end}}.
+      {{else}}
+        InfoLEG la tiene registrada pero no publicó su texto.
+      {{end}}
+    </p>
+    <div class="infoleg-enlaces">
+      {{if .Norma.TieneTexto}}<a class="boton suave" href="/norma/{{.Norma.ID}}">Ver el texto actualizado →</a>{{end}}
+      <a class="boton suave" href="{{.Norma.URLFicha}}">Ficha en InfoLEG</a>
+    </div>
+  </aside>
+  {{else if .InfoLEGAtrasado}}
+  <aside class="infoleg">
+    <div class="infoleg-titulo">Todavía no está en InfoLEG</div>
+    <p class="infoleg-nota">
+      El catálogo de InfoLEG llega hasta el {{.UltimaFechaBO}} y este aviso es
+      posterior. No quiere decir que la norma no exista: InfoLEG publica con
+      unos días de demora respecto del Boletín.
+    </p>
+  </aside>
+  {{end}}
+
   <div class="cuerpo" style="margin-top:22px">{{.Cuerpo}}</div>
 
   <div class="navegar">

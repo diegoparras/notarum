@@ -20,6 +20,7 @@ import (
 
 	"github.com/diegoparras/notarum/internal/almacen"
 	"github.com/diegoparras/notarum/internal/boletin"
+	"github.com/diegoparras/notarum/internal/infoleg"
 	"github.com/diegoparras/notarum/internal/servicio"
 )
 
@@ -46,7 +47,7 @@ func Nuevo(srv *servicio.Servicio, version string) (*Sitio, error) {
 		mux:       http.NewServeMux(),
 		plantilla: map[string]*template.Template{},
 	}
-	for _, nombre := range []string{"edicion", "aviso", "buscar", "calendario", "error"} {
+	for _, nombre := range []string{"edicion", "aviso", "buscar", "calendario", "norma", "error"} {
 		t, err := template.New("base").Funcs(funciones).ParseFS(archivosPlantillas,
 			"plantillas/base.html", "plantillas/"+nombre+".html")
 		if err != nil {
@@ -66,6 +67,7 @@ func (s *Sitio) rutas() {
 	s.mux.HandleFunc("GET /ed/{seccion}/{fecha}", s.edicion)
 	s.mux.HandleFunc("GET /av/{seccion}/{id}/{fecha}", s.aviso)
 	s.mux.HandleFunc("GET /calendario/{seccion}/{anio}", s.calendario)
+	s.mux.HandleFunc("GET /norma/{id}", s.norma)
 	s.mux.HandleFunc("GET /buscar", s.buscar)
 	s.mux.HandleFunc("GET /ir", s.ir)
 	s.mux.HandleFunc("GET /ir-calendario", s.irCalendario)
@@ -313,6 +315,14 @@ type datosAviso struct {
 	FechaLarga string
 	Detalle    *boletin.Detalle
 	Cuerpo     template.HTML
+	// Norma es lo que InfoLEG sabe de esta misma norma, cuando se la pudo
+	// cruzar. El Boletín publica el texto como salió ese día; InfoLEG lo
+	// mantiene actualizado, y ahí está el valor de mostrar las dos cosas.
+	Norma *infoleg.Norma
+	// InfoLEGAtrasado se prende cuando el catálogo todavía no llegó a la fecha
+	// del aviso: así se distingue "no existe" de "todavía no está".
+	InfoLEGAtrasado bool
+	UltimaFechaBO   string
 }
 
 func (s *Sitio) aviso(w http.ResponseWriter, r *http.Request) {
@@ -341,6 +351,20 @@ func (s *Sitio) aviso(w http.ResponseWriter, r *http.Request) {
 		Cuerpo: template.HTML(d.HTML),
 	}
 	datos.Angosto = true
+
+	if s.srv.InfoLEGDisponible() {
+		datos.Norma = s.srv.NormaDelAviso(d.Aviso)
+		if datos.Norma == nil {
+			// Si el catálogo no llega a esta fecha, la norma puede existir y
+			// no estar todavía. Decirlo es más honesto que callar.
+			e := s.srv.EstadoInfoLEG()
+			datos.UltimaFechaBO = e.UltimaFechaBO
+			if _, esNorma := infoleg.ParsearNorma(d.Norma); esNorma &&
+				e.Sincronizado && e.UltimaFechaBO != "" && d.Fecha.API() > e.UltimaFechaBO {
+				datos.InfoLEGAtrasado = true
+			}
+		}
+	}
 	s.mostrar(w, r, "aviso", datos, http.StatusOK)
 }
 
@@ -529,4 +553,59 @@ func (s *Sitio) calendario(w http.ResponseWriter, r *http.Request) {
 		d.Meses = append(d.Meses, mes)
 	}
 	s.mostrar(w, r, "calendario", d, http.StatusOK)
+}
+
+// ---------------------------------------------------------------- InfoLEG
+
+type datosNorma struct {
+	comun
+	Norma  *infoleg.Norma
+	Cuerpo template.HTML
+	Volver string
+	Error  string
+}
+
+// norma muestra el texto que InfoLEG mantiene actualizado, que es lo que el
+// Boletín no da: el Boletín publica la norma como salió ese día.
+func (s *Sitio) norma(w http.ResponseWriter, r *http.Request) {
+	if !s.srv.InfoLEGDisponible() {
+		s.fallo(w, r, http.StatusNotFound, "InfoLEG no está disponible",
+			"Esta instancia no tiene el enriquecimiento con InfoLEG activado.")
+		return
+	}
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil || id <= 0 {
+		s.fallo(w, r, http.StatusNotFound, "Ese identificador no se entiende",
+			"El de InfoLEG es un número.")
+		return
+	}
+
+	d := datosNorma{comun: s.base("", "")}
+	d.Angosto = true
+	// El volver se toma del propio sitio y nunca de lo que venga afuera, para
+	// que nadie use esta página como trampolín a otro lado.
+	if v := r.URL.Query().Get("volver"); strings.HasPrefix(v, "/av/") && !strings.Contains(v, "//") {
+		d.Volver = v
+	}
+
+	texto, err := s.srv.TextoDeNorma(r.Context(), id)
+	if errors.Is(err, infoleg.ErrSinTexto) {
+		s.fallo(w, r, http.StatusNotFound, "InfoLEG no publicó el texto de esta norma",
+			"Está registrada en el catálogo, pero su texto no está disponible. "+
+				"Le pasa a más de la mitad de las normas.")
+		return
+	}
+	if err != nil {
+		d.Error = mensajeDeError(err)
+		s.mostrar(w, r, "norma", d, http.StatusBadGateway)
+		return
+	}
+
+	d.Norma = &infoleg.Norma{ID: id}
+	if n := s.srv.NormaGuardada(id); n != nil {
+		d.Norma = n
+	}
+	// El HTML ya viene saneado del cliente de InfoLEG.
+	d.Cuerpo = template.HTML(texto.HTML)
+	s.mostrar(w, r, "norma", d, http.StatusOK)
 }

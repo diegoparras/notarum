@@ -16,6 +16,7 @@ import (
 
 	"github.com/diegoparras/notarum/internal/almacen"
 	"github.com/diegoparras/notarum/internal/boletin"
+	"github.com/diegoparras/notarum/internal/infoleg"
 )
 
 // TTLHoy es cuánto vale la edición del día en curso antes de volver a mirar.
@@ -38,8 +39,18 @@ type Servicio struct {
 	cli   *boletin.Cliente
 	cache almacen.Almacen
 	// indice es el mismo almacén, cuando el motor sabe buscar por su cuenta.
-	// Con disco es nil; con SQLite, no.
+	// Con disco es nil; con SQLite o Postgres, no.
 	indice almacen.Indexador
+	// infoleg enriquece los avisos con la norma actualizada. Es opcional: sin
+	// él notarum sirve el Boletín igual, sólo que sin ese agregado.
+	infoleg *infoleg.Cliente
+}
+
+// ConInfoLEG habilita el enriquecimiento de avisos con la normativa de
+// InfoLEG. Sin esto, notarum funciona igual: es un accesorio, no el corazón.
+func (s *Servicio) ConInfoLEG(c *infoleg.Cliente) *Servicio {
+	s.infoleg = c
+	return s
 }
 
 func Nuevo(cli *boletin.Cliente, c almacen.Almacen) *Servicio {

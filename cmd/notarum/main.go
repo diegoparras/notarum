@@ -22,6 +22,7 @@ import (
 	"github.com/diegoparras/notarum/internal/almacen"
 	"github.com/diegoparras/notarum/internal/api"
 	"github.com/diegoparras/notarum/internal/boletin"
+	"github.com/diegoparras/notarum/internal/infoleg"
 	"github.com/diegoparras/notarum/internal/mcp"
 	"github.com/diegoparras/notarum/internal/servicio"
 )
@@ -48,6 +49,8 @@ func ejecutar(args []string) error {
 		return rellenar(args)
 	case "mcp":
 		return servirMCP(args)
+	case "infoleg":
+		return sincronizarInfoLEG(args)
 	case "version", "--version", "-v":
 		fmt.Println("notarum " + version)
 		return nil
@@ -91,6 +94,11 @@ func ayuda() {
       Habla MCP por entrada y salida estándar, para un cliente local como
       Claude Desktop o Claude Code. La instancia levantada con "servir" ya
       expone lo mismo por HTTP en /mcp.
+
+  notarum infoleg
+      Baja el catálogo de normativa de InfoLEG y lo guarda. Con eso, cada
+      aviso del Boletín muestra la norma que InfoLEG mantiene actualizada.
+      Son unas 428 mil normas; se puede cortar y volver a correr.
 
   notarum version
 `)
@@ -169,7 +177,15 @@ func armarServicio(cfg configComun) (*servicio.Servicio, func(), error) {
 		UserAgent: cfg.userAgent,
 		Intervalo: cfg.intervalo,
 	})
-	return servicio.Nuevo(cli, alm), func() { _ = alm.Cerrar() }, nil
+	srv := servicio.Nuevo(cli, alm)
+	// InfoLEG es un accesorio: si se apaga, notarum sirve el Boletín igual.
+	if entorno("NOTARUM_SIN_INFOLEG", "") == "" {
+		srv = srv.ConInfoLEG(infoleg.NuevoCliente(infoleg.Opciones{
+			UserAgent: cfg.userAgent,
+			Intervalo: cfg.intervalo,
+		}))
+	}
+	return srv, func() { _ = alm.Cerrar() }, nil
 }
 
 // configComun es lo que ambos comandos necesitan para armar el servicio.
@@ -292,6 +308,57 @@ func servirMCP(args []string) error {
 	ctx, cancelar := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancelar()
 	return mcp.Nuevo(srv, version).ServirStdio(ctx, os.Stdin, os.Stdout)
+}
+
+// --------------------------------------------------------------- infoleg
+
+func sincronizarInfoLEG(args []string) error {
+	fs := flag.NewFlagSet("infoleg", flag.ContinueOnError)
+	dirCache := fs.String("cache", entorno("NOTARUM_CACHE", "/datos/cache"), "directorio de caché (motor disco)")
+	motor := fs.String("almacen", entorno("NOTARUM_ALMACEN", "disco"), "dónde guardar: disco, sqlite o postgres")
+	rutaDB := fs.String("db", entorno("NOTARUM_DB", "/datos/notarum.db"), "archivo de la base (motor sqlite)")
+	intervalo := fs.String("intervalo", entorno("NOTARUM_INTERVALO", "500ms"), "espera entre pedidos")
+	userAgent := fs.String("user-agent", entorno("NOTARUM_USER_AGENT", uaPorDefecto), "User-Agent hacia los sitios")
+	trabajo := fs.String("trabajo", entorno("NOTARUM_TRABAJO", ""), "dónde bajar el catálogo (por defecto, el temporal del sistema)")
+	formatoLog := fs.String("log", entorno("NOTARUM_LOG", "text"), "formato de log: text o json")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	armarLog(*formatoLog)
+
+	esperaSitio, err := time.ParseDuration(*intervalo)
+	if err != nil {
+		return fmt.Errorf("intervalo inválido %q: %w", *intervalo, err)
+	}
+	srv, cerrar, err := armarServicio(configComun{
+		motor: *motor, dirCache: *dirCache, rutaDB: *rutaDB,
+		userAgent: *userAgent, intervalo: esperaSitio,
+	})
+	if err != nil {
+		return err
+	}
+	defer cerrar()
+
+	ctx, cancelar := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancelar()
+
+	inicio := time.Now()
+	estado, err := srv.SincronizarInfoLEG(ctx, *trabajo, func(guardadas int) {
+		slog.Info("guardando normas", "guardadas", guardadas)
+	})
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			slog.Info("cortado por pedido del usuario; lo guardado queda")
+			return nil
+		}
+		return err
+	}
+	slog.Info("listo",
+		"normas", estado.Normas,
+		"con_texto", estado.ConTexto,
+		"hasta", estado.UltimaFechaBO,
+		"tardo", time.Since(inicio).Round(time.Second).String())
+	return nil
 }
 
 // ----------------------------------------------------------------- rellenar
