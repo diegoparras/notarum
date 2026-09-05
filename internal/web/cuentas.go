@@ -1,11 +1,13 @@
 package web
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/diegoparras/notarum/internal/asistente"
 	"github.com/diegoparras/notarum/internal/boletin"
 	"github.com/diegoparras/notarum/internal/cuentas"
 )
@@ -52,6 +54,13 @@ type datosCuenta struct {
 	// una pista para reconocer cuál está cargada, nunca la clave.
 	HayAsistente bool
 	ClaveIA      string
+	// Modelos son los que ofrece el proveedor con esa clave, para elegir uno.
+	Modelos []asistente.Modelo
+	// ModeloIA es el elegido; vacío significa el que trae notarum.
+	ModeloIA         string
+	ModeloPorDefecto string
+	// ErrorModelos es por qué no se pudo traer la lista, si no se pudo.
+	ErrorModelos string
 }
 
 // yo devuelve quién está mirando, o nil si nadie entró.
@@ -171,6 +180,22 @@ func (s *Sitio) dibujarCuenta(w http.ResponseWriter, r *http.Request, u *cuentas
 	}
 	if pista, hay := s.registro.PistaClaveIA(u.Nombre); hay {
 		d.ClaveIA = pista
+		d.ModeloIA = s.registro.ModeloIA(u.Nombre)
+		d.ModeloPorDefecto = asistente.ModeloPorDefecto
+		// La lista se le pide al proveedor con la clave de quien mira. Si no
+		// se puede, la página sale igual: elegir el modelo es una comodidad,
+		// no un requisito para que la cuenta funcione.
+		if s.asistente != nil {
+			if clave, err := s.registro.ClaveIA(u.Nombre); err == nil {
+				ctx, cancelar := context.WithTimeout(r.Context(), 10*time.Second)
+				defer cancelar()
+				if ms, err := s.asistente.Modelos(ctx, clave); err == nil {
+					d.Modelos = ms
+				} else {
+					d.ErrorModelos = explicarDelProveedor(err)
+				}
+			}
+		}
 	}
 	d.Angosto = true
 	for _, t := range s.registro.Tokens(u.Nombre) {

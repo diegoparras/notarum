@@ -99,6 +99,26 @@ Creá uno arriba. Nombralo por lo que va a hacer: cuando tengas varios, es lo
       <button class="boton suave" type="submit">Sacarla</button>
     </form>
   </div>
+
+  <h3>Con qué modelo</h3>
+  {{if .ErrorModelos}}
+    <div class="aviso-error">{{.ErrorModelos}}</div>
+  {{else if .Modelos}}
+  <form method="post" action="/cuenta/modelo-ia" class="barra">
+    <select name="modelo" style="flex:1 1 320px">
+      <option value="">El que trae notarum ({{.ModeloPorDefecto}})</option>
+      {{range .Modelos}}
+      <option value="{{.ID}}"{{if eq .ID $.ModeloIA}} selected{{end}}>{{.Nombre}} — {{.Precio}}</option>
+      {{end}}
+    </select>
+    <button class="boton" type="submit">Guardar el modelo</button>
+  </form>
+  <p class="pie-nota">
+    Son los {{len .Modelos}} modelos que ofrece tu clave hoy, con lo que cobran
+    por millón de tokens: entrada y salida. La lista se le pide a OpenRouter, no
+    está escrita acá, así que no envejece. Lo que gastes se cobra a tu cuenta.
+  </p>
+  {{end}}
 {{else}}
   <form method="post" action="/cuenta/clave-ia" class="barra">
     <span class="clave-caja" style="flex:1 1 320px">

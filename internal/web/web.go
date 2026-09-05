@@ -118,6 +118,10 @@ func Nuevo(srv *servicio.Servicio, version string) (*Sitio, error) {
 		// Sin cuentas no hay nada que pedir, pero la documentación igual tiene
 		// que decir en qué modo está: sin este piso mostraría cuotas en cero.
 		politica: cuentas.PoliticaPorDefecto(false),
+		// Uno propio, que ConTareas reemplaza por el del servicio. El
+		// asistente corre acá adentro: sin esto dependería de que alguien
+		// se acuerde de cablearlo, y fallaría en vez de generar.
+		tareas: tareas.Nuevo(),
 	}
 	for _, nombre := range []string{"edicion", "aviso", "buscar", "calendario", "norma", "docs", "entrar", "cuenta", "error", "provincial", "normaprov", "admin"} {
 		t, err := template.New("base").Funcs(funciones).ParseFS(archivosPlantillas,
@@ -149,6 +153,7 @@ func (s *Sitio) rutas() {
 	s.mux.HandleFunc("POST /docs/generar", s.generar)
 	s.mux.HandleFunc("POST /cuenta/clave-ia", s.guardarClaveIA)
 	s.mux.HandleFunc("POST /cuenta/clave-ia/borrar", s.borrarClaveIA)
+	s.mux.HandleFunc("POST /cuenta/modelo-ia", s.guardarModeloIA)
 	s.mux.HandleFunc("POST /admin/politica", s.guardarPolitica)
 	s.mux.HandleFunc("POST /admin/politica/olvidar", s.olvidarPolitica)
 	s.mux.HandleFunc("POST /admin/tareas/{tipo}", s.lanzarTarea)
@@ -798,7 +803,7 @@ type datosDocs struct {
 	Politica cuentas.Politica
 
 	// El asistente que arma la consulta.
-	Asistente      datosAsistente
+	Asistente      tareas.Tarea
 	HayAsistente   bool
 	TieneClaveIA   bool
 	ErrorAsistente string
@@ -810,16 +815,12 @@ type datosDocs struct {
 // OpenAPI embebido y la lista de herramientas—, así que no puede quedar
 // desactualizada: si se agrega una ruta o una herramienta, aparece sola.
 func (s *Sitio) docs(w http.ResponseWriter, r *http.Request) {
-	s.dibujarDocs(w, r, "", "", http.StatusOK)
+	s.dibujarDocs(w, r, "", http.StatusOK)
 }
 
 // dibujarDocs arma la página. El asistente vive acá porque es donde alguien
 // está leyendo qué rutas hay: es el momento en que necesita la consulta.
-func (s *Sitio) dibujarDocs(w http.ResponseWriter, r *http.Request, pedido, errMsg string, codigo int) {
-	s.dibujarDocsCon(w, r, datosAsistente{Pedido: pedido}, errMsg, codigo)
-}
-
-func (s *Sitio) dibujarDocsCon(w http.ResponseWriter, r *http.Request, a datosAsistente, errMsg string, codigo int) {
+func (s *Sitio) dibujarDocs(w http.ResponseWriter, r *http.Request, errMsg string, codigo int) {
 	doc, err := contrato.Leer()
 	if err != nil {
 		s.fallo(w, r, http.StatusInternalServerError, "No se pudo leer el contrato",
@@ -833,12 +834,17 @@ func (s *Sitio) dibujarDocsCon(w http.ResponseWriter, r *http.Request, a datosAs
 		Base:   baseVisible(r),
 
 		Politica:       s.vigente(),
-		Asistente:      a,
 		HayAsistente:   s.PuedeAsistir(),
 		ErrorAsistente: errMsg,
 	}
 	if u := s.yo(r); u != nil && s.registro != nil {
 		d.TieneClaveIA = s.registro.TieneClaveIA(u.Nombre)
+		// El estado de la generación sale del ejecutor, que es donde corre:
+		// así la página lo cuenta igual aunque quien la mire haya cerrado la
+		// pestaña mientras tanto y vuelva después.
+		if s.tareas != nil {
+			d.Asistente = s.tareas.Estado(tareaDe(u.Nombre))
+		}
 	}
 	for _, h := range mcp.Herramientas() {
 		d.Herramientas = append(d.Herramientas, aHerramientaDoc(h))

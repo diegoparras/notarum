@@ -42,6 +42,9 @@ type claveIAGuardada struct {
 	Pista string `json:"pista"`
 	// Proveedor queda anotado por si algún día hay más de uno.
 	Proveedor string `json:"proveedor"`
+	// Modelo es con cuál generar. Vacío significa el que trae notarum: la
+	// elección es de cada uno, y la paga cada uno.
+	Modelo string `json:"modelo,omitempty"`
 }
 
 // GuardarClaveIA cifra y guarda la clave de una persona.
@@ -100,6 +103,37 @@ func (r *Registro) PistaClaveIA(usuario string) (string, bool) {
 func (r *Registro) TieneClaveIA(usuario string) bool {
 	_, err := r.claveIAGuardada(usuario)
 	return err == nil
+}
+
+// GuardarModeloIA anota con qué modelo generar.
+//
+// Se guarda junto a la clave y no aparte: sin clave no hay con qué generar, y
+// un modelo elegido para una cuenta que ya no tiene clave no significa nada.
+func (r *Registro) GuardarModeloIA(usuario, modelo string) error {
+	g, err := r.claveIAGuardada(usuario)
+	if err != nil {
+		return err
+	}
+	modelo = strings.TrimSpace(modelo)
+	if len(modelo) > 200 {
+		return errors.New("eso es demasiado largo para ser el nombre de un modelo")
+	}
+	g.Modelo = modelo
+
+	crudo, err := json.Marshal(g)
+	if err != nil {
+		return err
+	}
+	return r.alm.Guardar(claveDeClaveIA(usuario), crudo, sinVencimiento)
+}
+
+// ModeloIA es el elegido, o vacío si nunca se eligió ninguno.
+func (r *Registro) ModeloIA(usuario string) string {
+	g, err := r.claveIAGuardada(usuario)
+	if err != nil {
+		return ""
+	}
+	return g.Modelo
 }
 
 // BorrarClaveIA la saca. Es de quien la cargó, así que se la puede llevar.

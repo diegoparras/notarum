@@ -1,6 +1,8 @@
 {{define "titulo"}}Documentación{{end}}
 {{define "cuerpo"}}
 
+{{if .Asistente.EstaCorriendo}}<meta http-equiv="refresh" content="3">{{end}}
+
 <h1>Documentación</h1>
 <p class="bajada">
   Lo mismo que ves acá, para que lo lea un programa o un modelo.
@@ -29,19 +31,33 @@
 
 {{if .Yo}}
   {{if .TieneClaveIA}}
+  {{if .Asistente.EstaCorriendo}}
+  <div class="tarea corriendo">
+    <div class="tarea-linea">
+      <span class="marca-chica">armando</span>
+      <span class="tarea-avance">{{if .Asistente.Avance}}{{.Asistente.Avance}}{{else}}empezando…{{end}}</span>
+    </div>
+    <p class="pie-nota">
+      Va por su cuenta: podés cerrar esta página y volver después. Se actualiza
+      sola.
+    </p>
+  </div>
+  {{else}}
   <form method="post" action="/docs/generar" class="asistente">
     <textarea name="pedido" rows="2" required
-      placeholder="la consulta para resúmenes de un rango de fechas en n8n">{{.Asistente.Pedido}}</textarea>
+      placeholder="la consulta para resúmenes de un rango de fechas en n8n"></textarea>
     <button class="boton" type="submit">Armar la consulta</button>
   </form>
+  {{end}}
 
-  {{if .Asistente.Generado}}
-  <pre class="docs-bloque"><code>{{.Asistente.Generado}}</code></pre>
+  {{if .Asistente.Fallo}}
+  <div class="aviso-error">{{.Asistente.Error}}</div>
+  {{else if .Asistente.SalioBien}}
+  <pre class="docs-bloque"><code>{{.Asistente.Resultado}}</code></pre>
   <p class="pie-nota">
-    Lo armó {{.Asistente.Modelo}} con la documentación de esta instancia
-    delante · {{.Asistente.TokensEntrada}} tokens de entrada y
-    {{.Asistente.TokensSalida}} de salida, que se cobran a tu cuenta de
-    OpenRouter. Revisalo antes de correrlo: un modelo se puede equivocar.
+    {{if .Asistente.Avance}}{{.Asistente.Avance}} · {{end}}con la documentación
+    de esta instancia delante, y cobrado a tu cuenta de OpenRouter. Revisalo
+    antes de correrlo: un modelo se puede equivocar.
   </p>
   {{end}}
   {{else}}

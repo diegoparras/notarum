@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/diegoparras/notarum/internal/almacen"
 	"github.com/diegoparras/notarum/internal/asistente"
@@ -22,6 +23,9 @@ type proveedorDeMentira struct {
 	claveRecibida string
 	codigo        int
 	respuesta     string
+	// antesDeContestar deja frenar al proveedor, para probar qué hace
+	// notarum mientras el otro se toma su tiempo.
+	antesDeContestar func()
 }
 
 const respuestaDelModelo = `{"choices":[{"message":{"content":` +
@@ -44,6 +48,9 @@ func nuevoProveedor(t *testing.T) *proveedorDeMentira {
 		// un contexto de 10 KB es menos de lo que se mandó.
 		crudo, _ := io.ReadAll(r.Body)
 		p.visto = string(crudo)
+		if p.antesDeContestar != nil {
+			p.antesDeContestar()
+		}
 		w.WriteHeader(p.codigo)
 		w.Write([]byte(p.respuesta))
 	}))
@@ -100,12 +107,16 @@ func TestGenerarUnaConsulta(t *testing.T) {
 		t.Fatal("la cuenta muestra la clave entera")
 	}
 
-	res2, cuerpo2 := postear(t, cli, srv.URL+"/docs/generar", url.Values{
+	// La generación no espera al proveedor: contesta en el acto y sigue por
+	// su cuenta. Un pedido HTTP colgado de un tercero termina en la página de
+	// error del proxy, que no explica nada.
+	res2, _ := postear(t, cli, srv.URL+"/docs/generar", url.Values{
 		"pedido": {"resúmenes de un rango de fechas en n8n"},
 	})
 	if res2.StatusCode != http.StatusOK {
 		t.Fatalf("generar = %d", res2.StatusCode)
 	}
+	cuerpo2 := esperarLaConsulta(t, cli, srv)
 	if !strings.Contains(cuerpo2, "/v1/ediciones/primera") {
 		t.Error("no se muestra la consulta generada")
 	}
@@ -225,7 +236,8 @@ func TestLosErroresDelProveedorSeExplican(t *testing.T) {
 
 		prov.codigo = codigo
 		prov.respuesta = `{"error":{"message":"no"}}`
-		_, cuerpo := postear(t, cli, srv.URL+"/docs/generar", url.Values{"pedido": {"algo"}})
+		postear(t, cli, srv.URL+"/docs/generar", url.Values{"pedido": {"algo"}})
+		cuerpo := esperarLaConsulta(t, cli, srv)
 		if !strings.Contains(cuerpo, esperado) {
 			t.Errorf("con %d no se explica: falta %q", codigo, esperado)
 		}
@@ -289,5 +301,60 @@ func TestElAsistenteEstaEnLaDocumentacion(t *testing.T) {
 	// serviría.
 	if strings.Contains(sinSesion, `action="/docs/generar"`) {
 		t.Error("ofrece el formulario a quien no puede usarlo")
+	}
+}
+
+// esperarLaConsulta recarga /docs hasta que la generación deja de estar
+// corriendo, y devuelve la página. Es lo que hace el navegador solo, con el
+// refresco de la página.
+func esperarLaConsulta(t *testing.T, cli *http.Client, srv *httptest.Server) string {
+	t.Helper()
+	hasta := time.Now().Add(5 * time.Second)
+	for time.Now().Before(hasta) {
+		_, cuerpo := pedirCon(t, cli, srv.URL+"/docs")
+		if !strings.Contains(cuerpo, `<span class="marca-chica">armando</span>`) {
+			return cuerpo
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("la generación no terminó nunca")
+	return ""
+}
+
+// El pedido HTTP no espera al proveedor.
+//
+// Esperándolo, el pedido quedaba colgado de un tercero: si tardaba de más, el
+// navegador terminaba mostrando la página de error del proxy —"el servicio no
+// responde"— cuando el servicio estaba perfecto y el que tardaba era el
+// proveedor. Un error que notarum puede explicar lo tiene que mostrar notarum.
+func TestGenerarContestaSinEsperarAlProveedor(t *testing.T) {
+	prov := nuevoProveedor(t)
+	// El proveedor tarda más de lo que aguantaría cualquier proxy.
+	seguir := make(chan struct{})
+	prov.antesDeContestar = func() { <-seguir }
+	defer close(seguir)
+
+	srv, reg := sitioConAsistente(t, prov)
+	cli := navegador(t)
+	entrar(t, srv, cli)
+	if err := reg.GuardarClaveIA("diego", "sk-or-v1-x0123456789"); err != nil {
+		t.Fatal(err)
+	}
+
+	empezo := time.Now()
+	res, _ := postear(t, cli, srv.URL+"/docs/generar", url.Values{"pedido": {"algo"}})
+	tardo := time.Since(empezo)
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("generar = %d", res.StatusCode)
+	}
+	if tardo > 2*time.Second {
+		t.Errorf("el pedido esperó %s al proveedor", tardo.Round(time.Millisecond))
+	}
+	// Y mientras tanto la página cuenta que está trabajando, en vez de dejar
+	// a quien mira sin saber si pasó algo.
+	_, cuerpo := pedirCon(t, cli, srv.URL+"/docs")
+	if !strings.Contains(cuerpo, "armando") {
+		t.Error("la página no dice que la consulta se está armando")
 	}
 }
