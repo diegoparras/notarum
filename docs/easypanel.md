@@ -14,7 +14,7 @@ En tu proyecto de EasyPanel, **+ Service → App**.
 **Desde una imagen ya construida**, que es como se despliega este proyecto:
 
 - Type: `Image`
-- Image: `ghcr.io/diegoparras/notarum:1.1.0`
+- Image: `ghcr.io/diegoparras/notarum:1.2.0`
 
 Fijá siempre una versión concreta en vez de `latest`: así sabés qué está
 corriendo cuando algo cambia.

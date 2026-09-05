@@ -9,7 +9,7 @@ RUN go mod download
 
 COPY . .
 
-ARG VERSION=1.0.0
+ARG VERSION=1.2.0
 # CGO apagado: el binario queda estático y corre en una imagen mínima.
 RUN CGO_ENABLED=0 GOOS=linux go build \
       -trimpath \
