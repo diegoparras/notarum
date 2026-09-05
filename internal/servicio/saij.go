@@ -47,28 +47,65 @@ func (s *Servicio) EstadoSAIJ() EstadoSAIJ {
 	return e
 }
 
-// indiceSAIJ devuelve el índice, cargándolo la primera vez que hace falta.
+// cadaCuantoMirar es cada cuánto se vuelve a preguntar por un catálogo más
+// nuevo cuando ya hay uno cargado. Con el índice vacío se pregunta siempre:
+// es el caso en que la respuesta cambia de "no hay nada" a "están las 81 mil",
+// y esperar un minuto para notarlo sería raro.
+const cadaCuantoMirar = time.Minute
+
+// indiceSAIJ devuelve el índice, cargándolo cuando hace falta.
 //
 // La carga es diferida a propósito: son 77 MB y 340 ms que sólo tiene que
 // pagar quien de verdad consulte normativa provincial. Una instancia que no
 // la use no carga nada, ni siquiera si el catálogo está guardado.
+//
+// Y se releva: `notarum provincial` se corre aparte del servicio —en un
+// contenedor, desde la consola— y escribe en el mismo almacén. Si el índice
+// se armara una sola vez, ese catálogo recién bajado no se notaría hasta
+// reiniciar, y quien lo bajó vería la misma pantalla de antes.
 func (s *Servicio) indiceSAIJ() *saij.Indice {
-	s.saijUnaVez.Do(func() {
+	s.saijMu.RLock()
+	indice, cargado, mirado := s.saijIndice, s.saijCargado, s.saijMirado
+	s.saijMu.RUnlock()
+
+	if indice != nil && indice.Cargado() && time.Since(mirado) < cadaCuantoMirar {
+		return indice
+	}
+
+	s.saijMu.Lock()
+	defer s.saijMu.Unlock()
+	// Otro pedido pudo haberlo cargado mientras se esperaba el candado.
+	if s.saijIndice != nil && s.saijIndice.Cargado() && s.saijCargado.After(cargado) {
+		return s.saijIndice
+	}
+	if s.saijIndice == nil {
 		s.saijIndice = saij.NuevoIndice()
-		crudo, hay := s.cache.Leer(claveCatalogoSAIJ)
-		if !hay {
-			return
-		}
-		empezo := time.Now()
-		var normas []saij.Norma
-		if err := json.Unmarshal(crudo, &normas); err != nil {
-			slog.Error("no se pudo leer el catálogo provincial guardado", "err", err)
-			return
-		}
-		s.saijIndice.Reemplazar(normas)
-		slog.Info("catálogo provincial en memoria",
-			"normas", len(normas), "tardo", time.Since(empezo))
-	})
+	}
+	s.saijMirado = time.Now()
+
+	e := s.EstadoSAIJ()
+	if !e.Sincronizado {
+		return s.saijIndice
+	}
+	// Lo que está en memoria ya es de esta versión del catálogo.
+	if s.saijIndice.Cargado() && !e.SincronizadoEn.After(s.saijCargado) {
+		return s.saijIndice
+	}
+
+	crudo, hay := s.cache.Leer(claveCatalogoSAIJ)
+	if !hay {
+		return s.saijIndice
+	}
+	empezo := time.Now()
+	var normas []saij.Norma
+	if err := json.Unmarshal(crudo, &normas); err != nil {
+		slog.Error("no se pudo leer el catálogo provincial guardado", "err", err)
+		return s.saijIndice
+	}
+	s.saijIndice.Reemplazar(normas)
+	s.saijCargado = e.SincronizadoEn
+	slog.Info("catálogo provincial en memoria",
+		"normas", len(normas), "tardo", time.Since(empezo))
 	return s.saijIndice
 }
 
@@ -188,8 +225,14 @@ func (s *Servicio) SincronizarSAIJ(ctx context.Context, dirTrabajo string) (Esta
 
 	// El índice que ya estaba en memoria queda viejo: se reemplaza con lo
 	// recién leído, sin volver a parsear ni obligar a reiniciar.
-	s.saijUnaVez.Do(func() { s.saijIndice = saij.NuevoIndice() })
+	s.saijMu.Lock()
+	if s.saijIndice == nil {
+		s.saijIndice = saij.NuevoIndice()
+	}
 	s.saijIndice.Reemplazar(normas)
+	s.saijCargado = e.SincronizadoEn
+	s.saijMirado = time.Now()
+	s.saijMu.Unlock()
 
 	slog.Info("catálogo provincial sincronizado", "normas", leidas, "provincias", len(provincias))
 	return e, nil

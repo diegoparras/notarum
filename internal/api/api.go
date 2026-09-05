@@ -14,6 +14,7 @@ import (
 	"github.com/diegoparras/notarum/internal/lockatus"
 	"github.com/diegoparras/notarum/internal/mcp"
 	"github.com/diegoparras/notarum/internal/servicio"
+	"github.com/diegoparras/notarum/internal/tareas"
 	"github.com/diegoparras/notarum/internal/web"
 )
 
@@ -37,6 +38,8 @@ type Config struct {
 	// Hub, si está, delega el login en Lockatus. Sólo lo usa el lector web:
 	// la API y el MCP se identifican con tokens de acá.
 	Hub *lockatus.Cliente
+	// Tareas corre los trabajos largos que se lanzan desde el panel.
+	Tareas *tareas.Ejecutor
 }
 
 // Servidor atiende las rutas de /v1.
@@ -85,6 +88,9 @@ func Nuevo(cfg Config) *Servidor {
 		sitio = sitio.ConMCP(!cfg.SinMCP).ConCuentas(cfg.Registro, politica)
 		if cfg.Hub != nil {
 			sitio = sitio.ConLockatus(cfg.Hub)
+		}
+		if cfg.Tareas != nil {
+			sitio = sitio.ConTareas(cfg.Tareas)
 		}
 		s.web = sitio
 		s.conWeb = true

@@ -25,6 +25,7 @@
       <a class="seccion-enlace" href="/buscar?seccion={{if $sec}}{{$sec}}{{else}}primera{{end}}">buscar</a>
       <a class="seccion-enlace" href="/provincial">provincias</a>
       <a class="seccion-enlace" href="/docs">API</a>
+      {{if .SoyAdmin}}<a class="seccion-enlace" href="/admin">panel</a>{{end}}
       {{if .Cuentas}}{{if .Yo}}<a class="seccion-enlace" href="/cuenta">{{.Yo}}</a>{{else}}<a class="seccion-enlace" href="/entrar">entrar</a>{{end}}{{end}}
     </nav>
   </div>

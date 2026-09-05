@@ -168,6 +168,13 @@ h2 { font-size: 17px; font-weight: 600; margin: 32px 0 12px; }
 
 /* -------------------------------------------------------------------- varios */
 
+/* El panel: el estado de cada fuente y lo que esté corriendo. */
+.tarea { background: var(--crema-hondo); border-radius: var(--radio); padding: 14px 18px; margin-bottom: 16px; font-size: 14px; }
+.tarea.corriendo { background: rgba(31, 95, 139, 0.08); }
+.tarea-linea { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tarea-avance { flex: 1; font-family: var(--mono); font-size: 13px; color: var(--tinta-suave); }
+.pie-nota { font-size: 13px; color: var(--tinta-tenue); margin-top: 8px; }
+
 /* La normativa provincial: una lista larga que se filtra, así que la barra
    de filtros tiene más campos y las páginas se navegan de a una. */
 .casilla { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--tinta-suave); white-space: nowrap; }

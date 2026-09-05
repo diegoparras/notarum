@@ -30,6 +30,7 @@ import (
 	"github.com/diegoparras/notarum/internal/mcp"
 	"github.com/diegoparras/notarum/internal/saij"
 	"github.com/diegoparras/notarum/internal/servicio"
+	"github.com/diegoparras/notarum/internal/tareas"
 )
 
 // version se puede fijar en el build: -ldflags "-X main.version=1.2.3".
@@ -302,10 +303,15 @@ func servir(args []string) error {
 		return err
 	}
 
+	// El ejecutor corre lo que se lanza desde el panel: sincronizar los
+	// catálogos y llenar la historia, que tardan más de lo que aguanta un
+	// pedido HTTP.
+	ejecutor := tareas.Nuevo()
+
 	manejador := api.Nuevo(api.Config{
 		Servicio: srv, PorMinuto: limite, Version: version,
 		TokenMCP: *tokenMCP, SinMCP: *sinMCP, SinWeb: *sinWeb,
-		Registro: reg, Politica: politica, Hub: hub,
+		Registro: reg, Politica: politica, Hub: hub, Tareas: ejecutor,
 	})
 
 	http := &http.Server{
@@ -338,6 +344,13 @@ func servir(args []string) error {
 		return nil
 	case <-ctx.Done():
 		slog.Info("apagando")
+		// Primero las tareas del panel: cortarlas y darles un momento para
+		// que dejen las cosas donde las dejarían. Lo que guardaron queda, y
+		// lo que faltaba se retoma al volver a lanzarlas.
+		if ejecutor.AlgoCorriendo() {
+			slog.Info("esperando a las tareas en curso")
+			ejecutor.Esperar(10 * time.Second)
+		}
 		apagado, cancelarApagado := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancelarApagado()
 		return http.Shutdown(apagado)
@@ -577,53 +590,24 @@ func rellenar(args []string) error {
 	return nil
 }
 
+// rellenarSeccion delega en el servicio, que es donde vive el recorrido: el
+// panel web lanza exactamente lo mismo.
 func rellenarSeccion(ctx context.Context, srv *servicio.Servicio, sec boletin.Seccion, desde, hasta boletin.Fecha, conAvisos bool) error {
-	fechas, err := srv.FechasDelAnio(ctx, sec, desde, hasta)
-	if err != nil {
-		return err
-	}
-	slog.Info("rellenando", "seccion", sec, "desde", desde.API(), "hasta", hasta.API(), "dias", len(fechas))
-
-	var bajadas, salteadas, fallidas int
-	inicio := time.Now()
-	for i, f := range fechas {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if srv.TieneEdicionEnCache(sec, f) {
-			salteadas++
-			continue
-		}
-		ed, err := srv.Edicion(ctx, sec, f, "")
-		switch {
-		case errors.Is(err, servicio.ErrSinEdicion):
-			slog.Debug("sin edición", "seccion", sec, "fecha", f.API())
-		case err != nil:
-			fallidas++
-			slog.Warn("no se pudo bajar", "seccion", sec, "fecha", f.API(), "err", err)
-			continue
-		default:
-			bajadas++
-			slog.Info("bajada", "seccion", sec, "fecha", f.API(), "avisos", ed.Cantidad,
-				"progreso", fmt.Sprintf("%d/%d", i+1, len(fechas)))
-			if conAvisos {
-				for _, a := range ed.Avisos {
-					if ctx.Err() != nil {
-						return ctx.Err()
-					}
-					if _, err := srv.Aviso(ctx, sec, a.ID, a.Fecha); err != nil {
-						slog.Warn("no se pudo bajar el aviso", "id", a.ID, "err", err)
-					}
-				}
-			}
+	avisar := func(a servicio.Avance) {
+		// Por consola alcanza con una línea por día bajado; el detalle de
+		// cada uno ya lo escribe el servicio.
+		if a.Dia%25 == 0 || a.Dia == a.DeDias {
+			slog.Info("avanzando", "seccion", a.Seccion, "dia", a.Dia, "de", a.DeDias,
+				"bajadas", a.Relleno.Bajadas, "ya_estaban", a.Relleno.YaEstaban)
 		}
 	}
-	slog.Info("listo", "seccion", sec, "bajadas", bajadas, "ya_estaban", salteadas,
-		"fallidas", fallidas, "tardo", time.Since(inicio).Round(time.Second).String())
-	if fallidas > 0 {
-		return fmt.Errorf("quedaron %d días sin bajar en la sección %s: volvé a correr el relleno", fallidas, sec)
+	var err error
+	if conAvisos {
+		_, err = srv.RellenarConAvisos(ctx, sec, desde, hasta, avisar)
+	} else {
+		_, err = srv.Rellenar(ctx, sec, desde, hasta, avisar)
 	}
-	return nil
+	return err
 }
 
 // armarRegistro prepara las cuentas.

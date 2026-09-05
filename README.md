@@ -318,6 +318,18 @@ guarda su huella, así que se muestra una vez y ni notarum puede recuperarlo.
 Cada zona tiene su propia cuota —lector, API, MCP, login—, así que bajar el
 límite de la API no deja la interfaz inusable.
 
+### El panel
+
+Todo lo que pone en marcha una instancia se hace desde `/admin`, sin abrir
+una consola: llenar la historia del Boletín, sincronizar InfoLEG y bajar la
+normativa provincial. Son trabajos de minutos, así que corren en segundo
+plano y la pantalla muestra cómo van; se puede cerrar la página y volver
+después.
+
+Es de quien administra: hace falta una cuenta con rol `admin`. Los mismos
+trabajos siguen estando por consola (`notarum rellenar`, `notarum infoleg`,
+`notarum provincial`) para quien prefiera automatizarlos.
+
 ### La normativa de las provincias
 
 El Boletín Oficial de la Nación no publica las leyes provinciales: cada
@@ -329,7 +341,7 @@ leyes, códigos y las 41 constituciones de las 24 jurisdicciones, desde 1855.
 notarum provincial
 ```
 
-Baja el catálogo y lo guarda. Tarda unos segundos y se puede volver a correr:
+…o el botón en `/admin`, que hace lo mismo. Baja el catálogo y lo guarda. Tarda unos segundos y se puede volver a correr:
 si el portal no publicó nada nuevo, no baja nada. Después queda en
 `/provincial` en el lector, en `/v1/provincial` en la API y como
 `provincial_buscar` en el MCP.

@@ -287,3 +287,81 @@ func TestTiposYProvincias(t *testing.T) {
 		t.Error("no hay tipos de norma")
 	}
 }
+
+// El catálogo que bajó otro proceso —`notarum provincial` desde la consola de
+// un contenedor— tiene que notarse sin reiniciar el servicio. Antes no: el
+// índice se armaba una sola vez, y quien visitara /provincial antes de
+// sincronizar dejaba al proceso convencido de que no había nada.
+func TestElCatalogoQueBajaOtroProcesoSeNota(t *testing.T) {
+	dir := t.TempDir()
+	alm, err := almacen.NuevoDisco(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Éste es el que atiende: consulta antes de que exista el catálogo.
+	sirviendo := Nuevo(boletin.NuevoCliente(boletin.Opciones{}), alm)
+	if r := sirviendo.BuscarProvincial(saij.Consulta{}); r.Total != 0 {
+		t.Fatalf("había %d normas antes de sincronizar", r.Total)
+	}
+	if sirviendo.CatalogoProvincialCargado() {
+		t.Fatal("dice tener catálogo antes de bajarlo")
+	}
+
+	// Y éste es el comando, en otro proceso sobre el mismo almacén.
+	srv, _ := portalProvincial(t, csvProvincial(t), "2026-09-01T10:57:16.703535")
+	alm2, err := almacen.NuevoDisco(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	comando := Nuevo(boletin.NuevoCliente(boletin.Opciones{}), alm2).
+		ConSAIJ(saij.NuevoCliente(saij.Opciones{Base: srv.URL}))
+	if _, err := comando.SincronizarSAIJ(context.Background(), t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+
+	// El que atiende tiene que enterarse sin reiniciar.
+	if r := sirviendo.BuscarProvincial(saij.Consulta{}); r.Total == 0 {
+		t.Error("el servicio no se enteró del catálogo que bajó el comando")
+	}
+	if !sirviendo.CatalogoProvincialCargado() {
+		t.Error("sigue diciendo que no hay catálogo")
+	}
+}
+
+// Y una vez cargado no se relee en cada consulta: leer 28 MB del almacén por
+// búsqueda sería peor que el problema que resuelve.
+func TestElCatalogoNoSeReleeEnCadaConsulta(t *testing.T) {
+	srv, _ := portalProvincial(t, csvProvincial(t), "2026-09-01T10:57:16.703535")
+	alm := &almacenQueCuenta{Almacen: nil}
+	base, err := almacen.NuevoDisco(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	alm.Almacen = base
+
+	s := Nuevo(boletin.NuevoCliente(boletin.Opciones{}), alm).
+		ConSAIJ(saij.NuevoCliente(saij.Opciones{Base: srv.URL}))
+	if _, err := s.SincronizarSAIJ(context.Background(), t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	alm.lecturas = 0
+	for k := 0; k < 50; k++ {
+		s.BuscarProvincial(saij.Consulta{Texto: "ley"})
+	}
+	if alm.lecturas > 2 {
+		t.Errorf("se leyó el almacén %d veces en 50 búsquedas", alm.lecturas)
+	}
+}
+
+// almacenQueCuenta cuenta las lecturas del catálogo.
+type almacenQueCuenta struct {
+	almacen.Almacen
+	lecturas int
+}
+
+func (a *almacenQueCuenta) Leer(clave string) ([]byte, bool) {
+	if clave == claveCatalogoSAIJ {
+		a.lecturas++
+	}
+	return a.Almacen.Leer(clave)
+}

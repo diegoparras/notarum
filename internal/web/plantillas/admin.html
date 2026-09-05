@@ -1,0 +1,150 @@
+{{define "titulo"}}Panel{{end}}
+{{define "cuerpo"}}
+
+{{if .Corriendo}}<meta http-equiv="refresh" content="4">{{end}}
+
+<h1>Panel</h1>
+<p class="bajada">
+  Poner en marcha las fuentes de datos de esta instancia. Todo lo de acá se
+  puede hacer también por consola, pero no hace falta.
+</p>
+
+{{if .Error}}<div class="aviso-error">{{.Error}}</div>{{end}}
+{{if .Aviso}}<div class="aviso-nota">{{.Aviso}}</div>{{end}}
+
+<div class="modo-acceso">
+  <span class="marca-chica">almacén {{.Almacen}}</span>
+  <span class="modo-explicacion">
+    {{if .TieneIndice}}con índice de búsqueda local{{else}}sin índice: las
+    búsquedas se le piden al Boletín{{end}}
+  </span>
+  <span class="modo-cuota">
+    {{.Entradas}} entradas{{if .Avisos}} · {{.Avisos}} avisos indexados{{end}}
+  </span>
+</div>
+
+<h2>El Boletín Oficial</h2>
+<p class="docs-parrafo">
+  notarum baja del sitio sólo lo que le piden. Llenar la historia de un
+  período hace que la API conteste al instante después, y —con los motores
+  sqlite o postgres— llena el índice para buscar sin pedirle nada al Boletín.
+  Se puede cortar y retomar: lo que ya está guardado se saltea.
+</p>
+
+{{$t := index .Tareas "rellenar"}}
+{{template "tarea" dict "T" $t "Nombre" "el relleno"}}
+
+{{if not $t.EstaCorriendo}}
+<form method="post" action="/admin/tareas/rellenar" class="barra">
+  <select name="seccion" aria-label="Sección">
+    {{range .Secciones}}<option value="{{.}}">{{.}}</option>{{end}}
+  </select>
+  <input type="date" name="desde" required aria-label="Desde">
+  <input type="date" name="hasta" required aria-label="Hasta">
+  <label class="casilla"><input type="checkbox" name="textos" value="1"> con el texto de cada aviso</label>
+  <button class="boton" type="submit">Llenar</button>
+</form>
+<p class="docs-parrafo pie-nota">
+  Con el texto de cada aviso tarda mucho más —es un pedido por aviso, al ritmo
+  que el Boletín tolera— pero es lo que hace que la búsqueda llegue al cuerpo
+  y no sólo al sumario.
+</p>
+{{end}}
+
+<h2>InfoLEG</h2>
+<p class="docs-parrafo">
+  El Boletín publica la norma como salió ese día; InfoLEG la mantiene
+  actualizada. Con esto, cada aviso muestra al lado la norma con sus
+  modificaciones. Son unas 428 mil normas y tarda varios minutos.
+</p>
+
+{{if not .InfoLEGHay}}
+  <div class="vacio"><strong>InfoLEG está apagado en esta instancia</strong>
+  Se enciende sacando <code>NOTARUM_SIN_INFOLEG</code> de la configuración.</div>
+{{else}}
+  {{$t := index .Tareas "infoleg"}}
+  {{template "tarea" dict "T" $t "Nombre" "la sincronización de InfoLEG"}}
+
+  {{if .InfoLEG.Sincronizado}}
+  <div class="datos">
+    <div><span class="dato-nombre">normas</span><span class="dato-mono">{{.InfoLEG.Normas}}</span></div>
+    <div><span class="dato-nombre">con texto</span><span class="dato-mono">{{.InfoLEG.ConTexto}}</span></div>
+    {{if .InfoLEG.UltimaFechaBO}}<div><span class="dato-nombre">hasta</span><span class="dato-mono">{{.InfoLEG.UltimaFechaBO}}</span></div>{{end}}
+    <div><span class="dato-nombre">sincronizado</span>{{haceCuanto .InfoLEG.SincronizadoEn}}</div>
+  </div>
+  {{end}}
+
+  {{if not $t.EstaCorriendo}}
+  <form method="post" action="/admin/tareas/infoleg">
+    <button class="boton" type="submit">
+      {{if .InfoLEG.Sincronizado}}Volver a sincronizar InfoLEG{{else}}Sincronizar InfoLEG{{end}}
+    </button>
+  </form>
+  {{end}}
+{{end}}
+
+<h2>Normativa provincial</h2>
+<p class="docs-parrafo">
+  Las leyes de las 24 provincias, que el Boletín nacional no publica. Son 81
+  mil normas y tarda unos segundos.
+</p>
+
+{{if not .SAIJHay}}
+  <div class="vacio"><strong>La base provincial está apagada en esta instancia</strong>
+  Se enciende sacando <code>NOTARUM_SIN_SAIJ</code> de la configuración.</div>
+{{else}}
+  {{$t := index .Tareas "provincial"}}
+  {{template "tarea" dict "T" $t "Nombre" "la sincronización provincial"}}
+
+  {{if .SAIJ.Sincronizado}}
+  <div class="datos">
+    <div><span class="dato-nombre">normas</span><span class="dato-mono">{{.SAIJ.Normas}}</span></div>
+    <div><span class="dato-nombre">jurisdicciones</span><span class="dato-mono">{{.SAIJ.Provincias}}</span></div>
+    <div><span class="dato-nombre">catálogo publicado</span><span class="dato-mono">{{fechaCorta .SAIJ.CatalogoAlDia}}</span></div>
+    <div><span class="dato-nombre">sincronizado</span>{{haceCuanto .SAIJ.SincronizadoEn}}</div>
+  </div>
+  {{end}}
+
+  {{if not $t.EstaCorriendo}}
+  <form method="post" action="/admin/tareas/provincial">
+    <button class="boton" type="submit">
+      {{if .SAIJ.Sincronizado}}Volver a sincronizar{{else}}Bajar la normativa provincial{{end}}
+    </button>
+  </form>
+  {{end}}
+{{end}}
+
+{{end}}
+
+{{define "tarea"}}
+{{$t := .T}}
+{{if $t.EstaCorriendo}}
+  <div class="tarea corriendo">
+    <div class="tarea-linea">
+      <span class="marca-chica">corriendo</span>
+      <span class="tarea-avance">{{if $t.Avance}}{{$t.Avance}}{{else}}empezando…{{end}}</span>
+      <form method="post" action="/admin/tareas/{{$t.Tipo}}/cortar">
+        <button class="boton suave" type="submit">Cortar</button>
+      </form>
+    </div>
+    <p class="pie-nota">
+      Va por su cuenta: podés cerrar esta página y volver después. La pantalla
+      se actualiza sola.
+    </p>
+  </div>
+{{else if $t.SalioBien}}
+  <div class="tarea lista">
+    <span class="marca-chica">listo</span>
+    {{$t.Resultado}} · {{haceCuanto $t.Termino}}{{if $t.QuienLaLanzo}}, lo lanzó {{$t.QuienLaLanzo}}{{end}}
+  </div>
+{{else if $t.Fallo}}
+  <div class="aviso-error">
+    No se pudo terminar {{.Nombre}}: {{$t.Error}}
+  </div>
+{{else if $t.SeCorto}}
+  <div class="tarea lista">
+    <span class="marca-chica gris">cortada</span>
+    {{if $t.Resultado}}{{$t.Resultado}}. {{end}}Lo que alcanzó a hacer quedó guardado.
+  </div>
+{{end}}
+{{end}}

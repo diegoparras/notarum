@@ -27,6 +27,7 @@ import (
 	"github.com/diegoparras/notarum/internal/lockatus"
 	"github.com/diegoparras/notarum/internal/mcp"
 	"github.com/diegoparras/notarum/internal/servicio"
+	"github.com/diegoparras/notarum/internal/tareas"
 )
 
 //go:embed plantillas/*.html
@@ -51,12 +52,20 @@ type Sitio struct {
 	// hub, si está, delega el login en Lockatus. Convive con el login propio:
 	// se suma una forma de entrar, no se reemplaza la que había.
 	hub *lockatus.Cliente
+	// tareas corre los trabajos largos que se lanzan desde el panel.
+	tareas *tareas.Ejecutor
 }
 
 // ConCuentas habilita el login y la gestión de tokens.
 func (s *Sitio) ConCuentas(reg *cuentas.Registro, p cuentas.Politica) *Sitio {
 	s.registro = reg
 	s.politica = p
+	return s
+}
+
+// ConTareas le da al lector con qué correr los trabajos largos del panel.
+func (s *Sitio) ConTareas(e *tareas.Ejecutor) *Sitio {
+	s.tareas = e
 	return s
 }
 
@@ -78,7 +87,7 @@ func Nuevo(srv *servicio.Servicio, version string) (*Sitio, error) {
 		// que decir en qué modo está: sin este piso mostraría cuotas en cero.
 		politica: cuentas.PoliticaPorDefecto(false),
 	}
-	for _, nombre := range []string{"edicion", "aviso", "buscar", "calendario", "norma", "docs", "entrar", "cuenta", "error", "provincial", "normaprov"} {
+	for _, nombre := range []string{"edicion", "aviso", "buscar", "calendario", "norma", "docs", "entrar", "cuenta", "error", "provincial", "normaprov", "admin"} {
 		t, err := template.New("base").Funcs(funciones).ParseFS(archivosPlantillas,
 			"plantillas/base.html", "plantillas/"+nombre+".html")
 		if err != nil {
@@ -104,6 +113,9 @@ func (s *Sitio) rutas() {
 	s.mux.HandleFunc("GET /entrar", s.verEntrar)
 	s.mux.HandleFunc("POST /entrar", s.hacerEntrar)
 	s.mux.HandleFunc("GET /salir", s.salir)
+	s.mux.HandleFunc("GET /admin", s.verAdmin)
+	s.mux.HandleFunc("POST /admin/tareas/{tipo}", s.lanzarTarea)
+	s.mux.HandleFunc("POST /admin/tareas/{tipo}/cortar", s.cortarTarea)
 	s.mux.HandleFunc("GET /provincial", s.verProvincial)
 	s.mux.HandleFunc("GET /provincial/{id}", s.verNormaProvincial)
 	s.mux.HandleFunc("GET /entrar/lockatus", s.irAlHub)
@@ -115,7 +127,36 @@ func (s *Sitio) rutas() {
 	s.mux.HandleFunc("GET /ir-calendario", s.irCalendario)
 }
 
-var funciones = template.FuncMap{}
+var funciones = template.FuncMap{
+	"haceCuanto": haceCuanto,
+	"fechaCorta": fechaCorta,
+	"dict":       dict,
+}
+
+// fechaCorta escribe una fecha como 2026-09-01, o nada si no hay.
+func fechaCorta(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format("2006-01-02")
+}
+
+// dict arma un mapa sobre la marcha, para poder pasarle más de un valor a una
+// plantilla incluida. Es la forma habitual de hacerlo con html/template.
+func dict(pares ...any) (map[string]any, error) {
+	if len(pares)%2 != 0 {
+		return nil, errors.New("dict necesita pares de clave y valor")
+	}
+	m := make(map[string]any, len(pares)/2)
+	for i := 0; i < len(pares); i += 2 {
+		clave, ok := pares[i].(string)
+		if !ok {
+			return nil, errors.New("las claves de dict son textos")
+		}
+		m[clave] = pares[i+1]
+	}
+	return m, nil
+}
 
 var meses = [...]string{"enero", "febrero", "marzo", "abril", "mayo", "junio",
 	"julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"}
@@ -142,8 +183,11 @@ func conMayuscula(s string) string {
 type comun struct {
 	Version string
 	// Cuentas dice si esta instancia tiene login, y Yo quién está mirando.
-	Cuentas     bool
-	Yo          string
+	Cuentas bool
+	Yo      string
+	// SoyAdmin enciende el enlace al panel. Que el enlace no aparezca es una
+	// cortesía, no la protección: quien entre a mano igual rebota.
+	SoyAdmin    bool
 	Seccion     boletin.Seccion
 	Secciones   []boletin.Seccion
 	FechaActual string
@@ -169,6 +213,7 @@ func (s *Sitio) baseCon(r *http.Request, sec boletin.Seccion, fecha string) comu
 	c := s.base(sec, fecha)
 	if u := s.yo(r); u != nil {
 		c.Yo = u.Nombre
+		c.SoyAdmin = u.Rol == cuentas.RolAdmin
 	}
 	return c
 }

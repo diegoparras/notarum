@@ -52,8 +52,14 @@ type Servicio struct {
 	saij *saij.Cliente
 	// El índice provincial se arma la primera vez que alguien lo consulta:
 	// son 77 MB que no tiene por qué pagar quien no lo use.
-	saijUnaVez sync.Once
+	saijMu     sync.RWMutex
 	saijIndice *saij.Indice
+	// saijCargado es de cuándo era el catálogo que está en memoria, y
+	// saijMirado cuándo se preguntó por última vez si había uno más nuevo.
+	// Sin esto, `notarum provincial` corrido aparte —que es como se hace en
+	// un contenedor— no se notaba hasta reiniciar el servicio.
+	saijCargado time.Time
+	saijMirado  time.Time
 }
 
 // ConSAIJ habilita la consulta de normativa provincial.
