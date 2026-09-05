@@ -11,6 +11,7 @@ import (
 	"github.com/diegoparras/notarum/internal/boletin"
 	"github.com/diegoparras/notarum/internal/contrato"
 	"github.com/diegoparras/notarum/internal/cuentas"
+	"github.com/diegoparras/notarum/internal/lockatus"
 	"github.com/diegoparras/notarum/internal/mcp"
 	"github.com/diegoparras/notarum/internal/servicio"
 	"github.com/diegoparras/notarum/internal/web"
@@ -33,6 +34,9 @@ type Config struct {
 	// Politica dice qué puede hacer quien no se identificó y cuánta cuota
 	// tiene cada rol. La define quien opera la instancia.
 	Politica cuentas.Politica
+	// Hub, si está, delega el login en Lockatus. Sólo lo usa el lector web:
+	// la API y el MCP se identifican con tokens de acá.
+	Hub *lockatus.Cliente
 }
 
 // Servidor atiende las rutas de /v1.
@@ -78,7 +82,11 @@ func Nuevo(cfg Config) *Servidor {
 			// vale más enterarse al arrancar que servir páginas rotas.
 			panic("no se pudo armar el lector web: " + err.Error())
 		}
-		s.web = sitio.ConMCP(!cfg.SinMCP).ConCuentas(cfg.Registro, politica)
+		sitio = sitio.ConMCP(!cfg.SinMCP).ConCuentas(cfg.Registro, politica)
+		if cfg.Hub != nil {
+			sitio = sitio.ConLockatus(cfg.Hub)
+		}
+		s.web = sitio
 		s.conWeb = true
 	}
 	s.rutas()

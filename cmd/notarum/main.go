@@ -26,6 +26,7 @@ import (
 	"github.com/diegoparras/notarum/internal/boletin"
 	"github.com/diegoparras/notarum/internal/cuentas"
 	"github.com/diegoparras/notarum/internal/infoleg"
+	"github.com/diegoparras/notarum/internal/lockatus"
 	"github.com/diegoparras/notarum/internal/mcp"
 	"github.com/diegoparras/notarum/internal/servicio"
 )
@@ -88,6 +89,15 @@ func ayuda() {
         NOTARUM_CUOTA_LECTOR                cuota de las páginas web    [600]
         NOTARUM_CUOTA_LOGIN                 intentos de entrada         [10]
         NOTARUM_SECRETO_SESION              firma las sesiones          [se genera]
+
+      Para delegar el login en Lockatus, el hub de identidad de la suite
+      Escriba. El default es el login propio; federado los suma, no los
+      reemplaza. Necesita que ya exista alguna cuenta.
+        NOTARUM_AUTH        local | federado                            [local]
+        LOCKATUS_ISSUER     la dirección del hub
+        LOCKATUS_CLIENT_ID  el nombre con el que notarum está declarado  [notarum]
+        LOCKATUS_REDIRECT_URI   https://tu-notarum/entrar/lockatus/volver
+
         NOTARUM_INTERVALO   (--intervalo)   espera entre pedidos al sitio [500ms]
         NOTARUM_USER_AGENT  (--user-agent)  User-Agent hacia el sitio
         NOTARUM_LOG         (--log)         text | json                 [json]
@@ -265,11 +275,15 @@ func servir(args []string) error {
 	if err != nil {
 		return err
 	}
+	hub, err := armarHub(reg != nil)
+	if err != nil {
+		return err
+	}
 
 	manejador := api.Nuevo(api.Config{
 		Servicio: srv, PorMinuto: limite, Version: version,
 		TokenMCP: *tokenMCP, SinMCP: *sinMCP, SinWeb: *sinWeb,
-		Registro: reg, Politica: politica,
+		Registro: reg, Politica: politica, Hub: hub,
 	})
 
 	http := &http.Server{
@@ -290,7 +304,7 @@ func servir(args []string) error {
 			"puerto", *puerto, "almacen", srv.Almacen().Metricas().Motor,
 			"indice_local", srv.TieneIndice(), "por_minuto", limite,
 			"mcp", !*sinMCP, "lector", !*sinWeb, "cuentas", reg != nil,
-			"acceso", politica.Modo, "version", version)
+			"acceso", politica.Modo, "federado", hub != nil, "version", version)
 		errores <- http.ListenAndServe()
 	}()
 
@@ -655,4 +669,35 @@ func armarPolitica(hayUsuarios bool, porMinuto int) (cuentas.Politica, error) {
 		}
 	}
 	return p, nil
+}
+
+// armarHub prepara la federación con Lockatus, si está pedida.
+//
+// Devuelve nil sin error cuando no está: el default es el login propio, y una
+// instancia que no forma parte de ninguna suite no tiene por qué depender de
+// un hub. Cuando sí está pedida, faltar un dato es un error de arranque y no
+// algo que se descubra cuando alguien intenta entrar.
+func armarHub(hayCuentas bool) (*lockatus.Cliente, error) {
+	modo := strings.ToLower(strings.TrimSpace(entorno("NOTARUM_AUTH", "local")))
+	switch modo {
+	case "", "local":
+		return nil, nil
+	case "federado":
+	default:
+		return nil, fmt.Errorf("NOTARUM_AUTH inválido: %q; se esperaba local o federado", modo)
+	}
+	if !hayCuentas {
+		// Sin registro no hay dónde guardar a quien entre. Se avisa acá y no
+		// después, porque el botón aparecería y no funcionaría.
+		return nil, errors.New("NOTARUM_AUTH=federado necesita el registro de cuentas encendido")
+	}
+	c, err := lockatus.Nuevo(lockatus.Opciones{
+		Emisor:    entorno("LOCKATUS_ISSUER", ""),
+		ClienteID: entorno("LOCKATUS_CLIENT_ID", "notarum"),
+		Vuelta:    entorno("LOCKATUS_REDIRECT_URI", ""),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
 }

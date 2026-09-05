@@ -278,6 +278,58 @@ registry y el detalle de cada paso, está en
 | `NOTARUM_SIN_MCP` | vacío | apaga `/mcp` |
 | `NOTARUM_SIN_WEB` | vacío | apaga el lector y deja sólo la API |
 
+### Quién entra, y cuánto puede pedir
+
+Esto lo decide quien monta la instancia, no notarum. Una cátedra puede querer
+su copia abierta a cualquiera; un estudio, la suya cerrada; un organismo, el
+lector público con la API por token. Las tres son legítimas.
+
+| Variable | Por defecto | Qué hace |
+|---|---|---|
+| `NOTARUM_ACCESO` | `cerrado` si hay cuentas | `abierto`, `mixto` o `cerrado` |
+| `NOTARUM_CUOTA_PERSONA` | `600` | pedidos por minuto de quien se identifica |
+| `NOTARUM_CUOTA_ADMIN` | `6000` | los de quien administra |
+| `NOTARUM_CUOTA_LECTOR` | `600` | los de las páginas web, que van aparte |
+| `NOTARUM_CUOTA_LOGIN` | `10` | intentos de entrada por minuto |
+| `NOTARUM_SECRETO_SESION` | se genera | firma las sesiones; fijalo para que sobrevivan al reinicio |
+
+- **abierto**: leer no pide nada. Las cuentas sirven para tener más cuota y
+  para el MCP.
+- **mixto**: el lector web es público, la API y el MCP piden token.
+- **cerrado**: nada sin sesión o token.
+
+Mientras no exista ninguna cuenta, notarum funciona abierto y sin login, que
+es como viene. Las cuentas se encienden con la primera:
+
+```bash
+notarum usuarios crear diego --rol admin
+```
+
+La clave se pide por teclado y no queda en el historial del shell. Desde
+`/cuenta` se crean y se revocan los tokens de API y de MCP; del token sólo se
+guarda su huella, así que se muestra una vez y ni notarum puede recuperarlo.
+
+Cada zona tiene su propia cuota —lector, API, MCP, login—, así que bajar el
+límite de la API no deja la interfaz inusable.
+
+### Federar con Lockatus
+
+Si notarum es parte de una suite Escriba, puede delegar el login en
+[Lockatus](docs/lockatus.md), el hub de identidad: quien entra usa la cuenta
+de la suite y los accesos se administran en un solo lugar.
+
+```
+NOTARUM_AUTH=federado
+LOCKATUS_ISSUER=https://tu-lockatus
+LOCKATUS_CLIENT_ID=notarum
+LOCKATUS_REDIRECT_URI=https://tu-notarum/entrar/lockatus/volver
+```
+
+Se suma al login propio en lugar de reemplazarlo: si el hub se cae, quien
+tenga una cuenta local todavía puede entrar. Los detalles —qué declarar del
+otro lado, cómo se traducen los roles y qué se verifica de cada token— están
+en [docs/lockatus.md](docs/lockatus.md).
+
 ### Llenar la historia
 
 notarum baja del sitio sólo lo que le piden. Si querés que responda rápido

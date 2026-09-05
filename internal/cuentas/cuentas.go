@@ -239,3 +239,29 @@ func TokenDeCabecera(cabecera string) string {
 func derivar(texto string, sal []byte, iteraciones int) ([]byte, error) {
 	return pbkdf2.Key(sha256.New, texto, sal, iteraciones, 32)
 }
+
+// ValidarNombreExterno acepta el correo con el que alguien viene de un
+// proveedor de identidad.
+//
+// Se guarda el correo entero y no la parte de adelante: diego@una.org y
+// diego@otra.org son dos personas, y juntarlas en una cuenta le daría a una
+// lo que es de la otra. Como un nombre local nunca puede llevar arroba, las
+// dos clases de cuenta no se pisan.
+func ValidarNombreExterno(correo string) error {
+	c := strings.TrimSpace(correo)
+	if len(c) < 3 || len(c) > 254 {
+		return errors.New("el correo necesita entre 3 y 254 caracteres")
+	}
+	arroba := strings.IndexByte(c, '@')
+	if arroba <= 0 || arroba == len(c)-1 || strings.Count(c, "@") != 1 {
+		return errors.New("el correo necesita una arroba con algo de cada lado")
+	}
+	for _, r := range c {
+		esLetra := r >= 'a' && r <= 'z'
+		esDigito := r >= '0' && r <= '9'
+		if !esLetra && !esDigito && !strings.ContainsRune(".-_+@", r) {
+			return fmt.Errorf("el correo lleva un carácter que no se acepta: %q", r)
+		}
+	}
+	return nil
+}

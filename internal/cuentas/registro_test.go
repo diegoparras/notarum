@@ -409,3 +409,146 @@ func TestRegistroNecesitaUnSecretoDecente(t *testing.T) {
 		t.Error("se aceptó un registro sin almacén")
 	}
 }
+
+// ------------------------------------------------------- login federado
+
+func TestEntrarFederadoCreaYActualiza(t *testing.T) {
+	r, _ := nuevoRegistro(t)
+
+	u, err := r.EntrarFederado("Diego@Ejemplo.AR", RolPersona)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Nombre != "diego@ejemplo.ar" {
+		t.Errorf("nombre = %q; tendría que normalizarse", u.Nombre)
+	}
+	if !u.Externo {
+		t.Error("la cuenta no quedó marcada como externa")
+	}
+	if u.Clave.Hash != "" {
+		t.Error("una cuenta federada no tiene por qué tener clave")
+	}
+
+	// La segunda vuelta es la misma cuenta, con el rol que diga el hub: allá
+	// se administran los accesos.
+	u2, err := r.EntrarFederado("diego@ejemplo.ar", RolAdmin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u2.Rol != RolAdmin {
+		t.Errorf("rol = %q; el hub lo había subido a admin", u2.Rol)
+	}
+	guardado, err := r.Usuario("diego@ejemplo.ar")
+	if err != nil || guardado.Rol != RolAdmin {
+		t.Errorf("el rol nuevo no se guardó: %+v %v", guardado, err)
+	}
+	// Y bajarlo también tiene efecto: si no, quitar un acceso en el hub no
+	// alcanzaría.
+	if _, err := r.EntrarFederado("diego@ejemplo.ar", RolPersona); err != nil {
+		t.Fatal(err)
+	}
+	if g, _ := r.Usuario("diego@ejemplo.ar"); g.Rol != RolPersona {
+		t.Errorf("rol = %q; el hub se lo había bajado", g.Rol)
+	}
+}
+
+// Dos correos con la misma parte de adelante son dos personas distintas.
+func TestDosDominiosSonDosPersonas(t *testing.T) {
+	r, _ := nuevoRegistro(t)
+	uno, err := r.EntrarFederado("diego@una.org", RolPersona)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otro, err := r.EntrarFederado("diego@otra.org", RolPersona)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if uno.Nombre == otro.Nombre {
+		t.Fatalf("las dos cuentas quedaron en %q", uno.Nombre)
+	}
+}
+
+// El hub no puede quedarse con una cuenta local.
+func TestElHubNoSePuedeQuedarConUnaCuentaLocal(t *testing.T) {
+	r, _ := nuevoRegistro(t)
+	if _, err := r.CrearUsuario("diego", "una frase larga y tranquila", RolPersona); err != nil {
+		t.Fatal(err)
+	}
+	// Un nombre local no lleva arroba, así que esto ni siquiera es un nombre
+	// externo válido; que falle es lo correcto por partida doble.
+	if _, err := r.EntrarFederado("diego", RolAdmin); err == nil {
+		t.Fatal("el hub tomó una cuenta local")
+	}
+	u, _ := r.Usuario("diego")
+	if u.Externo || u.Rol != RolPersona {
+		t.Errorf("la cuenta local quedó tocada: %+v", u)
+	}
+}
+
+// Por el formulario no se entra a una cuenta federada: no tiene clave, y
+// aceptar la vacía sería dejarla abierta.
+func TestUnaCuentaFederadaNoEntraPorElFormulario(t *testing.T) {
+	r, _ := nuevoRegistro(t)
+	if _, err := r.EntrarFederado("diego@ejemplo.ar", RolAdmin); err != nil {
+		t.Fatal(err)
+	}
+	for _, intento := range []string{"", " ", "una frase larga y tranquila"} {
+		if _, err := r.Autenticar("diego@ejemplo.ar", intento); err == nil {
+			t.Errorf("se entró a una cuenta federada con la clave %q", intento)
+		}
+	}
+}
+
+func TestCorreosQueNoSeAceptan(t *testing.T) {
+	r, _ := nuevoRegistro(t)
+	for _, malo := range []string{"", "diego", "@ejemplo.ar", "diego@", "a@b@c",
+		"diego ejemplo@x.ar", "die\ngo@ejemplo.ar", "<script>@x.ar", "diego@ejem plo.ar"} {
+		if _, err := r.EntrarFederado(malo, RolPersona); err == nil {
+			t.Errorf("se aceptó el correo %q", malo)
+		}
+	}
+	// Los espacios de los bordes sí se perdonan: son un descuido, no otro
+	// correo.
+	if _, err := r.EntrarFederado("  diego@ejemplo.ar \n", RolPersona); err != nil {
+		t.Errorf("no se aceptó un correo con espacios al costado: %v", err)
+	}
+}
+
+// ------------------------------------------------------------- sellado
+
+func TestSellarYAbrir(t *testing.T) {
+	r, _ := nuevoRegistro(t)
+	dentro := `{"v":"un verificador","e":"un estado"}`
+	sello := r.Sellar("oidc", dentro, time.Now().Add(time.Minute))
+
+	vuelta, err := r.Abrir("oidc", sello)
+	if err != nil || vuelta != dentro {
+		t.Fatalf("abrir = %q, %v", vuelta, err)
+	}
+	// El contenido no viaja a la vista, pero tampoco es un secreto: lo que
+	// importa es que no se pueda cambiar.
+	if _, err := r.Abrir("oidc", sello[:len(sello)-1]+"X"); err == nil {
+		t.Error("se abrió un sello con la firma cambiada")
+	}
+}
+
+// Un sello hecho para una cosa no vale para otra: si valiera, una transacción
+// a medio hacer podría presentarse como una sesión abierta.
+func TestUnSelloNoSirveParaOtroProposito(t *testing.T) {
+	r, _ := nuevoRegistro(t)
+	sello := r.Sellar("oidc", "diego", time.Now().Add(time.Minute))
+	if _, err := r.Abrir("sesion", sello); err == nil {
+		t.Fatal("un sello de transacción pasó por uno de sesión")
+	}
+	if _, err := r.LeerSesion(sello); err == nil {
+		t.Fatal("un sello de transacción pasó por una cookie de sesión")
+	}
+}
+
+func TestUnSelloVencido(t *testing.T) {
+	r, _ := nuevoRegistro(t)
+	sello := r.Sellar("oidc", "diego", time.Now().Add(-time.Second))
+	if _, err := r.Abrir("oidc", sello); err == nil {
+		t.Fatal("se abrió un sello vencido")
+	}
+}

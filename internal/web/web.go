@@ -24,6 +24,7 @@ import (
 	"github.com/diegoparras/notarum/internal/contrato"
 	"github.com/diegoparras/notarum/internal/cuentas"
 	"github.com/diegoparras/notarum/internal/infoleg"
+	"github.com/diegoparras/notarum/internal/lockatus"
 	"github.com/diegoparras/notarum/internal/mcp"
 	"github.com/diegoparras/notarum/internal/servicio"
 )
@@ -47,6 +48,9 @@ type Sitio struct {
 	// se comporta como siempre.
 	registro *cuentas.Registro
 	politica cuentas.Politica
+	// hub, si está, delega el login en Lockatus. Convive con el login propio:
+	// se suma una forma de entrar, no se reemplaza la que había.
+	hub *lockatus.Cliente
 }
 
 // ConCuentas habilita el login y la gestión de tokens.
@@ -100,6 +104,8 @@ func (s *Sitio) rutas() {
 	s.mux.HandleFunc("GET /entrar", s.verEntrar)
 	s.mux.HandleFunc("POST /entrar", s.hacerEntrar)
 	s.mux.HandleFunc("GET /salir", s.salir)
+	s.mux.HandleFunc("GET /entrar/lockatus", s.irAlHub)
+	s.mux.HandleFunc("GET /entrar/lockatus/volver", s.volverDelHub)
 	s.mux.HandleFunc("GET /cuenta", s.verCuenta)
 	s.mux.HandleFunc("POST /cuenta/tokens", s.crearToken)
 	s.mux.HandleFunc("POST /cuenta/tokens/{id}/revocar", s.revocarToken)

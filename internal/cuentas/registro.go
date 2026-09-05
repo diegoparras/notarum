@@ -351,3 +351,94 @@ func (r *Registro) firma(cuerpo string) string {
 	m.Write([]byte(cuerpo))
 	return base64.RawURLEncoding.EncodeToString(m.Sum(nil))
 }
+
+// EntrarFederado da por buena una identidad que verificó un proveedor de
+// identidad y devuelve la cuenta local que le corresponde, creándola si es la
+// primera vez.
+//
+// El rol viene del hub y se pisa en cada entrada: la matriz de accesos de allá
+// es la que manda, así que quitarle un rol a alguien tiene efecto la próxima
+// vez que entra y no hay que acordarse de tocar también acá.
+//
+// La cuenta queda marcada como externa y sin clave: no se puede entrar a ella
+// por el formulario, sólo por el hub.
+func (r *Registro) EntrarFederado(correo string, rol Rol) (*Usuario, error) {
+	correo = NormalizarNombre(correo)
+	if err := ValidarNombreExterno(correo); err != nil {
+		return nil, err
+	}
+	if !rol.Valido() {
+		return nil, fmt.Errorf("rol inválido: %q", rol)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if crudo, hay := r.alm.Leer(claveUsuario(correo)); hay {
+		var u Usuario
+		if err := json.Unmarshal(crudo, &u); err != nil {
+			return nil, fmt.Errorf("la cuenta de %q está ilegible: %w", correo, err)
+		}
+		// Una cuenta local con este nombre no puede existir —no se acepta la
+		// arroba al crearlas—, pero si alguna vez existiera, dejar que el hub
+		// la tomara sería regalarla.
+		if !u.Externo {
+			return nil, fmt.Errorf("%q ya es una cuenta local: %w", correo, ErrYaExiste)
+		}
+		if u.Rol != rol {
+			u.Rol = rol
+			if err := r.guardarUsuario(&u); err != nil {
+				return nil, err
+			}
+		}
+		return &u, nil
+	}
+
+	u := &Usuario{Nombre: correo, Rol: rol, Creado: time.Now().UTC(), Externo: true}
+	if err := r.guardarUsuario(u); err != nil {
+		return nil, err
+	}
+	if err := r.alm.Guardar("cuentas/_hay", []byte("true"), sinVencimiento); err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
+// ------------------------------------------------------------- transacciones
+
+// Sellar firma un texto que va a dar una vuelta por afuera y volver —hoy, los
+// secretos del login federado, que viajan en una cookie.
+//
+// El propósito entra en la firma: un sello hecho para una cosa no vale para
+// otra, así que una transacción a medio hacer no puede presentarse como una
+// sesión abierta.
+func (r *Registro) Sellar(proposito, cuerpo string, hasta time.Time) string {
+	base := proposito + "|" + strconv.FormatInt(hasta.Unix(), 10) + "|" +
+		base64.RawURLEncoding.EncodeToString([]byte(cuerpo))
+	return base + "|" + r.firma(base)
+}
+
+// Abrir devuelve lo que se selló, si la firma cierra, el propósito es el
+// mismo y todavía no venció.
+func (r *Registro) Abrir(proposito, valor string) (string, error) {
+	partes := strings.Split(valor, "|")
+	if len(partes) != 4 {
+		return "", ErrCredenciales
+	}
+	base := strings.Join(partes[:3], "|")
+	if !hmac.Equal([]byte(r.firma(base)), []byte(partes[3])) {
+		return "", ErrCredenciales
+	}
+	if partes[0] != proposito {
+		return "", ErrCredenciales
+	}
+	vence, err := strconv.ParseInt(partes[1], 10, 64)
+	if err != nil || time.Now().Unix() > vence {
+		return "", ErrCredenciales
+	}
+	cuerpo, err := base64.RawURLEncoding.DecodeString(partes[2])
+	if err != nil {
+		return "", ErrCredenciales
+	}
+	return string(cuerpo), nil
+}

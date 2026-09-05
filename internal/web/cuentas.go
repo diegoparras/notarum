@@ -25,6 +25,8 @@ type datosEntrar struct {
 	comun
 	Usuario string
 	Error   string
+	// Federado enciende el botón del hub.
+	Federado bool
 	// Explicacion dice para qué sirve entrar en esta instancia, que depende
 	// del modo: no es lo mismo una abierta, donde la cuenta sólo da cuota,
 	// que una cerrada, donde sin cuenta no se ve nada.
@@ -84,7 +86,8 @@ func (s *Sitio) verEntrar(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/cuenta", http.StatusFound)
 		return
 	}
-	d := datosEntrar{comun: s.baseCon(r, "", ""), Explicacion: s.politica.Explicacion()}
+	d := datosEntrar{comun: s.baseCon(r, "", ""), Explicacion: s.politica.Explicacion(),
+		Federado: s.Federado()}
 	d.Angosto = true
 	s.mostrar(w, r, "entrar", d, http.StatusOK)
 }
@@ -104,7 +107,8 @@ func (s *Sitio) hacerEntrar(w http.ResponseWriter, r *http.Request) {
 		// El mismo mensaje para usuario inexistente y clave errada: la
 		// diferencia serviría para averiguar qué cuentas existen.
 		d := datosEntrar{comun: s.baseCon(r, "", ""), Usuario: usuario,
-			Error: "Usuario o clave incorrectos.", Explicacion: s.politica.Explicacion()}
+			Error: "Usuario o clave incorrectos.", Explicacion: s.politica.Explicacion(),
+			Federado: s.Federado()}
 		d.Angosto = true
 		s.mostrar(w, r, "entrar", d, http.StatusUnauthorized)
 		return

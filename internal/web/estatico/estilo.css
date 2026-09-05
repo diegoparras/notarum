@@ -168,6 +168,12 @@ h2 { font-size: 17px; font-weight: 600; margin: 32px 0 12px; }
 
 /* -------------------------------------------------------------------- varios */
 
+/* Entrar por el hub de la suite: es la vía principal cuando está encendida,
+   así que va primero y con el mismo peso visual que el botón propio. */
+.boton.hub { display: block; text-align: center; text-decoration: none; margin-bottom: 18px; }
+.o-bien { display: flex; align-items: center; gap: 12px; margin: 0 0 18px; color: var(--tinta-tenue); font-size: 13px; }
+.o-bien::before, .o-bien::after { content: ""; flex: 1; height: 1px; background: var(--linea); }
+
 /* El modo de acceso de la instancia, arriba de la cuenta: quien la opera
    tiene que poder verlo sin abrir la configuración. */
 .modo-acceso { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; background: var(--crema-hondo); border-radius: var(--radio); padding: 14px 18px; margin-bottom: 26px; }

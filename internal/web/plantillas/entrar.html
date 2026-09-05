@@ -10,6 +10,11 @@
 
   {{if .Error}}<div class="aviso-error">{{.Error}}</div>{{end}}
 
+  {{if .Federado}}
+  <a class="boton hub" href="/entrar/lockatus">Entrar con Lockatus</a>
+  <div class="o-bien"><span>o con tu cuenta de acá</span></div>
+  {{end}}
+
   <form method="post" action="/entrar" class="formulario">
     <label class="campo">
       <span class="campo-nombre">Usuario</span>
