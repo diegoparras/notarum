@@ -50,9 +50,11 @@ func NuevoCliente(o Opciones) *Cliente {
 		c.base = BaseOpenRouter
 	}
 	if c.http == nil {
-		// Generar una consulta son unos segundos; más que esto es que algo se
-		// colgó, y quien está esperando en una página no aguanta más.
-		c.http = &http.Client{Timeout: 60 * time.Second}
+		// Menos que el timeout de un proxy común, que suele estar en 30
+		// segundos: si el proveedor tarda más, el error tiene que darlo
+		// notarum —que puede explicarlo— y no el proxy, que muestra una
+		// página que no dice nada y hace pensar que el servicio se cayó.
+		c.http = &http.Client{Timeout: 25 * time.Second}
 	}
 	return c
 }
@@ -65,6 +67,10 @@ var (
 	ErrSinSaldo = errors.New("la cuenta del proveedor no tiene saldo")
 	// ErrProveedorOcupado es un límite de uso del proveedor.
 	ErrProveedorOcupado = errors.New("el proveedor está limitando los pedidos")
+	// ErrProveedorLento es que tardó más de lo que se puede esperar en una
+	// página. Se distingue del que no contesta: éste probablemente ande, y
+	// volver a intentar tiene sentido.
+	ErrProveedorLento = errors.New("el proveedor tardó demasiado")
 )
 
 type mensaje struct {
@@ -101,6 +107,9 @@ type Generado struct {
 	Modelo string
 	// Tokens es lo que costó, para que quien paga lo vea.
 	TokensEntrada, TokensSalida int
+	// Tardo queda anotado en el log: si un día empieza a fallar, lo primero
+	// que hay que saber es si el proveedor se puso lento.
+	Tardo time.Duration
 }
 
 // Generar le pide al modelo la consulta.
@@ -139,8 +148,13 @@ func (c *Cliente) Generar(ctx context.Context, clave, modelo, sistema, pedidoDeL
 	}
 	req.Header.Set("X-Title", "notarum")
 
+	empezo := time.Now()
 	res, err := c.http.Do(req)
 	if err != nil {
+		// Distinguir el tardó del no contestó: llevan a cosas distintas.
+		if errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "Client.Timeout") {
+			return nil, fmt.Errorf("%w: tardó más de %s", ErrProveedorLento, c.http.Timeout)
+		}
 		return nil, fmt.Errorf("no se pudo hablar con el proveedor: %w", err)
 	}
 	defer res.Body.Close()
@@ -176,6 +190,7 @@ func (c *Cliente) Generar(ctx context.Context, clave, modelo, sistema, pedidoDeL
 		Modelo:        modelo,
 		TokensEntrada: r.Uso.Entrada,
 		TokensSalida:  r.Uso.Salida,
+		Tardo:         time.Since(empezo),
 	}, nil
 }
 

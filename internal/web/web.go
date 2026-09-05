@@ -56,6 +56,8 @@ type Sitio struct {
 	hub *lockatus.Cliente
 	// tareas corre los trabajos largos que se lanzan desde el panel.
 	tareas *tareas.Ejecutor
+	// programador los corre solos, todos los días.
+	programador *tareas.Programador
 	// asistente arma consultas a partir de un pedido en castellano.
 	asistente *asistente.Cliente
 }
@@ -81,6 +83,12 @@ func (s *Sitio) vigente() cuentas.Politica {
 // ConTareas le da al lector con qué correr los trabajos largos del panel.
 func (s *Sitio) ConTareas(e *tareas.Ejecutor) *Sitio {
 	s.tareas = e
+	return s
+}
+
+// ConProgramador le da al panel con qué mostrar la actualización automática.
+func (s *Sitio) ConProgramador(p *tareas.Programador) *Sitio {
+	s.programador = p
 	return s
 }
 
@@ -149,6 +157,7 @@ func (s *Sitio) rutas() {
 
 var funciones = template.FuncMap{
 	"haceCuanto": haceCuanto,
+	"enCuanto":   enCuanto,
 	"fechaCorta": fechaCorta,
 	"dict":       dict,
 }

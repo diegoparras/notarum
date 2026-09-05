@@ -105,6 +105,31 @@
 </p>
 {{end}}
 
+<h2>Actualización automática</h2>
+{{if .Automatica}}
+<p class="docs-parrafo">
+  Los catálogos se actualizan solos todos los días a las
+  <strong>{{.Automatica.Hora}}</strong>, hora de {{.Automatica.Zona}}. InfoLEG
+  suma las normas del Boletín con unos días de retraso y la base provincial se
+  republica cada tanto: sin esto habría que acordarse de apretar el botón.
+</p>
+<div class="datos">
+  <div><span class="dato-nombre">próxima</span><span class="dato-mono">{{fechaCorta .Automatica.Proxima}} {{.Automatica.Hora}}</span> · {{enCuanto .Automatica.Proxima}}</div>
+  <div><span class="dato-nombre">última</span>{{if .Automatica.Ultima.IsZero}}todavía ninguna desde que arrancó{{else}}{{haceCuanto .Automatica.Ultima}}{{end}}</div>
+  <div><span class="dato-nombre">qué actualiza</span><span class="dato-mono">{{range .Automatica.Tareas}}{{.}} {{end}}</span></div>
+</div>
+<p class="docs-parrafo pie-nota">
+  La hora se cambia con <code>NOTARUM_ACTUALIZAR_A_LAS</code> (HH:MM) y la zona
+  con <code>NOTARUM_ZONA</code>. Los botones de más abajo hacen lo mismo en el
+  momento; si una actualización ya está corriendo, la automática no la pisa.
+</p>
+{{else}}
+<div class="vacio"><strong>Las actualizaciones automáticas están apagadas</strong>
+Se encienden sacando <code>NOTARUM_SIN_ACTUALIZACION_AUTOMATICA</code> de la
+configuración. Mientras tanto, los catálogos sólo se actualizan con los botones
+de acá abajo.</div>
+{{end}}
+
 <h2>InfoLEG</h2>
 <p class="docs-parrafo">
   El Boletín publica la norma como salió ese día; InfoLEG la mantiene

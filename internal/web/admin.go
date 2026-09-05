@@ -49,6 +49,9 @@ type datosAdmin struct {
 	// pantalla se actualiza sola.
 	Corriendo bool
 
+	// Automatica es la actualización de todos los días, si está encendida.
+	Automatica *datosAutomatica
+
 	Secciones []boletin.Seccion
 	Error     string
 	Aviso     string
@@ -112,6 +115,15 @@ func (s *Sitio) dibujarAdmin(w http.ResponseWriter, r *http.Request, u *cuentas.
 			d.Tareas[t] = s.tareas.Estado(t)
 		}
 		d.Corriendo = s.tareas.AlgoCorriendo()
+	}
+	if s.programador != nil {
+		d.Automatica = &datosAutomatica{
+			Hora:    s.programador.HoraTexto(),
+			Zona:    s.programador.Zona(),
+			Proxima: s.programador.Proxima(),
+			Ultima:  s.programador.Ultima(),
+			Tareas:  s.programador.Tareas(),
+		}
 	}
 	s.mostrar(w, r, "admin", d, codigo)
 }
@@ -344,4 +356,37 @@ func (s *Sitio) olvidarPolitica(w http.ResponseWriter, r *http.Request) {
 	}
 	slog.Info("política de acceso devuelta a la del entorno", "quien", u.Nombre)
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+}
+
+// ------------------------------------------------- la actualización automática
+
+// datosAutomatica es lo que el panel muestra del programador: los catálogos se
+// actualizan solos de madrugada, y quien opera tiene que poder verlo sin
+// entrar al contenedor a leer el log.
+type datosAutomatica struct {
+	Hora    string
+	Zona    string
+	Proxima time.Time
+	Ultima  time.Time
+	Tareas  []string
+}
+
+// enCuanto dice cuánto falta para algo que todavía no pasó.
+func enCuanto(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	d := time.Until(t)
+	switch {
+	case d < 0:
+		return "ya"
+	case d < time.Minute:
+		return "en menos de un minuto"
+	case d < time.Hour:
+		return fmt.Sprintf("en %d minutos", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("en %d horas", int(d.Hours()))
+	default:
+		return fmt.Sprintf("en %d días", int(d.Hours()/24))
+	}
 }

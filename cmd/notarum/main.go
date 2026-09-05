@@ -9,6 +9,8 @@ import (
 	"bufio"
 	"context"
 	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -29,13 +31,14 @@ import (
 	"github.com/diegoparras/notarum/internal/infoleg"
 	"github.com/diegoparras/notarum/internal/lockatus"
 	"github.com/diegoparras/notarum/internal/mcp"
+	"github.com/diegoparras/notarum/internal/memoria"
 	"github.com/diegoparras/notarum/internal/saij"
 	"github.com/diegoparras/notarum/internal/servicio"
 	"github.com/diegoparras/notarum/internal/tareas"
 )
 
 // version se puede fijar en el build: -ldflags "-X main.version=1.2.3".
-var version = "1.7.2"
+var version = "1.8.0"
 
 func main() {
 	if err := ejecutar(os.Args[1:]); err != nil {
@@ -94,6 +97,15 @@ func ayuda() {
         NOTARUM_CUOTA_LECTOR                cuota de las páginas web    [600]
         NOTARUM_CUOTA_LOGIN                 intentos de entrada         [10]
         NOTARUM_SECRETO_SESION              firma las sesiones          [se genera]
+        NOTARUM_MEMORIA_MAX                 techo de memoria, 512MB o 1GB
+                                            [lo que diga el contenedor]
+
+      Los catálogos se actualizan solos todos los días. Los mismos botones del
+      panel los actualizan en el momento.
+        NOTARUM_ACTUALIZAR_A_LAS            hora HH:MM                  [05:00]
+        NOTARUM_ZONA                        dónde se cuenta esa hora
+                                            [America/Argentina/Buenos_Aires]
+        NOTARUM_SIN_ACTUALIZACION_AUTOMATICA   apaga la actualización diaria
 
       Para delegar el login en Lockatus, el hub de identidad de la suite
       Escriba. El default es el login propio; federado los suma, no los
@@ -277,6 +289,20 @@ func servir(args []string) error {
 	}
 	armarLog(*formatoLog)
 
+	// Un techo para el recolector, antes que nada. Go deja crecer el heap
+	// hasta el doble de lo vivo sin mirar lo que hay afuera: si la máquina
+	// está justa, el pico de armar un índice termina en un OOM del que el
+	// proceso ni se entera —lo mata el sistema— y desde afuera se ve como el
+	// servicio que dejó de responder sin explicación. Con el techo puesto, el
+	// recolector trabaja más seguido y el pico no llega.
+	if techo := memoria.Ajustar(entorno("NOTARUM_MEMORIA_MAX", "")); techo > 0 {
+		slog.Info("techo de memoria", "megas", techo/(1<<20),
+			"de", map[bool]string{true: "la configuración", false: "el contenedor"}[entorno("NOTARUM_MEMORIA_MAX", "") != ""])
+	} else {
+		slog.Info("sin techo de memoria: el proceso crece hasta donde lo deje la máquina",
+			"para_ponerle_uno", "NOTARUM_MEMORIA_MAX=1GB")
+	}
+
 	esperaSitio, err := time.ParseDuration(*intervalo)
 	if err != nil {
 		return fmt.Errorf("intervalo inválido %q: %w", *intervalo, err)
@@ -330,10 +356,33 @@ func servir(args []string) error {
 	// pedido HTTP.
 	ejecutor := tareas.Nuevo()
 
+	// Y el programador, que los corre solos todos los días. Los catálogos se
+	// publican de a poco —InfoLEG suma las normas del Boletín con unos días
+	// de retraso— y sin esto hay que acordarse de apretar el botón.
+	programador, err := tareas.NuevoProgramador(ejecutor,
+		entorno("NOTARUM_ACTUALIZAR_A_LAS", tareas.HoraPorDefecto),
+		entorno("NOTARUM_ZONA", tareas.ZonaArgentina))
+	if err != nil {
+		return err
+	}
+	if entorno("NOTARUM_SIN_ACTUALIZACION_AUTOMATICA", "") == "" {
+		programador.Agregar(tareas.Programado{
+			Tipo:  "infoleg",
+			Hacer: trabajoInfoLEG(srv),
+		})
+		programador.Agregar(tareas.Programado{
+			Tipo:  "provincial",
+			Hacer: trabajoProvincial(srv),
+		})
+		programador.Arrancar()
+		defer programador.Frenar()
+	}
+
 	manejador := api.Nuevo(api.Config{
 		Servicio: srv, PorMinuto: limite, Version: version,
 		TokenMCP: *tokenMCP, SinMCP: *sinMCP, SinWeb: *sinWeb,
-		Registro: reg, Politica: politica, Hub: hub, Tareas: ejecutor,
+		Registro: reg, Politica: politica, Hub: hub,
+		Tareas: ejecutor, Programador: programador,
 		// El asistente se enciende solo: cada persona pone su clave de
 		// OpenRouter desde su cuenta, así que no hay nada que configurar acá.
 		Asistente: asistente.NuevoCliente(asistente.Opciones{}),
@@ -650,18 +699,45 @@ func armarRegistro(alm almacen.Almacen) (*cuentas.Registro, error) {
 		return cuentas.NuevoRegistro(alm, []byte(s))
 	}
 
+	// Sin secreto configurado se genera uno y se guarda, para que las
+	// sesiones y lo que se cifre con él sobrevivan al reinicio.
+	//
+	// Va en base64 y no en crudo: el almacén guarda JSON, y 32 bytes al azar
+	// casi nunca lo son. Guardarlos derecho hacía que una instancia sin
+	// NOTARUM_SECRETO_SESION no llegara a arrancar.
 	const clave = "cuentas/_secreto"
-	if guardado, hay := alm.Leer(clave); hay && len(guardado) >= 32 {
-		return cuentas.NuevoRegistro(alm, guardado)
+	if crudo, hay := alm.Leer(clave); hay {
+		var enTexto string
+		if err := json.Unmarshal(crudo, &enTexto); err == nil {
+			if secreto, err := base64.StdEncoding.DecodeString(enTexto); err == nil && len(secreto) >= 32 {
+				return cuentas.NuevoRegistro(alm, secreto)
+			}
+		}
+		// Lo guardado por una versión anterior, en crudo: si sirve, se usa y
+		// se reescribe bien. Perderlo cerraría todas las sesiones abiertas y
+		// dejaría ilegible lo que se haya cifrado con él.
+		if len(crudo) >= 32 {
+			if err := guardarSecreto(alm, clave, crudo); err == nil {
+				return cuentas.NuevoRegistro(alm, crudo)
+			}
+		}
 	}
 	secreto := make([]byte, 32)
 	if _, err := rand.Read(secreto); err != nil {
 		return nil, err
 	}
-	if err := alm.Guardar(clave, secreto, almacen.SinVencimiento); err != nil {
+	if err := guardarSecreto(alm, clave, secreto); err != nil {
 		return nil, err
 	}
 	return cuentas.NuevoRegistro(alm, secreto)
+}
+
+func guardarSecreto(alm almacen.Almacen, clave string, secreto []byte) error {
+	crudo, err := json.Marshal(base64.StdEncoding.EncodeToString(secreto))
+	if err != nil {
+		return err
+	}
+	return alm.Guardar(clave, crudo, almacen.SinVencimiento)
 }
 
 // armarPolitica arma la política de acceso de esta instancia.
@@ -774,4 +850,30 @@ func sincronizarSAIJ(args []string) error {
 		"catalogo_publicado", estado.CatalogoAlDia.Format("2006-01-02"),
 		"tardo", time.Since(inicio).Round(time.Second).String())
 	return nil
+}
+
+// Los trabajos que corren solos y desde el panel son los mismos: se arman acá
+// una vez y los usan los dos, para que no puedan diverger.
+func trabajoInfoLEG(srv *servicio.Servicio) tareas.Trabajo {
+	return func(ctx context.Context, avisar func(string)) (string, error) {
+		avisar("buscando el catálogo de InfoLEG")
+		e, err := srv.SincronizarInfoLEG(ctx, "", func(guardadas int) {
+			avisar(fmt.Sprintf("guardando normas (%d)", guardadas))
+		})
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("%d normas, %d con texto", e.Normas, e.ConTexto), nil
+	}
+}
+
+func trabajoProvincial(srv *servicio.Servicio) tareas.Trabajo {
+	return func(ctx context.Context, avisar func(string)) (string, error) {
+		avisar("bajando el catálogo provincial")
+		e, err := srv.SincronizarSAIJ(ctx, "")
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("%d normas de %d jurisdicciones", e.Normas, e.Provincias), nil
+	}
 }

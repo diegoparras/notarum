@@ -22,6 +22,13 @@ import (
 // otra que no.
 func sitioConPanel(t *testing.T) (*httptest.Server, *tareas.Ejecutor) {
 	t.Helper()
+	return armarPanel(t, nil)
+}
+
+// armarPanel es lo mismo, con una oportunidad de agregarle algo al sitio antes
+// de levantarlo.
+func armarPanel(t *testing.T, ajustar func(*Sitio, *tareas.Ejecutor)) (*httptest.Server, *tareas.Ejecutor) {
+	t.Helper()
 	alm, err := almacen.NuevoDisco(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -45,6 +52,9 @@ func sitioConPanel(t *testing.T) (*httptest.Server, *tareas.Ejecutor) {
 	}
 	ej := tareas.Nuevo()
 	sitio.ConCuentas(reg, cuentas.PoliticaPorDefecto(true)).ConTareas(ej)
+	if ajustar != nil {
+		ajustar(sitio, ej)
+	}
 
 	srv := httptest.NewServer(sitio)
 	t.Cleanup(srv.Close)
@@ -405,6 +415,64 @@ func TestSoloElAdminCambiaLaPolitica(t *testing.T) {
 		res, _ := postear(t, cli, srv.URL+ruta, url.Values{"modo": {"abierto"}})
 		if res.StatusCode != http.StatusForbidden {
 			t.Errorf("%s = %d, se esperaba 403", ruta, res.StatusCode)
+		}
+	}
+}
+
+// ------------------------------------------- la actualización automática
+
+// El panel tiene que decir cuándo se actualiza solo. Que corra de madrugada no
+// sirve de nada si quien opera no puede verlo sin entrar al contenedor.
+func TestElPanelMuestraLaActualizacionAutomatica(t *testing.T) {
+	srv, _ := armarPanel(t, func(s *Sitio, ej *tareas.Ejecutor) {
+		p, err := tareas.NuevoProgramador(ej, "05:00", tareas.ZonaArgentina)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p.Agregar(tareas.Programado{Tipo: tareaInfoLEG, Hacer: nada})
+		p.Agregar(tareas.Programado{Tipo: tareaProvincial, Hacer: nada})
+		s.ConProgramador(p)
+	})
+	_, cuerpo := pedirCon(t, entrarComo(t, srv, "jefa"), srv.URL+"/admin")
+
+	for _, esperado := range []string{
+		"Actualización automática", "05:00",
+		"America/Argentina/Buenos_Aires", tareaInfoLEG, tareaProvincial,
+	} {
+		if !strings.Contains(cuerpo, esperado) {
+			t.Errorf("el panel no muestra %q", esperado)
+		}
+	}
+}
+
+// Y cuando está apagada, tiene que decir eso y cómo encenderla: un panel que
+// no dice nada deja pensando que la actualización anda cuando no anda.
+func TestElPanelAvisaSiLaAutomaticaEstaApagada(t *testing.T) {
+	srv, _ := sitioConPanel(t)
+	_, cuerpo := pedirCon(t, entrarComo(t, srv, "jefa"), srv.URL+"/admin")
+
+	if !strings.Contains(cuerpo, "automáticas están apagadas") {
+		t.Error("no avisa que la actualización automática está apagada")
+	}
+	if !strings.Contains(cuerpo, "NOTARUM_SIN_ACTUALIZACION_AUTOMATICA") {
+		t.Error("no dice cómo encenderla")
+	}
+}
+
+func nada(context.Context, func(string)) (string, error) { return "", nil }
+
+func TestEnCuanto(t *testing.T) {
+	if got := enCuanto(time.Time{}); got != "" {
+		t.Errorf("sin fecha = %q", got)
+	}
+	for espera, esperado := range map[time.Duration]string{
+		-time.Hour:       "ya",
+		30 * time.Second: "en menos de un minuto",
+		90 * time.Minute: "en 1 horas",
+		30 * time.Hour:   "en 1 días",
+	} {
+		if got := enCuanto(time.Now().Add(espera)); got != esperado {
+			t.Errorf("dentro de %s = %q, se esperaba %q", espera, got, esperado)
 		}
 	}
 }

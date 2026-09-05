@@ -41,6 +41,8 @@ type Config struct {
 	Hub *lockatus.Cliente
 	// Tareas corre los trabajos largos que se lanzan desde el panel.
 	Tareas *tareas.Ejecutor
+	// Programador los corre solos, todos los días.
+	Programador *tareas.Programador
 	// Asistente arma consultas a partir de un pedido en castellano. Sólo lo
 	// usa el lector web.
 	Asistente *asistente.Cliente
@@ -95,6 +97,9 @@ func Nuevo(cfg Config) *Servidor {
 		}
 		if cfg.Tareas != nil {
 			sitio = sitio.ConTareas(cfg.Tareas)
+		}
+		if cfg.Programador != nil {
+			sitio = sitio.ConProgramador(cfg.Programador)
 		}
 		if cfg.Asistente != nil {
 			sitio = sitio.ConAsistente(cfg.Asistente)

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/diegoparras/notarum/internal/asistente"
 	"github.com/diegoparras/notarum/internal/cuentas"
@@ -86,7 +87,8 @@ func (s *Sitio) generar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.Info("consulta generada", "quien", u.Nombre, "modelo", g.Modelo,
-		"tokens_entrada", g.TokensEntrada, "tokens_salida", g.TokensSalida)
+		"tokens_entrada", g.TokensEntrada, "tokens_salida", g.TokensSalida,
+		"tardo", g.Tardo.Round(time.Millisecond))
 
 	s.dibujarDocsCon(w, r, datosAsistente{
 		Pedido: pedido, Generado: g.Texto, Modelo: g.Modelo,
@@ -103,6 +105,9 @@ func explicarDelProveedor(err error) string {
 		return "Tu cuenta de OpenRouter no tiene saldo."
 	case errors.Is(err, asistente.ErrProveedorOcupado):
 		return "OpenRouter está limitando los pedidos. Probá de nuevo en un rato."
+	case errors.Is(err, asistente.ErrProveedorLento):
+		return "OpenRouter tardó más de lo que se puede esperar. Probá de nuevo, " +
+			"o pedí algo más corto."
 	}
 	return "No se pudo generar la consulta: " + err.Error()
 }
