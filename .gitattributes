@@ -1,0 +1,6 @@
+# Los archivos que ejecuta el contenedor van con finales de línea de Unix,
+# siempre. Un script con CRLF hace que el shebang apunte a "/bin/sh\r", que no
+# existe: el contenedor falla al arrancar con un "no such file or directory"
+# que nombra un archivo que está ahí.
+*.sh text eol=lf
+Dockerfile text eol=lf
