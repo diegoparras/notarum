@@ -3,6 +3,8 @@ package servicio
 import (
 	"log/slog"
 	"os"
+	"runtime"
+	"runtime/debug"
 	"time"
 
 	"github.com/diegoparras/notarum/internal/almacen"
@@ -15,9 +17,11 @@ import (
 // veía al lado la norma actualizada. Pero las 428 mil normas no se podían
 // buscar, mientras que las 81 mil provinciales sí. Esto lo empareja.
 //
-// Va aparte y apagado por defecto porque cuesta: se midió con el catálogo
-// real y son 357 MB en memoria. Quien lo quiera lo enciende; quien no, no
-// paga nada.
+// Va aparte y apagado por defecto porque cuesta: con el catálogo real, el
+// proceso pasa de unos 90 MB a unos 480 MB de memoria pedida al sistema. Ese
+// es el número que mira un contenedor —no los 357 MB que informa el
+// recolector—, y es la diferencia entre entrar o no en 512 MB. Quien lo
+// quiera lo enciende; quien no, no paga nada.
 
 // claveCatalogoInfoLEG guarda el catálogo comprimido, tal como se bajó.
 //
@@ -55,7 +59,9 @@ func (s *Servicio) indiceInfoLEG() *infoleg.Indice {
 		}
 		s.infoIndice = i
 		slog.Info("buscador de InfoLEG listo",
-			"normas", i.Normas(), "tardo", time.Since(empezo).Round(time.Millisecond))
+			"normas", i.Normas(), "tardo", time.Since(empezo).Round(time.Millisecond),
+			"memoria_mb", memoriaMB(),
+			"nota", "si el contenedor tiene menos de 1 GB, conviene apagarlo con NOTARUM_SIN_BUSCADOR_INFOLEG")
 	})
 	return s.infoIndice
 }
@@ -93,7 +99,22 @@ func armarIndiceDesdeZip(crudo []byte) (*infoleg.Indice, error) {
 		return nil, err
 	}
 	i.Cerrar()
+
+	// Armar el índice deja atrás todo el catálogo parseado: 256 MB de CSV,
+	// las cadenas intermedias y el mapa del internador. Go se las guarda por
+	// si vuelven a hacer falta, pero acá no van a hacer falta hasta la
+	// próxima sincronización, y lo que el contenedor mira es la memoria
+	// pedida al sistema y no la que el recolector considera libre.
+	debug.FreeOSMemory()
 	return i, nil
+}
+
+// memoriaMB es cuánta memoria tiene pedida el proceso al sistema, que es lo
+// que mira el contenedor para decidir si lo mata.
+func memoriaMB() int {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	return int(m.Sys / (1 << 20))
 }
 
 // BuscarNacional busca en la normativa nacional de InfoLEG.

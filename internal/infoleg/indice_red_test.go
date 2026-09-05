@@ -53,15 +53,20 @@ func TestRedElIndiceNacionalEntra(t *testing.T) {
 	runtime.GC()
 	runtime.ReadMemStats(&despues)
 	mb := float64(despues.HeapAlloc-antes.HeapAlloc) / (1 << 20)
-	t.Logf("normas: %d | armado: %s | memoria: %.0f MB", leidas, tardo.Round(time.Second), mb)
+	// Sys es lo que el proceso le pidió al sistema, que es lo que mira un
+	// contenedor para decidir si lo mata. HeapAlloc subestima: en la medición
+	// real fueron 357 MB de heap contra 480 de proceso.
+	sys := float64(despues.Sys) / (1 << 20)
+	t.Logf("normas: %d | armado: %s | heap: %.0f MB | proceso: %.0f MB",
+		leidas, tardo.Round(time.Second), mb, sys)
 
 	if i.Normas() < 400000 {
 		t.Errorf("sólo entraron %d normas", i.Normas())
 	}
 	// El techo: más que esto y el buscador nacional deja de ser algo que se
 	// pueda tener prendido siempre en un contenedor común.
-	if mb > 400 {
-		t.Errorf("el índice ocupa %.0f MB", mb)
+	if sys > 700 {
+		t.Errorf("el proceso le pide %.0f MB al sistema; ya no entra en un contenedor común", sys)
 	}
 
 	for _, q := range []Consulta{

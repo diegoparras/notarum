@@ -35,7 +35,7 @@ import (
 )
 
 // version se puede fijar en el build: -ldflags "-X main.version=1.2.3".
-var version = "1.7.1"
+var version = "1.7.2"
 
 func main() {
 	if err := ejecutar(os.Args[1:]); err != nil {
@@ -232,7 +232,12 @@ func armarServicio(cfg configComun) (*servicio.Servicio, func(), error) {
 	}
 	// El buscador de normativa nacional se pide: son unos 350 MB en memoria,
 	// medidos con el catálogo real, y no se le imponen a quien no lo usa.
-	srv = srv.ConBuscadorInfoLEG(entorno("NOTARUM_BUSCADOR_INFOLEG", "") != "")
+	if entorno("NOTARUM_BUSCADOR_INFOLEG", "") != "" {
+		srv = srv.ConBuscadorInfoLEG(true)
+		slog.Warn("el buscador de normativa nacional está encendido",
+			"memoria_estimada", "unos 480 MB con el catálogo entero",
+			"nota", "en un contenedor de 512 MB el proceso puede morir; conviene darle 1 GB")
+	}
 	return srv, func() { _ = alm.Cerrar() }, nil
 }
 

@@ -13,7 +13,7 @@ set -euo pipefail
 
 USUARIO=diegoparras
 IMAGEN=ghcr.io/$USUARIO/notarum
-VERSION=1.7.1
+VERSION=1.7.2
 
 echo "==> Sesión en ghcr.io"
 if docker system info 2>/dev/null | grep -q "ghcr.io"; then

@@ -25,7 +25,7 @@ crudo y bien tipado, y eso es todo su valor.
 
 ```bash
 docker run -d -p 8080:8080 -v notarum-datos:/datos \
-  -e NOTARUM_ALMACEN=sqlite ghcr.io/diegoparras/notarum:1.7.1
+  -e NOTARUM_ALMACEN=sqlite ghcr.io/diegoparras/notarum:1.7.2
 ```
 
 Abrí `http://localhost:8080` y ya estás leyendo el Boletín de hoy.
@@ -238,7 +238,7 @@ docker run -d --name notarum -p 8080:8080 \
   -v notarum-datos:/datos \
   -e NOTARUM_ALMACEN=sqlite \
   -e "NOTARUM_USER_AGENT=notarum/1.7 (+https://tu-dominio.com)" \
-  ghcr.io/diegoparras/notarum:1.7.1
+  ghcr.io/diegoparras/notarum:1.7.2
 ```
 
 El volumen en `/datos` no es opcional en la práctica: sin él, cada redeploy
@@ -251,7 +251,7 @@ vuelve a bajar todo el Boletín desde cero.
 | Campo | Valor |
 |---|---|
 | Source → Type | `Image` |
-| Image | `ghcr.io/diegoparras/notarum:1.7.1` |
+| Image | `ghcr.io/diegoparras/notarum:1.7.2` |
 | Volume | `notarum-datos` montado en `/datos` |
 | Domain → Port | `8080`, con HTTPS |
 
@@ -304,7 +304,7 @@ lector público con la API por token. Las tres son legítimas.
 | `NOTARUM_SECRETO_SESION` | se genera | firma las sesiones; fijalo para que sobrevivan al reinicio |
 | `NOTARUM_ADMIN_USUARIO` | `admin` | la cuenta que administra |
 | `NOTARUM_ADMIN_CLAVE` | se genera | su clave; sin esto se genera una y se imprime en el log una vez |
-| `NOTARUM_BUSCADOR_INFOLEG` | vacío | con `1`, enciende la búsqueda de normativa nacional (~350 MB) |
+| `NOTARUM_BUSCADOR_INFOLEG` | vacío | con `1`, enciende la búsqueda de normativa nacional; pide 1 GB de memoria |
 
 - **abierto**: leer no pide nada. Las cuentas sirven para tener más cuota y
   para el MCP.
