@@ -86,10 +86,14 @@ jobs:
             exit 1
           fi
 
-          # Corriendo sin privilegios, que es de lo que se baja el arranque.
-          quien=$(docker exec notarum-ci id -un)
+          # El servicio, corriendo sin privilegios. Se mira el proceso 1 y no
+          # "docker exec id": exec arranca un proceso nuevo con el usuario de
+          # la imagen —root, que es de donde el arranque se baja— y contestaba
+          # root aunque el servicio estuviera bien.
+          quien=$(docker exec notarum-ci stat -c %U /proc/1)
           if [ "$quien" != "notarum" ]; then
             echo "el servicio quedó corriendo como $quien"
+            docker exec notarum-ci ps -o user,pid,comm || true
             exit 1
           fi
           docker rm -f notarum-ci
