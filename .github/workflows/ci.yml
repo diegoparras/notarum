@@ -56,8 +56,43 @@ jobs:
           NOTARUM_TEST_POSTGRES: postgres://notarum:notarum@localhost:5432/notarum?sslmode=disable
         run: go test -race ./...
 
-      - name: Que la imagen se construya
-        run: docker build -t notarum:ci .
+      # Construirla no alcanza: lo que falla en un despliegue de verdad es el
+      # volumen. El panel lo crea como root, notarum corre sin privilegios, y
+      # si el arranque no acomoda los permisos el servicio no levanta —con los
+      # datos perdiéndose en cada despliegue mientras tanto, que es peor.
+      - name: Que la imagen arranque con un volumen montado, como en un panel
+        run: |
+          docker build -t notarum:ci .
+          sudo mkdir -p /tmp/datos-de-root
+          sudo chown root:root /tmp/datos-de-root
+          docker run -d --name notarum-ci -p 8080:8080             -v /tmp/datos-de-root:/datos             -e NOTARUM_ALMACEN=sqlite             -e NOTARUM_ADMIN_CLAVE=una-clave-larga-para-la-prueba             notarum:ci
+
+          for i in $(seq 1 40); do
+            curl -fsS http://127.0.0.1:8080/v1/salud >/dev/null && break
+            sleep 1
+          done
+          if ! curl -fsS http://127.0.0.1:8080/v1/salud; then
+            echo "no levantó; esto dijo:"
+            docker logs notarum-ci
+            exit 1
+          fi
+
+          # Y que haya podido escribir de verdad en el volumen: levantar sin
+          # poder guardar nada sería el mismo problema con otra cara.
+          if ! sudo test -s /tmp/datos-de-root/notarum.db; then
+            echo "levantó pero no escribió la base en el volumen:"
+            sudo ls -la /tmp/datos-de-root
+            docker logs notarum-ci
+            exit 1
+          fi
+
+          # Corriendo sin privilegios, que es de lo que se baja el arranque.
+          quien=$(docker exec notarum-ci id -un)
+          if [ "$quien" != "notarum" ]; then
+            echo "el servicio quedó corriendo como $quien"
+            exit 1
+          fi
+          docker rm -f notarum-ci
 
   # Los tests con la etiqueta `red` pegan al sitio real del Boletín Oficial.
   # No corren en cada push: se disparan a mano o una vez por día, y sirven para
