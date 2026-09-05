@@ -25,6 +25,11 @@ import (
 // BaseOpenRouter es el punto de entrada del proveedor.
 const BaseOpenRouter = "https://openrouter.ai/api/v1"
 
+// maxTokensDeSalida es el techo de la respuesta. Holgado a propósito: un
+// modelo de razonamiento gasta tokens pensando antes de escribir, y con un
+// techo justo se queda sin ninguno para la respuesta y devuelve vacío.
+const maxTokensDeSalida = 8000
+
 // ModeloPorDefecto es con el que se genera si no se elige otro. Se prefiere
 // uno rápido y barato: la tarea es traducir un pedido a una consulta con el
 // contrato delante, no razonar.
@@ -88,11 +93,18 @@ type mensaje struct {
 	Contenido string `json:"content"`
 }
 
+// pedido es el cuerpo que se le manda al proveedor.
+//
+// Los parámetros van como punteros para poder omitirlos: no todos los modelos
+// aceptan los mismos, y mandarle a uno algo que no acepta hace fallar la
+// generación entera. La familia GPT-5 rechaza temperature, por ejemplo. Qué
+// acepta cada uno lo dice el catálogo, así que no hay que adivinarlo ni
+// mantener acá una lista que envejece sola.
 type pedido struct {
 	Modelo      string    `json:"model"`
 	Mensajes    []mensaje `json:"messages"`
-	Temperatura float64   `json:"temperature"`
-	MaxTokens   int       `json:"max_tokens"`
+	Temperatura *float64  `json:"temperature,omitempty"`
+	MaxTokens   *int      `json:"max_tokens,omitempty"`
 }
 
 type respuesta struct {
@@ -130,16 +142,32 @@ func (c *Cliente) Generar(ctx context.Context, clave, modelo, sistema, pedidoDeL
 	if modelo == "" {
 		modelo = ModeloPorDefecto
 	}
-	cuerpo, err := json.Marshal(pedido{
+	// Qué acepta este modelo. Se le pregunta al catálogo en vez de suponerlo:
+	// cualquier modelo que el proveedor ofrezca tiene que poder usarse, y
+	// mandarle un parámetro que no acepta lo rompe antes de empezar.
+	m := c.buscarModelo(ctx, clave, modelo)
+
+	p := pedido{
 		Modelo: modelo,
 		Mensajes: []mensaje{
 			{Rol: "system", Contenido: sistema},
 			{Rol: "user", Contenido: pedidoDeLaPersona},
 		},
+	}
+	if m.Acepta("temperature") {
 		// Temperatura baja: se quiere la consulta correcta, no una variada.
-		Temperatura: 0.1,
-		MaxTokens:   1500,
-	})
+		// El que no la acepta genera con la suya, que es lo que corresponde.
+		baja := 0.1
+		p.Temperatura = &baja
+	}
+	if m.Acepta("max_tokens") {
+		// Con techo, acotado a lo que este modelo admite: cada token se le
+		// cobra a quien puso la clave, y pedir más de lo que puede escribir
+		// es otro error evitable.
+		techo := m.TechoDeSalida(maxTokensDeSalida)
+		p.MaxTokens = &techo
+	}
+	cuerpo, err := json.Marshal(p)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +230,9 @@ func (c *Cliente) Generar(ctx context.Context, clave, modelo, sistema, pedidoDeL
 		return nil, fmt.Errorf("el proveedor contestó %d", res.StatusCode)
 	}
 	if len(r.Opciones) == 0 || strings.TrimSpace(r.Opciones[0].Mensaje.Contenido) == "" {
-		return nil, errors.New("el proveedor contestó sin contenido")
+		// Le pasa a los modelos que razonan cuando gastan todo el presupuesto
+		// pensando: contestan bien, pero sin nada escrito.
+		return nil, fmt.Errorf("%s contestó sin escribir nada; probá con otro modelo", modelo)
 	}
 
 	return &Generado{

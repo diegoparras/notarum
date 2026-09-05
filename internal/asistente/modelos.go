@@ -34,6 +34,36 @@ type Modelo struct {
 	PorMillonSalida  float64
 	// Gratis es el que no cobra nada, que conviene poder ver de un vistazo.
 	Gratis bool
+	// Parametros son los que este modelo acepta, tal como los declara el
+	// proveedor. No todos aceptan lo mismo: los de razonamiento rechazan
+	// temperature, y mandárselo igual hace fallar la generación entera.
+	Parametros []string
+	// MaxSalida es lo más que este modelo puede escribir, o 0 si no lo dice.
+	// Pedirle más de lo que admite es otro error evitable: van desde 4096
+	// hasta cientos de miles según el modelo.
+	MaxSalida int
+}
+
+// TechoDeSalida acota un techo propio a lo que este modelo admite.
+func (m Modelo) TechoDeSalida(querido int) int {
+	if m.MaxSalida > 0 && m.MaxSalida < querido {
+		return m.MaxSalida
+	}
+	return querido
+}
+
+// Acepta dice si a este modelo se le puede mandar un parámetro.
+//
+// Si el catálogo no dijo nada, se contesta que no: omitir un parámetro deja al
+// proveedor con su valor por defecto, mandarle uno que no acepta rompe el
+// pedido. Ante la duda, la que no rompe.
+func (m Modelo) Acepta(parametro string) bool {
+	for _, p := range m.Parametros {
+		if p == parametro {
+			return true
+		}
+	}
+	return false
 }
 
 // Precio escribe lo que cuesta, para mostrarlo al lado del nombre.
@@ -62,6 +92,10 @@ type modeloCrudo struct {
 		Entrada string `json:"prompt"`
 		Salida  string `json:"completion"`
 	} `json:"pricing"`
+	Parametros []string `json:"supported_parameters"`
+	Proveedor  struct {
+		MaxSalida int `json:"max_completion_tokens"`
+	} `json:"top_provider"`
 }
 
 // cacheModelos guarda la lista un rato: son cientos de modelos y la misma para
@@ -152,7 +186,9 @@ func ordenar(crudos []modeloCrudo) []Modelo {
 		lista = append(lista, Modelo{
 			ID: c.ID, Nombre: nombre, Contexto: c.ContextLength,
 			PorMillonEntrada: entrada, PorMillonSalida: salida,
-			Gratis: entrada == 0 && salida == 0,
+			Gratis:     entrada == 0 && salida == 0,
+			Parametros: c.Parametros,
+			MaxSalida:  c.Proveedor.MaxSalida,
 		})
 	}
 	sort.Slice(lista, func(i, j int) bool {
@@ -187,4 +223,22 @@ func porMillon(s string) float64 {
 	// Redondeado: multiplicar 0.0000008 por un millón da 0.7999999999999999,
 	// y esto es un precio para mirar, no para contar centavos.
 	return math.Round(v*1_000_000*1e6) / 1e6
+}
+
+// buscarModelo devuelve lo que el catálogo dice de un modelo.
+//
+// Se usa antes de generar, para armar el pedido con lo que ese modelo acepta y
+// nada más. Si el catálogo no se puede traer, devuelve un modelo vacío: sin
+// parámetros declarados no se manda ninguno, que es lo que no rompe.
+func (c *Cliente) buscarModelo(ctx context.Context, clave, id string) Modelo {
+	ms, err := c.Modelos(ctx, clave)
+	if err != nil {
+		return Modelo{ID: id}
+	}
+	for _, m := range ms {
+		if m.ID == id {
+			return m
+		}
+	}
+	return Modelo{ID: id}
 }

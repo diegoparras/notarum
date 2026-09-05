@@ -37,3 +37,41 @@ func TestElModeloPorDefectoExisteEnElProveedor(t *testing.T) {
 	t.Errorf("el modelo por defecto %q no está entre los %d que ofrece OpenRouter: "+
 		"todas las generaciones que no elijan otro van a fallar", ModeloPorDefecto, len(ms))
 }
+
+// Hay modelos de verdad que no aceptan temperature, y notarum tiene que
+// poder usarlos: si el proveedor lo ofrece, tiene que entrar.
+//
+// Este test existe porque la suposición contraria —"todos aceptan lo mismo"—
+// hacía fallar la generación entera con cualquier modelo de la familia GPT-5,
+// que es de los que alguien va a elegir.
+func TestHayModelosQueNoAceptanTemperatura(t *testing.T) {
+	ctx, cancelar := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelar()
+
+	ms, err := NuevoCliente(Opciones{}).Modelos(ctx, "")
+	if err != nil {
+		t.Fatalf("no se pudo leer el catálogo del proveedor: %v", err)
+	}
+
+	var sinTemperatura, conTemperatura, sinParametros int
+	for _, m := range ms {
+		switch {
+		case len(m.Parametros) == 0:
+			sinParametros++
+		case m.Acepta("temperature"):
+			conTemperatura++
+		default:
+			sinTemperatura++
+		}
+	}
+	t.Logf("de %d modelos: %d aceptan temperature, %d no, %d no lo declaran",
+		len(ms), conTemperatura, sinTemperatura, sinParametros)
+
+	if sinTemperatura == 0 {
+		t.Error("ninguno rechaza temperature: o el proveedor cambió cómo lo declara, " +
+			"o dejamos de leer supported_parameters")
+	}
+	if conTemperatura == 0 {
+		t.Error("ninguno acepta temperature: se dejó de leer supported_parameters")
+	}
+}
