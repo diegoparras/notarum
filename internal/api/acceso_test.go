@@ -299,7 +299,7 @@ func TestZonaDe(t *testing.T) {
 		{"GET", "/v1/salud", zonaLibre},
 		{"GET", "/estatico/estilo.css", zonaLibre},
 		{"POST", "/entrar", zonaLogin},
-		{"GET", "/entrar", zonaLector},
+		{"GET", "/entrar", zonaPuerta},
 		{"POST", "/mcp", zonaMCP},
 		{"GET", "/v1/secciones", zonaAPI},
 		{"GET", "/", zonaLector},
@@ -309,6 +309,68 @@ func TestZonaDe(t *testing.T) {
 	for _, c := range casos {
 		r := httptest.NewRequest(c.metodo, c.ruta, nil)
 		if got := zonaDe(r); got != c.esperada {
+			t.Errorf("%s %s -> %v, se esperaba %v", c.metodo, c.ruta, got, c.esperada)
+		}
+	}
+}
+
+// La puerta de entrada nunca puede redirigir a la puerta de entrada.
+//
+// Pasó en producción: al crear la primera cuenta, el modo por defecto pasó a
+// cerrado, /entrar cayó en la zona del lector y el gate la mandó a /entrar.
+// La instancia quedó inaccesible con ERR_TOO_MANY_REDIRECTS.
+func TestLaPuertaNoSeCierraSobreSiMisma(t *testing.T) {
+	for _, modo := range []cuentas.Modo{cuentas.ModoAbierto, cuentas.ModoMixto, cuentas.ModoCerrado} {
+		p := cuentas.PoliticaPorDefecto(true)
+		p.Modo = modo
+		srv, _ := conPolitica(t, p)
+
+		for _, ruta := range []string{"/entrar", "/salir", "/entrar/lockatus"} {
+			res := conToken(t, srv, ruta, "")
+			if destino := res.Header.Get("Location"); destino == ruta {
+				t.Errorf("%s: %s se redirige a sí misma", modo, ruta)
+			}
+			if res.StatusCode == http.StatusForbidden || res.StatusCode == http.StatusUnauthorized {
+				t.Errorf("%s: %s = %d; por ahí se entra", modo, ruta, res.StatusCode)
+			}
+		}
+	}
+}
+
+// Y sigue teniendo su límite: que no se cierre no quiere decir que se pueda
+// martillar.
+func TestLaPuertaSeLimita(t *testing.T) {
+	p := cuentas.PoliticaPorDefecto(true)
+	p.Modo = cuentas.ModoCerrado
+	p.Lector = 3
+	srv, _ := conPolitica(t, p)
+
+	var frenado bool
+	for i := 0; i < 8; i++ {
+		if conToken(t, srv, "/entrar", "").StatusCode == http.StatusTooManyRequests {
+			frenado = true
+			break
+		}
+	}
+	if !frenado {
+		t.Error("la puerta no tiene ningún límite")
+	}
+}
+
+func TestZonaDeLaPuerta(t *testing.T) {
+	casos := []struct {
+		metodo, ruta string
+		esperada     zona
+	}{
+		{"GET", "/entrar", zonaPuerta},
+		{"GET", "/salir", zonaPuerta},
+		{"GET", "/entrar/lockatus", zonaPuerta},
+		{"GET", "/entrar/lockatus/volver", zonaPuerta},
+		{"POST", "/entrar", zonaLogin}, // el freno de los intentos sigue aparte
+		{"GET", "/cuenta", zonaLector},
+	}
+	for _, c := range casos {
+		if got := zonaDe(httptest.NewRequest(c.metodo, c.ruta, nil)); got != c.esperada {
 			t.Errorf("%s %s -> %v, se esperaba %v", c.metodo, c.ruta, got, c.esperada)
 		}
 	}

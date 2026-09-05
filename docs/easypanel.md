@@ -14,7 +14,7 @@ En tu proyecto de EasyPanel, **+ Service → App**.
 **Desde una imagen ya construida**, que es como se despliega este proyecto:
 
 - Type: `Image`
-- Image: `ghcr.io/diegoparras/notarum:1.7.0`
+- Image: `ghcr.io/diegoparras/notarum:1.7.1`
 
 Fijá siempre una versión concreta en vez de `latest`: así sabés qué está
 corriendo cuando algo cambia.
@@ -35,8 +35,8 @@ en GitHub.
 ### Publicar una versión nueva
 
 ```bash
-docker build -t ghcr.io/diegoparras/notarum:1.7.0 --build-arg VERSION=1.2.0 .
-docker push ghcr.io/diegoparras/notarum:1.7.0
+docker build -t ghcr.io/diegoparras/notarum:1.7.1 --build-arg VERSION=1.2.0 .
+docker push ghcr.io/diegoparras/notarum:1.7.1
 ```
 
 El `docker login ghcr.io` necesita un token con `write:packages`. Si usás el de

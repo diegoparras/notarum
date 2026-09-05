@@ -20,6 +20,10 @@ const (
 	zonaAPI
 	zonaMCP
 	zonaLogin
+	// zonaPuerta es por dónde se entra: la pantalla de login y la vuelta del
+	// proveedor de identidad. Se limita como el lector, pero no se cierra
+	// nunca: para entrar haría falta haber entrado.
+	zonaPuerta
 	zonaLibre // salud y archivos estáticos: no se limitan ni se cierran
 )
 
@@ -30,6 +34,12 @@ func zonaDe(r *http.Request) zona {
 		return zonaLibre
 	case p == "/entrar" && r.Method == http.MethodPost:
 		return zonaLogin
+	case p == "/entrar" || p == "/salir" || strings.HasPrefix(p, "/entrar/"):
+		// La puerta. Si cayera en la zona del lector, una instancia en modo
+		// cerrado redirigiría /entrar a /entrar para siempre: es lo que pasó
+		// en cuanto la primera cuenta hizo que el modo por defecto pasara a
+		// cerrado.
+		return zonaPuerta
 	case strings.HasPrefix(p, "/mcp"):
 		return zonaMCP
 	case strings.HasPrefix(p, "/v1/"):
@@ -128,6 +138,8 @@ func (g *guardia) envolver(siguiente http.Handler) http.Handler {
 func (g *guardia) permite(u *cuentas.Usuario, z zona) bool {
 	p := g.vigente()
 	switch z {
+	case zonaPuerta:
+		return true // por acá se entra: no se puede pedir haber entrado
 	case zonaAPI:
 		return p.PermiteAPI(u)
 	case zonaMCP:
@@ -147,7 +159,7 @@ func (g *guardia) cupoDe(r *http.Request, u *cuentas.Usuario, z zona) (string, i
 		// Los intentos de entrada se cuentan por dirección y aparte: es el
 		// único límite pensado para frenar a alguien.
 		return "login:" + ip, p.Login
-	case zonaLector:
+	case zonaLector, zonaPuerta:
 		if u != nil {
 			return "lector:" + u.Nombre, p.Lector
 		}
