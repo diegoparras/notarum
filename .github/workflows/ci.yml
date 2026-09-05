@@ -114,6 +114,9 @@ jobs:
           go-version: "1.25"
           cache: true
       - run: go test -tags red -v -timeout 10m ./internal/boletin/
+      # Y que el modelo por defecto siga existiendo en OpenRouter: escrito a
+      # mano en el código, un nombre de modelo envejece sin avisar.
+      - run: go test -tags red -v -timeout 5m ./internal/asistente/
 
   # Publicar la imagen. Antes salía de la máquina de quien tuviera Docker
   # prendido, que es una forma de que la versión publicada dependa de dónde se

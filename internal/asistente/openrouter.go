@@ -28,7 +28,13 @@ const BaseOpenRouter = "https://openrouter.ai/api/v1"
 // ModeloPorDefecto es con el que se genera si no se elige otro. Se prefiere
 // uno rápido y barato: la tarea es traducir un pedido a una consulta con el
 // contrato delante, no razonar.
-const ModeloPorDefecto = "anthropic/claude-3.5-haiku"
+//
+// Un nombre de modelo escrito acá envejece: el proveedor los agrega y los
+// retira, y el día que éste deje de existir todas las generaciones fallan sin
+// que nada en el código haya cambiado. Ya pasó —el anterior era
+// "anthropic/claude-3.5-haiku", que no está en el catálogo— así que hay un
+// test con la etiqueta `red` que lo comprueba contra el catálogo de verdad.
+const ModeloPorDefecto = "anthropic/claude-haiku-4.5"
 
 // Opciones configura el cliente.
 type Opciones struct {
@@ -71,6 +77,10 @@ var (
 	// página. Se distingue del que no contesta: éste probablemente ande, y
 	// volver a intentar tiene sentido.
 	ErrProveedorLento = errors.New("el proveedor tardó demasiado")
+	// ErrModeloDesconocido es que el modelo pedido no existe en el proveedor.
+	// Lleva a otra cosa que un error de la clave o del saldo: hay que elegir
+	// otro modelo, y se elige desde la cuenta.
+	ErrModeloDesconocido = errors.New("el proveedor no conoce ese modelo")
 )
 
 type mensaje struct {
@@ -175,6 +185,16 @@ func (c *Cliente) Generar(ctx context.Context, clave, modelo, sistema, pedidoDeL
 		return nil, ErrSinSaldo
 	case http.StatusTooManyRequests:
 		return nil, ErrProveedorOcupado
+	case http.StatusBadRequest, http.StatusNotFound:
+		// El caso frecuente: un modelo que ya no está. Se distingue por el
+		// mensaje porque el proveedor usa el mismo código para varias cosas.
+		if pareceModeloDesconocido(r.Error.Mensaje) {
+			return nil, fmt.Errorf("%w: %s", ErrModeloDesconocido, modelo)
+		}
+		if r.Error.Mensaje != "" {
+			return nil, fmt.Errorf("el proveedor devolvió un error: %s", r.Error.Mensaje)
+		}
+		return nil, fmt.Errorf("el proveedor contestó %d", res.StatusCode)
 	default:
 		if r.Error.Mensaje != "" {
 			return nil, fmt.Errorf("el proveedor devolvió un error: %s", r.Error.Mensaje)
@@ -218,4 +238,16 @@ func (c *Cliente) Probar(ctx context.Context, clave string) error {
 		return ErrProveedorOcupado
 	}
 	return fmt.Errorf("el proveedor contestó %d al revisar la clave", res.StatusCode)
+}
+
+// pareceModeloDesconocido mira el mensaje del proveedor: no hay un código
+// aparte para esto, así que se reconoce por lo que dice.
+func pareceModeloDesconocido(mensaje string) bool {
+	m := strings.ToLower(mensaje)
+	for _, seña := range []string{"not a valid model", "no endpoints found", "unknown model", "model not found"} {
+		if strings.Contains(m, seña) {
+			return true
+		}
+	}
+	return false
 }

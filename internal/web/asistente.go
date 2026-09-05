@@ -34,6 +34,11 @@ func (s *Sitio) ConAsistente(c *asistente.Cliente) *Sitio {
 // PuedeAsistir dice si esta instancia tiene con qué generar.
 func (s *Sitio) PuedeAsistir() bool { return s.asistente != nil && s.registro != nil }
 
+// tiempoMaximoDeGeneracion es lo más que se espera antes de darlo por perdido.
+// Más que el timeout del cliente HTTP, para que gane ése y pueda explicar que
+// el proveedor tardó; éste es la red por si algo se cuelga antes de llegar ahí.
+const tiempoMaximoDeGeneracion = 40 * time.Second
+
 // tareaDe es la clave con la que corre la generación de una persona. Va con el
 // nombre adentro: cada uno tiene la suya y no se pisan entre cuentas.
 func tareaDe(quien string) string { return "asistente:" + quien }
@@ -110,6 +115,13 @@ func (s *Sitio) generar(w http.ResponseWriter, r *http.Request) {
 
 	err = s.tareas.Lanzar(tareaDe(u.Nombre), u.Nombre,
 		func(ctx context.Context, avisar func(string)) (string, error) {
+			// Un techo propio, además del que tiene el cliente HTTP. Es lo que
+			// garantiza que la pantalla no se quede en "armando" para
+			// siempre: pase lo que pase del otro lado, esto termina y cuenta
+			// qué pasó.
+			ctx, cancelar := context.WithTimeout(ctx, tiempoMaximoDeGeneracion)
+			defer cancelar()
+
 			avisar("armando el contexto de esta instancia")
 			instrucciones, err := asistente.Instrucciones(base)
 			if err != nil {
@@ -157,6 +169,9 @@ func explicarDelProveedor(err error) string {
 		return "Tu cuenta de OpenRouter no tiene saldo."
 	case errors.Is(err, asistente.ErrProveedorOcupado):
 		return "OpenRouter está limitando los pedidos. Probá de nuevo en un rato."
+	case errors.Is(err, asistente.ErrModeloDesconocido):
+		return "Ese modelo ya no existe en OpenRouter. Elegí otro en tu cuenta: " +
+			"la lista sale de lo que el proveedor ofrece hoy."
 	case errors.Is(err, asistente.ErrProveedorLento):
 		return "OpenRouter tardó más de lo que se puede esperar. Probá de nuevo, " +
 			"o pedí algo más corto."

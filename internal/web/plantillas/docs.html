@@ -35,7 +35,8 @@
   <div class="tarea corriendo">
     <div class="tarea-linea">
       <span class="marca-chica">armando</span>
-      <span class="tarea-avance">{{if .Asistente.Avance}}{{.Asistente.Avance}}{{else}}empezando…{{end}}</span>
+      <span class="tarea-avance">{{if .Asistente.Avance}}{{.Asistente.Avance}}{{else}}empezando…{{end}}
+        · {{cuantoVa .Asistente.Duracion}}</span>
     </div>
     <p class="pie-nota">
       Va por su cuenta: podés cerrar esta página y volver después. Se actualiza

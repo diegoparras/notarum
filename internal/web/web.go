@@ -172,6 +172,7 @@ func (s *Sitio) rutas() {
 var funciones = template.FuncMap{
 	"haceCuanto": haceCuanto,
 	"enCuanto":   enCuanto,
+	"cuantoVa":   cuantoVa,
 	"fechaCorta": fechaCorta,
 	"dict":       dict,
 }

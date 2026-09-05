@@ -396,3 +396,17 @@ func enCuanto(t time.Time) string {
 		return fmt.Sprintf("en %d días", int(d.Hours()/24))
 	}
 }
+
+// cuantoVa escribe cuánto lleva algo que está corriendo. Sin esto, una tarea
+// que trabaja y una que se colgó se ven igual, y no hay forma de saber si vale
+// la pena seguir esperando.
+func cuantoVa(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%d segundos", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%d minutos", int(d.Minutes()))
+	default:
+		return fmt.Sprintf("%d horas", int(d.Hours()))
+	}
+}
