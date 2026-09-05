@@ -23,6 +23,60 @@
   </span>
 </div>
 
+<h2>Quién entra, y cuánto puede pedir</h2>
+<p class="docs-parrafo">
+  Esto lo decide quien opera la instancia. Se guarda acá mismo y rige en el
+  acto: no hace falta tocar variables ni volver a desplegar.
+</p>
+
+<form method="post" action="/admin/politica" class="config">
+  <div class="config-campo config-ancho">
+    <label class="dato-nombre" for="modo">Modo de acceso</label>
+    <select name="modo" id="modo">
+      {{$m := .Politica.Modo}}
+      {{range .Modos}}<option value="{{.}}"{{if eq . $m}} selected{{end}}>{{.}}</option>{{end}}
+    </select>
+    <span class="pie-nota">{{.Politica.Explicacion}}</span>
+  </div>
+
+  <div class="config-campo">
+    <label class="dato-nombre" for="anonimo">Sin identificarse</label>
+    <input type="number" name="anonimo" id="anonimo" value="{{.Politica.Anonimo}}" min="1" max="1000000">
+  </div>
+  <div class="config-campo">
+    <label class="dato-nombre" for="persona">Con cuenta</label>
+    <input type="number" name="persona" id="persona" value="{{.Politica.Persona}}" min="1" max="1000000">
+  </div>
+  <div class="config-campo">
+    <label class="dato-nombre" for="admin">Quien administra</label>
+    <input type="number" name="admin" id="admin" value="{{.Politica.Admin}}" min="1" max="1000000">
+  </div>
+  <div class="config-campo">
+    <label class="dato-nombre" for="lector">Lector web</label>
+    <input type="number" name="lector" id="lector" value="{{.Politica.Lector}}" min="1" max="1000000">
+  </div>
+  <div class="config-campo">
+    <label class="dato-nombre" for="login">Intentos de entrada</label>
+    <input type="number" name="login" id="login" value="{{.Politica.Login}}" min="1" max="1000000">
+  </div>
+
+  <div class="config-pie">
+    <span class="pie-nota">
+      Los números son pedidos por minuto, y se cuentan por separado: bajar la
+      cuota de la API no deja la interfaz inusable.
+      {{if .PoliticaGuardada}} Lo que rige se configuró desde acá.{{else}} Lo
+      que rige viene de la configuración del servicio.{{end}}
+    </span>
+    <button class="boton" type="submit">Guardar</button>
+  </div>
+</form>
+
+{{if .PoliticaGuardada}}
+<form method="post" action="/admin/politica/olvidar">
+  <button class="boton suave" type="submit">Volver a la configuración del servicio</button>
+</form>
+{{end}}
+
 <h2>El Boletín Oficial</h2>
 <p class="docs-parrafo">
   notarum baja del sitio sólo lo que le piden. Llenar la historia de un

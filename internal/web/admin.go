@@ -3,7 +3,9 @@ package web
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -50,6 +52,13 @@ type datosAdmin struct {
 	Secciones []boletin.Seccion
 	Error     string
 	Aviso     string
+
+	// La configuración de acceso, que se edita desde acá.
+	Politica cuentas.Politica
+	Modos    []cuentas.Modo
+	// PoliticaGuardada dice si lo que rige se cambió desde el panel o viene
+	// de la configuración del servicio.
+	PoliticaGuardada bool
 }
 
 // exigirAdmin deja pasar sólo a quien administra. Estas acciones cambian lo
@@ -92,6 +101,11 @@ func (s *Sitio) dibujarAdmin(w http.ResponseWriter, r *http.Request, u *cuentas.
 		Aviso:       aviso,
 		Error:       errMsg,
 		Tareas:      map[string]tareas.Tarea{},
+		Politica:    s.vigente(),
+		Modos:       []cuentas.Modo{cuentas.ModoAbierto, cuentas.ModoMixto, cuentas.ModoCerrado},
+	}
+	if s.registro != nil {
+		d.PoliticaGuardada = s.registro.HayPoliticaGuardada()
 	}
 	if s.tareas != nil {
 		for _, t := range []string{tareaInfoLEG, tareaProvincial, tareaRellenar} {
@@ -260,4 +274,74 @@ func haceCuanto(t time.Time) string {
 	default:
 		return fmt.Sprintf("hace %d días", int(d.Hours()/24))
 	}
+}
+
+// --------------------------------------------------------- la configuración
+
+// guardarPolitica cambia quién entra y cuánto puede pedir, sin reiniciar.
+//
+// Es lo que antes había que poner en variables de entorno y volver a
+// desplegar. Se guarda en el almacén, así que sobrevive al reinicio y pisa a
+// lo que diga el entorno.
+func (s *Sitio) guardarPolitica(w http.ResponseWriter, r *http.Request) {
+	u := s.exigirAdmin(w, r)
+	if u == nil {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		s.fallo(w, r, http.StatusBadRequest, "No se entendió el formulario", "")
+		return
+	}
+	p := s.vigente()
+
+	modo, err := cuentas.ParseModo(r.PostFormValue("modo"))
+	if err != nil {
+		s.dibujarAdmin(w, r, u, "", primeraMayuscula(err.Error())+".", http.StatusBadRequest)
+		return
+	}
+	p.Modo = modo
+
+	for _, c := range []struct {
+		campo   string
+		destino *int
+	}{
+		{"anonimo", &p.Anonimo},
+		{"persona", &p.Persona},
+		{"admin", &p.Admin},
+		{"lector", &p.Lector},
+		{"login", &p.Login},
+	} {
+		v := strings.TrimSpace(r.PostFormValue(c.campo))
+		if v == "" {
+			continue // lo que no se toca queda como estaba
+		}
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			s.dibujarAdmin(w, r, u, "", "«"+v+"» no es un número.", http.StatusBadRequest)
+			return
+		}
+		*c.destino = n
+	}
+
+	if err := s.registro.FijarPolitica(p); err != nil {
+		s.dibujarAdmin(w, r, u, "", primeraMayuscula(err.Error())+".", http.StatusBadRequest)
+		return
+	}
+	slog.Info("política de acceso cambiada desde el panel",
+		"quien", u.Nombre, "modo", p.Modo, "anonimo", p.Anonimo, "persona", p.Persona)
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+}
+
+// olvidarPolitica vuelve a lo que diga la configuración del servicio.
+func (s *Sitio) olvidarPolitica(w http.ResponseWriter, r *http.Request) {
+	u := s.exigirAdmin(w, r)
+	if u == nil {
+		return
+	}
+	if err := s.registro.OlvidarPolitica(s.politica); err != nil {
+		s.dibujarAdmin(w, r, u, "", primeraMayuscula(err.Error())+".", http.StatusInternalServerError)
+		return
+	}
+	slog.Info("política de acceso devuelta a la del entorno", "quien", u.Nombre)
+	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }

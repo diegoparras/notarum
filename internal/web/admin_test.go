@@ -291,3 +291,120 @@ func TestHaceCuanto(t *testing.T) {
 		t.Errorf("sin fecha = %q", got)
 	}
 }
+
+// Cambiar la política desde el panel rige en el acto: es lo que evita tener
+// que tocar variables de entorno y volver a desplegar.
+func TestCambiarLaPoliticaDesdeElPanel(t *testing.T) {
+	srv, _ := sitioConPanel(t)
+	jefa := entrarComo(t, srv, "jefa")
+
+	res, cuerpo := postear(t, jefa, srv.URL+"/admin/politica", url.Values{
+		"modo": {"mixto"}, "anonimo": {"7"}, "persona": {"70"},
+		"admin": {"700"}, "lector": {"77"}, "login": {"3"},
+	})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("codigo = %d", res.StatusCode)
+	}
+	// Vuelve al panel con lo nuevo puesto.
+	if !strings.Contains(cuerpo, `value="7"`) || !strings.Contains(cuerpo, `value="mixto" selected`) {
+		t.Error("el panel no muestra lo que se acaba de guardar")
+	}
+	if !strings.Contains(cuerpo, "se configuró desde acá") {
+		t.Error("no aclara que lo que rige salió del panel")
+	}
+
+	// Y rige de verdad: la cuenta muestra la cuota nueva.
+	_, cuenta := pedirCon(t, jefa, srv.URL+"/cuenta")
+	if !strings.Contains(cuenta, "700") {
+		t.Error("la cuota nueva no llegó a la cuenta")
+	}
+}
+
+// Sobrevive al reinicio: se guarda, no queda sólo en memoria.
+func TestLaPoliticaSobreviveAlReinicio(t *testing.T) {
+	dir := t.TempDir()
+	alm, err := almacen.NuevoDisco(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg, err := cuentas.NuevoRegistro(alm, []byte(strings.Repeat("s", 32)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := cuentas.PoliticaPorDefecto(true)
+	reg.CargarPolitica(p)
+	p.Modo = cuentas.ModoAbierto
+	p.Anonimo = 123
+	if err := reg.FijarPolitica(p); err != nil {
+		t.Fatal(err)
+	}
+
+	// Otro registro sobre el mismo almacén: es lo que pasa al reiniciar.
+	alm2, _ := almacen.NuevoDisco(dir)
+	reg2, err := cuentas.NuevoRegistro(alm2, []byte(strings.Repeat("s", 32)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg2.CargarPolitica(cuentas.PoliticaPorDefecto(true)) // el entorno dice otra cosa
+	if got := reg2.Politica(); got.Modo != cuentas.ModoAbierto || got.Anonimo != 123 {
+		t.Errorf("después de reiniciar rige %+v", got)
+	}
+}
+
+// Un número imposible se avisa y no se guarda: una cuota en cero deja a todos
+// afuera sin que nadie entienda por qué.
+func TestUnaCuotaImposibleNoSeGuarda(t *testing.T) {
+	srv, _ := sitioConPanel(t)
+	jefa := entrarComo(t, srv, "jefa")
+	antes := url.Values{"modo": {"abierto"}, "anonimo": {"60"}, "persona": {"600"},
+		"admin": {"6000"}, "lector": {"600"}, "login": {"10"}}
+	postear(t, jefa, srv.URL+"/admin/politica", antes)
+
+	for _, malo := range []url.Values{
+		{"modo": {"abierto"}, "anonimo": {"0"}},
+		{"modo": {"abierto"}, "anonimo": {"-5"}},
+		{"modo": {"abierto"}, "anonimo": {"ninguno"}},
+		{"modo": {"publico"}, "anonimo": {"60"}},
+	} {
+		res, _ := postear(t, jefa, srv.URL+"/admin/politica", malo)
+		if res.StatusCode != http.StatusBadRequest {
+			t.Errorf("%v -> %d, se esperaba 400", malo, res.StatusCode)
+		}
+	}
+	// Y lo que regía quedó intacto.
+	_, cuerpo := pedirCon(t, jefa, srv.URL+"/admin")
+	if !strings.Contains(cuerpo, `value="60"`) {
+		t.Error("se perdió la configuración que andaba")
+	}
+}
+
+// Y se puede volver a lo que diga el entorno.
+func TestVolverALaConfiguracionDelServicio(t *testing.T) {
+	srv, _ := sitioConPanel(t)
+	jefa := entrarComo(t, srv, "jefa")
+	postear(t, jefa, srv.URL+"/admin/politica", url.Values{
+		"modo": {"abierto"}, "anonimo": {"7"},
+	})
+	res, cuerpo := postear(t, jefa, srv.URL+"/admin/politica/olvidar", nil)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("codigo = %d", res.StatusCode)
+	}
+	if strings.Contains(cuerpo, "se configuró desde acá") {
+		t.Error("sigue diciendo que la política salió del panel")
+	}
+	if strings.Contains(cuerpo, `value="7"`) {
+		t.Error("no volvió a la configuración del servicio")
+	}
+}
+
+// Una cuenta común no puede cambiar quién entra.
+func TestSoloElAdminCambiaLaPolitica(t *testing.T) {
+	srv, _ := sitioConPanel(t)
+	cli := entrarComo(t, srv, "persona")
+	for _, ruta := range []string{"/admin/politica", "/admin/politica/olvidar"} {
+		res, _ := postear(t, cli, srv.URL+ruta, url.Values{"modo": {"abierto"}})
+		if res.StatusCode != http.StatusForbidden {
+			t.Errorf("%s = %d, se esperaba 403", ruta, res.StatusCode)
+		}
+	}
+}

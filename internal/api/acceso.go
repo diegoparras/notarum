@@ -20,13 +20,19 @@ const (
 	zonaAPI
 	zonaMCP
 	zonaLogin
-	zonaLibre // salud y archivos estáticos: no se limitan
+	zonaLibre // salud, estáticos y el arranque: no se limitan ni se cierran
 )
 
 func zonaDe(r *http.Request) zona {
 	p := r.URL.Path
 	switch {
 	case p == "/v1/salud" || strings.HasPrefix(p, "/estatico/"):
+		return zonaLibre
+	case p == "/empezar":
+		// La puerta para crear la primera cuenta. Si quedara detrás del gate,
+		// una instancia en modo cerrado y sin cuentas no se podría poner en
+		// marcha: para entrar haría falta una cuenta que sólo se puede crear
+		// entrando.
 		return zonaLibre
 	case p == "/entrar" && r.Method == http.MethodPost:
 		return zonaLogin
@@ -40,9 +46,20 @@ func zonaDe(r *http.Request) zona {
 
 // guardia aplica la política de la instancia: quién puede pedir qué y cuánto.
 type guardia struct {
-	reg      *cuentas.Registro
+	reg *cuentas.Registro
+	// politica es la de arranque, que rige cuando no hay registro donde
+	// guardar los cambios.
 	politica cuentas.Politica
 	limite   *limitador
+}
+
+// vigente es la política que rige ahora. Se pregunta en cada pedido porque se
+// puede cambiar desde el panel sin reiniciar.
+func (g *guardia) vigente() cuentas.Politica {
+	if g.reg != nil {
+		return g.reg.Politica()
+	}
+	return g.politica
 }
 
 func nuevaGuardia(reg *cuentas.Registro, p cuentas.Politica) *guardia {
@@ -115,13 +132,14 @@ func (g *guardia) envolver(siguiente http.Handler) http.Handler {
 }
 
 func (g *guardia) permite(u *cuentas.Usuario, z zona) bool {
+	p := g.vigente()
 	switch z {
 	case zonaAPI:
-		return g.politica.PermiteAPI(u)
+		return p.PermiteAPI(u)
 	case zonaMCP:
-		return g.politica.PermiteMCP(u)
+		return p.PermiteMCP(u)
 	case zonaLector:
-		return g.politica.PermiteLector(u)
+		return p.PermiteLector(u)
 	}
 	return true // el login siempre se puede intentar
 }
@@ -129,23 +147,24 @@ func (g *guardia) permite(u *cuentas.Usuario, z zona) bool {
 // cupoDe dice contra qué cubo se cuenta este pedido y cuánto le toca.
 func (g *guardia) cupoDe(r *http.Request, u *cuentas.Usuario, z zona) (string, int) {
 	ip := ipDe(r)
+	p := g.vigente()
 	switch z {
 	case zonaLogin:
 		// Los intentos de entrada se cuentan por dirección y aparte: es el
 		// único límite pensado para frenar a alguien.
-		return "login:" + ip, g.politica.Login
+		return "login:" + ip, p.Login
 	case zonaLector:
 		if u != nil {
-			return "lector:" + u.Nombre, g.politica.Lector
+			return "lector:" + u.Nombre, p.Lector
 		}
-		return "lector:" + ip, g.politica.Lector
+		return "lector:" + ip, p.Lector
 	}
 	if u != nil {
 		// Identificado: la cuota es suya y no la comparte con quien salga por
 		// la misma dirección.
-		return "api:" + u.Nombre, g.politica.CuotaDe(u)
+		return "api:" + u.Nombre, p.CuotaDe(u)
 	}
-	return "api:" + ip, g.politica.Anonimo
+	return "api:" + ip, p.Anonimo
 }
 
 func (g *guardia) rechazarToken(w http.ResponseWriter, r *http.Request, z zona, err error) {

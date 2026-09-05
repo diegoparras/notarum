@@ -79,14 +79,20 @@ func (s *Sitio) exigirSesion(w http.ResponseWriter, r *http.Request) *cuentas.Us
 func (s *Sitio) verEntrar(w http.ResponseWriter, r *http.Request) {
 	if s.registro == nil {
 		s.fallo(w, r, http.StatusNotFound, "Esta instancia no tiene cuentas",
-			"notarum funciona sin cuentas; se habilitan creando la primera con `notarum usuarios crear`.")
+			"El registro de cuentas está apagado.")
+		return
+	}
+	// Sin ninguna cuenta no hay a qué entrar: lo que corresponde es crear la
+	// primera.
+	if s.hayQueArrancar() {
+		http.Redirect(w, r, "/empezar", http.StatusFound)
 		return
 	}
 	if s.yo(r) != nil {
 		http.Redirect(w, r, "/cuenta", http.StatusFound)
 		return
 	}
-	d := datosEntrar{comun: s.baseCon(r, "", ""), Explicacion: s.politica.Explicacion(),
+	d := datosEntrar{comun: s.baseCon(r, "", ""), Explicacion: s.vigente().Explicacion(),
 		Federado: s.Federado()}
 	d.Angosto = true
 	s.mostrar(w, r, "entrar", d, http.StatusOK)
@@ -107,7 +113,7 @@ func (s *Sitio) hacerEntrar(w http.ResponseWriter, r *http.Request) {
 		// El mismo mensaje para usuario inexistente y clave errada: la
 		// diferencia serviría para averiguar qué cuentas existen.
 		d := datosEntrar{comun: s.baseCon(r, "", ""), Usuario: usuario,
-			Error: "Usuario o clave incorrectos.", Explicacion: s.politica.Explicacion(),
+			Error: "Usuario o clave incorrectos.", Explicacion: s.vigente().Explicacion(),
 			Federado: s.Federado()}
 		d.Angosto = true
 		s.mostrar(w, r, "entrar", d, http.StatusUnauthorized)
@@ -159,10 +165,10 @@ func (s *Sitio) dibujarCuenta(w http.ResponseWriter, r *http.Request, u *cuentas
 		Error:             errMsg,
 		Base:              baseVisible(r),
 		Hoy:               boletin.HoyEnArgentina().API(),
-		PorMinuto:         s.politica.Anonimo,
-		PorMinutoConToken: s.politica.CuotaDe(u),
-		Modo:              string(s.politica.Modo),
-		Explicacion:       s.politica.Explicacion(),
+		PorMinuto:         s.vigente().Anonimo,
+		PorMinutoConToken: s.vigente().CuotaDe(u),
+		Modo:              string(s.vigente().Modo),
+		Explicacion:       s.vigente().Explicacion(),
 	}
 	d.Angosto = true
 	for _, t := range s.registro.Tokens(u.Nombre) {

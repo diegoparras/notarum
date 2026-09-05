@@ -313,3 +313,61 @@ func TestZonaDe(t *testing.T) {
 		}
 	}
 }
+
+// La puerta para crear la primera cuenta no puede quedar detrás del gate:
+// para entrar haría falta una cuenta que sólo se puede crear entrando. Pasó:
+// /empezar redirigía a /entrar y /entrar a /empezar.
+func TestElArranqueNuncaSeCierra(t *testing.T) {
+	for _, modo := range []cuentas.Modo{cuentas.ModoAbierto, cuentas.ModoMixto, cuentas.ModoCerrado} {
+		p := cuentas.PoliticaPorDefecto(true)
+		p.Modo = modo
+		p.Anonimo = 1 // y tampoco se limita
+		// Sin ninguna cuenta creada, que es cuando el arranque hace falta.
+		srv := sinCuentas(t, p)
+
+		for i := 0; i < 5; i++ {
+			res := conToken(t, srv, "/empezar", "")
+			if res.StatusCode == http.StatusTooManyRequests {
+				t.Errorf("%s: /empezar se quedó sin cuota en el intento %d", modo, i+1)
+				break
+			}
+			if destino := res.Header.Get("Location"); destino == "/entrar" {
+				t.Errorf("%s: /empezar manda a entrar, y entrar manda a empezar", modo)
+				break
+			}
+		}
+	}
+}
+
+// sinCuentas levanta una instancia con registro pero sin ninguna cuenta: es
+// como queda una recién montada.
+func sinCuentas(t *testing.T, p cuentas.Politica) *httptest.Server {
+	t.Helper()
+	h, _ := sitioFalso(t)
+	origen := httptest.NewServer(h)
+	t.Cleanup(origen.Close)
+
+	alm, err := almacen.NuevoDisco(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg, err := cuentas.NuevoRegistro(alm, []byte(strings.Repeat("s", 32)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cli := boletin.NuevoCliente(boletin.Opciones{Base: origen.URL, Intervalo: time.Millisecond})
+	srv := httptest.NewServer(Nuevo(Config{
+		Servicio: servicio.Nuevo(cli, alm), Version: "test",
+		Registro: reg, Politica: p,
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestZonaDelArranque(t *testing.T) {
+	for _, m := range []string{"GET", "POST"} {
+		if got := zonaDe(httptest.NewRequest(m, "/empezar", nil)); got != zonaLibre {
+			t.Errorf("%s /empezar -> %v, tendría que ser libre", m, got)
+		}
+	}
+}

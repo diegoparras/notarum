@@ -34,7 +34,7 @@ import (
 )
 
 // version se puede fijar en el build: -ldflags "-X main.version=1.2.3".
-var version = "1.4.0"
+var version = "1.5.0"
 
 func main() {
 	if err := ejecutar(os.Args[1:]); err != nil {
@@ -291,10 +291,20 @@ func servir(args []string) error {
 	if err != nil {
 		return err
 	}
+	// Sin cuentas, la instancia arranca abierta y ofrece crear la primera
+	// desde el navegador. El código va al log —que es lo que ve quien la
+	// levantó— porque una instancia expuesta a internet no puede regalarle el
+	// administrador a quien pase primero.
 	if !reg.HayUsuarios() {
-		reg = nil
+		codigo, err := reg.CodigoDeArranque()
+		if err != nil {
+			return err
+		}
+		slog.Warn("esta instancia todavía no tiene cuentas",
+			"para_crear_la_primera_cuenta", "abrí /empezar en el navegador",
+			"codigo_de_arranque", cuentas.CodigoLegible(codigo))
 	}
-	politica, err := armarPolitica(reg != nil, limite)
+	politica, err := armarPolitica(reg.HayUsuarios(), limite)
 	if err != nil {
 		return err
 	}

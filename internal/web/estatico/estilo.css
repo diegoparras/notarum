@@ -46,17 +46,41 @@ a:hover { text-decoration: underline; }
 
 .marca { display: flex; align-items: center; gap: 9px; font-size: 18px; font-weight: 600; letter-spacing: -0.02em; color: var(--tinta); }
 .marca:hover { text-decoration: none; }
-.marca-punto { width: 11px; height: 11px; border-radius: 3px; background: var(--acento); flex: none; }
+/* La balanza: el símbolo de la ley, que es lo que notarum lee. Blanca sobre
+   el azul de la marca, que a este tamaño se lee mejor que un trazo suelto. */
+.marca-icono { width: 22px; height: 22px; flex: none; border-radius: 6px; }
 .marca-nota { font-family: var(--mono); font-size: 11px; color: var(--tinta-tenue); font-weight: 400; letter-spacing: 0; }
 
-.secciones { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
-.seccion-enlace {
-  font-size: 13px; padding: 6px 12px; border-radius: 99px;
-  color: var(--tinta-suave); border: 1px solid transparent;
-}
-.seccion-enlace:hover { background: var(--crema-hondo); text-decoration: none; }
-.seccion-enlace.activa { background: var(--acento); color: var(--crema); }
-.seccion-enlace.activa:hover { text-decoration: none; }
+/* El menú de la cabecera, con el patrón de la suite: arriba sólo la marca y
+   un botón, y todo lo demás adentro. Con <details> y no con JavaScript: acá
+   se usa para una sola cosa, y no va a ser el menú. */
+.menu-caja { position: relative; margin-left: auto; flex: none; }
+.menu-boton { list-style: none; cursor: pointer; display: inline-flex; align-items: center;
+  justify-content: center; width: 38px; height: 38px; border-radius: 11px;
+  border: 1px solid var(--linea); background: var(--crema); color: var(--tinta-suave);
+  font-size: 19px; line-height: 1; user-select: none; }
+.menu-boton::-webkit-details-marker { display: none; }
+.menu-boton:hover { background: var(--crema-hondo); color: var(--tinta); }
+.menu-caja[open] .menu-boton { background: var(--crema-hondo); color: var(--tinta); }
+
+.menu { position: absolute; right: 0; top: calc(100% + 8px); min-width: 260px;
+  background: var(--crema); border: 1px solid var(--linea); border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(42, 27, 20, 0.13); padding: 6px; z-index: 60;
+  display: flex; flex-direction: column; gap: 1px; }
+.menu-quien { padding: 8px 12px 5px; font-size: 12.5px; color: var(--tinta-tenue);
+  font-family: var(--mono); }
+.menu-item { display: flex; align-items: center; gap: 11px; padding: 9px 12px;
+  border-radius: 9px; text-decoration: none; color: var(--tinta); font-size: 14px; }
+.menu-item:hover { background: var(--crema-hondo); }
+.menu-item.activa { color: var(--acento); font-weight: 600; }
+.menu-ico { width: 18px; height: 18px; flex: none; color: var(--tinta-tenue); display: inline-flex; }
+.menu-ico svg { width: 18px; height: 18px; }
+.menu-item:hover .menu-ico, .menu-item.activa .menu-ico { color: currentColor; }
+.menu-sep { height: 1px; background: var(--linea); margin: 5px 4px; }
+
+/* Para lectores de pantalla: el botón dice "Menú" aunque se vea un ⋮. */
+.sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 /* -------------------------------------------------------------------- barras */
 
@@ -167,6 +191,17 @@ h2 { font-size: 17px; font-weight: 600; margin: 32px 0 12px; }
 .dia.suplemento { box-shadow: inset 0 -3px 0 var(--terracota); }
 
 /* -------------------------------------------------------------------- varios */
+
+/* La configuración del panel: una grilla de campos cortos, porque son números
+   de una o dos cifras y ponerlos uno abajo del otro haría una lista larguísima. */
+.config { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px 18px; background: var(--crema-hondo); border-radius: var(--radio);
+  padding: 18px; margin-bottom: 16px; align-items: end; }
+.config-campo { display: flex; flex-direction: column; gap: 5px; }
+.config-ancho { grid-column: 1 / -1; }
+.config-pie { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px;
+  flex-wrap: wrap; justify-content: space-between; }
+.config-pie .pie-nota { flex: 1 1 260px; margin: 0; }
 
 /* El panel: el estado de cada fuente y lo que esté corriendo. */
 .tarea { background: var(--crema-hondo); border-radius: var(--radio); padding: 14px 18px; margin-bottom: 16px; font-size: 14px; }

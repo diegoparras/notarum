@@ -36,7 +36,11 @@ type Registro struct {
 
 	// mu ordena las operaciones que leen y escriben en dos pasos, como crear
 	// un usuario o revocar un token: el almacén no tiene transacciones.
-	mu sync.Mutex
+	mu sync.RWMutex
+	// politica es la que rige ahora. Se lee en cada pedido, así que vive en
+	// memoria; lo que se configura desde el panel se guarda además en el
+	// almacén para que sobreviva al reinicio.
+	politica Politica
 }
 
 // NuevoRegistro arma el registro. El secreto firma las cookies de sesión: si

@@ -3,13 +3,12 @@ package api
 import (
 	"context"
 	"log/slog"
-	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/diegoparras/notarum/internal/cuentas"
+	"github.com/diegoparras/notarum/internal/web"
 )
 
 // claveContexto evita que otra cosa pise lo que se guarda en el contexto.
@@ -97,25 +96,10 @@ func (l *limitador) permitirCon(quien string, porMinuto int) (bool, int) {
 	return true, int(c.fichas)
 }
 
-func ipDe(r *http.Request) string {
-	// EasyPanel (Traefik) pone el cliente real acá.
-	if v := r.Header.Get("X-Forwarded-For"); v != "" {
-		if i := strings.IndexByte(v, ','); i > 0 {
-			v = v[:i]
-		}
-		if ip := strings.TrimSpace(v); ip != "" {
-			return ip
-		}
-	}
-	if v := strings.TrimSpace(r.Header.Get("X-Real-IP")); v != "" {
-		return v
-	}
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return ip
-}
+// ipDe dice de dónde vino un pedido. Vive en el paquete web porque los dos
+// la necesitan y api ya lo importa: dos copias de esto se desincronizan el
+// día que aparece otra cabecera de proxy.
+func ipDe(r *http.Request) string { return web.IPDe(r) }
 
 // conCORS deja que cualquiera lea la API desde el navegador: es abierta.
 func conCORS(siguiente http.Handler) http.Handler {

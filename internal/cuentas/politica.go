@@ -1,6 +1,7 @@
 package cuentas
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -120,4 +121,98 @@ func (p Politica) Explicacion() string {
 		return "hay que entrar o traer un token para cualquier cosa"
 	}
 	return ""
+}
+
+// ------------------------------------------------------- la política vigente
+
+// clavePolitica es donde vive la que se configuró desde el panel.
+const clavePolitica = "cuentas/_politica"
+
+// Politica devuelve la que rige ahora.
+//
+// Se guarda en memoria y se relee sola: la del entorno es el punto de
+// partida, y lo que se cambie desde el panel la pisa. Así quien opera puede
+// abrir o cerrar la instancia sin editar variables y reiniciar.
+func (r *Registro) Politica() Politica {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.politica
+}
+
+// FijarPolitica cambia la que rige y la guarda.
+func (r *Registro) FijarPolitica(p Politica) error {
+	if !p.Modo.Valido() {
+		return fmt.Errorf("modo de acceso inválido: %q", p.Modo)
+	}
+	if err := p.Revisar(); err != nil {
+		return err
+	}
+	crudo, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.alm.Guardar(clavePolitica, crudo, sinVencimiento); err != nil {
+		return err
+	}
+	r.politica = p
+	return nil
+}
+
+// CargarPolitica arranca con lo que haya guardado, y si no hay, con la que
+// venga de la configuración.
+func (r *Registro) CargarPolitica(delEntorno Politica) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.politica = delEntorno
+	crudo, hay := r.alm.Leer(clavePolitica)
+	if !hay {
+		return
+	}
+	var guardada Politica
+	if err := json.Unmarshal(crudo, &guardada); err != nil || !guardada.Modo.Valido() {
+		return
+	}
+	r.politica = guardada
+}
+
+// HayPoliticaGuardada dice si lo que rige se configuró desde el panel, para
+// poder aclararlo al lado de los valores.
+func (r *Registro) HayPoliticaGuardada() bool {
+	return r.alm.Existe(clavePolitica)
+}
+
+// OlvidarPolitica borra lo configurado y vuelve a lo que diga el entorno.
+func (r *Registro) OlvidarPolitica(delEntorno Politica) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.alm.Borrar(clavePolitica); err != nil {
+		return err
+	}
+	r.politica = delEntorno
+	return nil
+}
+
+// Revisar dice si los números tienen sentido antes de guardarlos. Una cuota
+// en cero deja a todos afuera sin que nadie entienda por qué.
+func (p Politica) Revisar() error {
+	for _, c := range []struct {
+		nombre string
+		valor  int
+	}{
+		{"la cuota de quien no se identifica", p.Anonimo},
+		{"la cuota de las cuentas", p.Persona},
+		{"la cuota de quien administra", p.Admin},
+		{"la cuota del lector web", p.Lector},
+		{"el tope de intentos de entrada", p.Login},
+	} {
+		if c.valor < 1 {
+			return fmt.Errorf("%s tiene que ser al menos 1", c.nombre)
+		}
+		if c.valor > 1000000 {
+			return fmt.Errorf("%s es un número imposible", c.nombre)
+		}
+	}
+	return nil
 }

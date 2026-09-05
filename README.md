@@ -25,7 +25,7 @@ crudo y bien tipado, y eso es todo su valor.
 
 ```bash
 docker run -d -p 8080:8080 -v notarum-datos:/datos \
-  -e NOTARUM_ALMACEN=sqlite ghcr.io/diegoparras/notarum:1.4.0
+  -e NOTARUM_ALMACEN=sqlite ghcr.io/diegoparras/notarum:1.5.0
 ```
 
 Abrí `http://localhost:8080` y ya estás leyendo el Boletín de hoy.
@@ -233,8 +233,8 @@ conocidas: 73 avisos el 15/7/2026, 52 el 10/3/2025, 100 el 1/9/2026.
 docker run -d --name notarum -p 8080:8080 \
   -v notarum-datos:/datos \
   -e NOTARUM_ALMACEN=sqlite \
-  -e "NOTARUM_USER_AGENT=notarum/1.4 (+https://tu-dominio.com)" \
-  ghcr.io/diegoparras/notarum:1.4.0
+  -e "NOTARUM_USER_AGENT=notarum/1.5 (+https://tu-dominio.com)" \
+  ghcr.io/diegoparras/notarum:1.5.0
 ```
 
 El volumen en `/datos` no es opcional en la práctica: sin él, cada redeploy
@@ -247,7 +247,7 @@ vuelve a bajar todo el Boletín desde cero.
 | Campo | Valor |
 |---|---|
 | Source → Type | `Image` |
-| Image | `ghcr.io/diegoparras/notarum:1.4.0` |
+| Image | `ghcr.io/diegoparras/notarum:1.5.0` |
 | Volume | `notarum-datos` montado en `/datos` |
 | Domain → Port | `8080`, con HTTPS |
 
@@ -259,7 +259,7 @@ NOTARUM_DB=/datos/notarum.db
 NOTARUM_POR_MINUTO=60
 NOTARUM_INTERVALO=500ms
 NOTARUM_LOG=json
-NOTARUM_USER_AGENT=notarum/1.4 (+https://tu-dominio.com)
+NOTARUM_USER_AGENT=notarum/1.5 (+https://tu-dominio.com)
 ```
 
 Deploy, y entrá a la raíz. La guía completa, con las dos formas de resolver el
@@ -278,7 +278,7 @@ registry y el detalle de cada paso, está en
 | `NOTARUM_POSTGRES_HOST` … | — | o las piezas sueltas: `_PUERTO`, `_BASE`, `_USUARIO`, `_CLAVE`, `_SSL`, `_ESQUEMA` |
 | `NOTARUM_POR_MINUTO` | `60` | pedidos por minuto por IP; `0` lo desactiva |
 | `NOTARUM_INTERVALO` | `500ms` | espera entre pedidos al Boletín |
-| `NOTARUM_USER_AGENT` | `notarum/1.4 (+…)` | poné una URL de contacto real |
+| `NOTARUM_USER_AGENT` | `notarum/1.5 (+…)` | poné una URL de contacto real |
 | `NOTARUM_LOG` | `json` | `json` o `text` |
 | `NOTARUM_MCP_TOKEN` | vacío | si se define, `/mcp` exige `Bearer` |
 | `NOTARUM_SIN_MCP` | vacío | apaga `/mcp` |
@@ -320,9 +320,21 @@ límite de la API no deja la interfaz inusable.
 
 ### El panel
 
-Todo lo que pone en marcha una instancia se hace desde `/admin`, sin abrir
-una consola: llenar la historia del Boletín, sincronizar InfoLEG y bajar la
-normativa provincial. Son trabajos de minutos, así que corren en segundo
+Todo lo que pone en marcha y configura una instancia se hace desde `/admin`,
+sin abrir una consola: llenar la historia del Boletín, sincronizar InfoLEG,
+bajar la normativa provincial, y decidir quién entra y cuánto puede pedir.
+
+Lo que se configura ahí se guarda y pisa a las variables de entorno, así que
+abrir o cerrar la instancia no obliga a volver a desplegar. Siempre se puede
+volver a lo que diga la configuración del servicio.
+
+**La primera cuenta también se crea desde el navegador.** Una instancia recién
+montada imprime en su log un código de arranque y ofrece `/empezar`; con ese
+código se crea la cuenta que administra, y la puerta se cierra sola. En
+EasyPanel el log se lee en la pestaña de registros: no hace falta ninguna
+consola.
+
+Los trabajos de poner en marcha: Son trabajos de minutos, así que corren en segundo
 plano y la pantalla muestra cómo van; se puede cerrar la página y volver
 después.
 

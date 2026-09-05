@@ -60,7 +60,18 @@ type Sitio struct {
 func (s *Sitio) ConCuentas(reg *cuentas.Registro, p cuentas.Politica) *Sitio {
 	s.registro = reg
 	s.politica = p
+	if reg != nil {
+		reg.CargarPolitica(p)
+	}
 	return s
+}
+
+// vigente es la política que rige ahora, que se puede cambiar desde el panel.
+func (s *Sitio) vigente() cuentas.Politica {
+	if s.registro != nil {
+		return s.registro.Politica()
+	}
+	return s.politica
 }
 
 // ConTareas le da al lector con qué correr los trabajos largos del panel.
@@ -87,7 +98,7 @@ func Nuevo(srv *servicio.Servicio, version string) (*Sitio, error) {
 		// que decir en qué modo está: sin este piso mostraría cuotas en cero.
 		politica: cuentas.PoliticaPorDefecto(false),
 	}
-	for _, nombre := range []string{"edicion", "aviso", "buscar", "calendario", "norma", "docs", "entrar", "cuenta", "error", "provincial", "normaprov", "admin"} {
+	for _, nombre := range []string{"edicion", "aviso", "buscar", "calendario", "norma", "docs", "entrar", "cuenta", "error", "provincial", "normaprov", "admin", "arranque"} {
 		t, err := template.New("base").Funcs(funciones).ParseFS(archivosPlantillas,
 			"plantillas/base.html", "plantillas/"+nombre+".html")
 		if err != nil {
@@ -110,10 +121,14 @@ func (s *Sitio) rutas() {
 	s.mux.HandleFunc("GET /norma/{id}", s.norma)
 	s.mux.HandleFunc("GET /buscar", s.buscar)
 	s.mux.HandleFunc("GET /docs", s.docs)
+	s.mux.HandleFunc("GET /empezar", s.verArranque)
+	s.mux.HandleFunc("POST /empezar", s.hacerArranque)
 	s.mux.HandleFunc("GET /entrar", s.verEntrar)
 	s.mux.HandleFunc("POST /entrar", s.hacerEntrar)
 	s.mux.HandleFunc("GET /salir", s.salir)
 	s.mux.HandleFunc("GET /admin", s.verAdmin)
+	s.mux.HandleFunc("POST /admin/politica", s.guardarPolitica)
+	s.mux.HandleFunc("POST /admin/politica/olvidar", s.olvidarPolitica)
 	s.mux.HandleFunc("POST /admin/tareas/{tipo}", s.lanzarTarea)
 	s.mux.HandleFunc("POST /admin/tareas/{tipo}/cortar", s.cortarTarea)
 	s.mux.HandleFunc("GET /provincial", s.verProvincial)
@@ -761,7 +776,7 @@ func (s *Sitio) docs(w http.ResponseWriter, r *http.Request) {
 		ConMCP: s.conMCP,
 		Base:   baseVisible(r),
 
-		Politica: s.politica,
+		Politica: s.vigente(),
 	}
 	for _, h := range mcp.Herramientas() {
 		d.Herramientas = append(d.Herramientas, aHerramientaDoc(h))
