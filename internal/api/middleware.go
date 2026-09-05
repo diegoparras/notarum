@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -142,19 +143,35 @@ func conLog(siguiente http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		inicio := time.Now()
 		reg := &registrador{ResponseWriter: w}
+		// La línea va en un defer y no después de atender.
+		//
+		// Escrita después, un pánico desenrolla la pila sin pasar por acá y el
+		// pedido desaparece del registro: queda una instancia que falla y un
+		// log que dice que nadie pidió nada, que es la peor combinación
+		// posible para entender qué pasó. Pasó de verdad, y costó horas.
+		defer func() {
+			codigo := reg.codigo
+			if codigo == 0 {
+				// Nadie escribió nada. Si el handler volvió bien, Go manda un
+				// 200; si entró en pánico, no manda nada y hay que decirlo en
+				// vez de anotar un 200 que no ocurrió.
+				codigo = http.StatusOK
+				if p := recover(); p != nil {
+					codigo = 0
+					defer panic(p) // que siga hasta conPanico, que arma la respuesta
+				}
+			}
+			slog.Info("pedido",
+				"metodo", r.Method,
+				"ruta", r.URL.Path,
+				"query", r.URL.RawQuery,
+				"codigo", codigo,
+				"bytes", reg.bytes,
+				"ms", time.Since(inicio).Milliseconds(),
+				"ip", ipDe(r),
+			)
+		}()
 		siguiente.ServeHTTP(reg, r)
-		if reg.codigo == 0 {
-			reg.codigo = http.StatusOK
-		}
-		slog.Info("pedido",
-			"metodo", r.Method,
-			"ruta", r.URL.Path,
-			"query", r.URL.RawQuery,
-			"codigo", reg.codigo,
-			"bytes", reg.bytes,
-			"ms", time.Since(inicio).Milliseconds(),
-			"ip", ipDe(r),
-		)
 	})
 }
 
@@ -163,7 +180,14 @@ func conPanico(siguiente http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if p := recover(); p != nil {
-				slog.Error("pánico atendiendo un pedido", "panico", p, "ruta", r.URL.Path)
+				// Con la traza: sin ella la línea dice que algo se rompió y
+				// no dónde, que obliga a adivinar sobre un servicio que ya
+				// está en producción.
+				slog.Error("pánico atendiendo un pedido",
+					"panico", p,
+					"metodo", r.Method,
+					"ruta", r.URL.Path,
+					"traza", string(debug.Stack()))
 				escribirError(w, r, http.StatusInternalServerError, OrigenNotarum,
 					"error interno", "")
 			}
