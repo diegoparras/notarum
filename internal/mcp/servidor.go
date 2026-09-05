@@ -142,6 +142,12 @@ func (s *Servidor) llamar(ctx context.Context, params json.RawMessage) *Resultad
 		return s.hRubros(ctx, p.Argumentos)
 	case "estado":
 		return s.hEstado(ctx)
+	case "provincial_buscar":
+		return s.hProvincialBuscar(ctx, p.Argumentos)
+	case "provincial_norma":
+		return s.hProvincialNorma(ctx, p.Argumentos)
+	case "provincial_tipos":
+		return s.hProvincialTipos(ctx)
 	default:
 		return errorDeHerramienta("no existe la herramienta " + p.Nombre)
 	}

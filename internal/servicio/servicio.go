@@ -3,6 +3,8 @@
 package servicio
 
 import (
+	"sync"
+
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
@@ -17,6 +19,7 @@ import (
 	"github.com/diegoparras/notarum/internal/almacen"
 	"github.com/diegoparras/notarum/internal/boletin"
 	"github.com/diegoparras/notarum/internal/infoleg"
+	"github.com/diegoparras/notarum/internal/saij"
 )
 
 // TTLHoy es cuánto vale la edición del día en curso antes de volver a mirar.
@@ -44,6 +47,19 @@ type Servicio struct {
 	// infoleg enriquece los avisos con la norma actualizada. Es opcional: sin
 	// él notarum sirve el Boletín igual, sólo que sin ese agregado.
 	infoleg *infoleg.Cliente
+	// saij trae la normativa de las provincias, que el Boletín nacional no
+	// publica. También es opcional.
+	saij *saij.Cliente
+	// El índice provincial se arma la primera vez que alguien lo consulta:
+	// son 77 MB que no tiene por qué pagar quien no lo use.
+	saijUnaVez sync.Once
+	saijIndice *saij.Indice
+}
+
+// ConSAIJ habilita la consulta de normativa provincial.
+func (s *Servicio) ConSAIJ(c *saij.Cliente) *Servicio {
+	s.saij = c
+	return s
 }
 
 // ConInfoLEG habilita el enriquecimiento de avisos con la normativa de

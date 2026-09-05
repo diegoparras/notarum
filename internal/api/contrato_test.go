@@ -99,19 +99,15 @@ func TestContratoCubreTodasLasRutas(t *testing.T) {
 	for ruta := range doc.Paths.Map() {
 		documentadas[ruta] = true
 	}
-	// Las rutas del servidor, en la notación de OpenAPI.
-	servidas := []string{
-		"/v1/calendario/{anio}/{seccion}",
-		"/v1/ediciones/{seccion}/{fecha}",
-		"/v1/ediciones/{seccion}",
-		"/v1/avisos/{seccion}/{id}/{fecha}",
-		"/v1/anexos/{seccion}/{nro}/{id}/{fecha}",
-		"/v1/rubros/{seccion}",
-		"/v1/buscar",
-		"/v1/secciones",
-		"/v1/salud",
-		"/v1/openapi.json",
+	// Las rutas del servidor, sacadas del servidor y no escritas a mano acá:
+	// una lista copiada se desactualiza en silencio, que es justo lo que este
+	// test tiene que impedir.
+	srv := &Servidor{}
+	var servidas []string
+	for _, r := range srv.rutasDeLaAPI() {
+		servidas = append(servidas, r.Camino)
 	}
+
 	for _, r := range servidas {
 		if !documentadas[r] {
 			t.Errorf("la ruta %s se atiende pero no está en openapi.json", r)

@@ -16,7 +16,7 @@ func Herramientas() []Herramienta {
 		return map[string]any{"type": "string", "pattern": `^\d{4}-\d{2}-\d{2}$`, "description": desc}
 	}
 
-	return []Herramienta{
+	hs := []Herramienta{
 		{
 			Nombre:      "edicion",
 			Titulo:      "Edición de un día",
@@ -94,4 +94,5 @@ func Herramientas() []Herramienta {
 			Esquema:     map[string]any{"type": "object", "properties": map[string]any{}},
 		},
 	}
+	return append(hs, herramientasProvinciales()...)
 }

@@ -78,7 +78,7 @@ func Nuevo(srv *servicio.Servicio, version string) (*Sitio, error) {
 		// que decir en qué modo está: sin este piso mostraría cuotas en cero.
 		politica: cuentas.PoliticaPorDefecto(false),
 	}
-	for _, nombre := range []string{"edicion", "aviso", "buscar", "calendario", "norma", "docs", "entrar", "cuenta", "error"} {
+	for _, nombre := range []string{"edicion", "aviso", "buscar", "calendario", "norma", "docs", "entrar", "cuenta", "error", "provincial", "normaprov"} {
 		t, err := template.New("base").Funcs(funciones).ParseFS(archivosPlantillas,
 			"plantillas/base.html", "plantillas/"+nombre+".html")
 		if err != nil {
@@ -104,6 +104,8 @@ func (s *Sitio) rutas() {
 	s.mux.HandleFunc("GET /entrar", s.verEntrar)
 	s.mux.HandleFunc("POST /entrar", s.hacerEntrar)
 	s.mux.HandleFunc("GET /salir", s.salir)
+	s.mux.HandleFunc("GET /provincial", s.verProvincial)
+	s.mux.HandleFunc("GET /provincial/{id}", s.verNormaProvincial)
 	s.mux.HandleFunc("GET /entrar/lockatus", s.irAlHub)
 	s.mux.HandleFunc("GET /entrar/lockatus/volver", s.volverDelHub)
 	s.mux.HandleFunc("GET /cuenta", s.verCuenta)

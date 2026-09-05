@@ -35,6 +35,10 @@
     {
       "name": "servicio",
       "description": "Estado del servicio"
+    },
+    {
+      "name": "provincial",
+      "description": "Normativa de las 24 provincias: leyes, decretos, códigos y constituciones. Sale de la Base SAIJ del Ministerio de Justicia, que es lo que el Boletín Oficial de la Nación no publica."
     }
   ],
   "paths": {
@@ -538,6 +542,229 @@
             "description": "El contrato",
             "content": {
               "application/json": {}
+            }
+          }
+        }
+      }
+    },
+    "/v1/provincial": {
+      "get": {
+        "tags": [
+          "provincial"
+        ],
+        "summary": "Buscar normativa provincial",
+        "description": "Busca en las 81 mil normas de las 24 provincias. Sin filtros devuelve todo el catálogo paginado, de la más nueva a la más vieja. Cuando hay texto, primero va lo que se llama así y después lo que lo menciona de paso.",
+        "operationId": "buscarProvincial",
+        "parameters": [
+          {
+            "name": "texto",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Palabras a buscar en el título y las materias. No hace falta poner los acentos; todas las palabras tienen que estar."
+          },
+          {
+            "name": "provincia",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Nombre, código INDEC o prefijo. Sin esto busca en las 24."
+          },
+          {
+            "name": "tipo",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Ley, Decreto Ley, Constitución Provincial… La lista está en /v1/provincial/tipos."
+          },
+          {
+            "name": "desde",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Año de sanción más viejo."
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Año de sanción más nuevo."
+          },
+          {
+            "name": "vigentes",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Con 1 deja fuera lo derogado, lo caduco y las modificatorias."
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limite",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 30
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Las normas que cumplen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultadoProvincial"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Una provincia que no existe, o un año mal escrito.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Esta instancia todavía no bajó el catálogo provincial.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/provincial/provincias": {
+      "get": {
+        "tags": [
+          "provincial"
+        ],
+        "summary": "Las 24 jurisdicciones",
+        "description": "Devuelve las provincias con su código INDEC y cuántas normas hay guardadas de cada una.",
+        "operationId": "verProvincias",
+        "responses": {
+          "200": {
+            "description": "Las jurisdicciones.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProvinciaConNormas"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/provincial/tipos": {
+      "get": {
+        "tags": [
+          "provincial"
+        ],
+        "summary": "Tipos de norma provincial",
+        "description": "Devuelve los tipos que trae el catálogo, del más frecuente al menos. Sirve para saber por qué valor filtrar.",
+        "operationId": "verTiposProvinciales",
+        "responses": {
+          "200": {
+            "description": "Los tipos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "tipo": {
+                        "type": "string"
+                      },
+                      "normas": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/provincial/{id}": {
+      "get": {
+        "tags": [
+          "provincial"
+        ],
+        "summary": "Una norma provincial",
+        "description": "Trae una norma por su identificador de SAIJ.",
+        "operationId": "verNormaProvincial",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Identificador de SAIJ, como LPB1000000.",
+            "example": "LPB1000000"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "La norma, con el enlace a su ficha en SAIJ.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NormaProvincial"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No hay una norma con ese identificador.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Esta instancia todavía no bajó el catálogo provincial.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
             }
           }
         }
@@ -1060,6 +1287,116 @@
           "dias_con_edicion": {
             "type": "integer",
             "description": "Días del rango que tuvieron edición. Si es mayor que dias_indexados, el índice vio menos de lo que hay."
+          }
+        }
+      },
+      "NormaProvincial": {
+        "type": "object",
+        "description": "Una norma provincial. notarum guarda sus datos y el enlace a SAIJ, no su texto: SAIJ lo publica para pocas de las 81 mil.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Identificador de SAIJ, del estilo LPB1000000. Es la clave.",
+            "example": "LPB1000000"
+          },
+          "provincia": {
+            "type": "string",
+            "example": "Buenos Aires"
+          },
+          "provincia_id": {
+            "type": "string",
+            "description": "Código INDEC de la jurisdicción.",
+            "example": "06"
+          },
+          "tipo": {
+            "type": "string",
+            "example": "Constitución Provincial"
+          },
+          "numero": {
+            "type": "string",
+            "description": "Texto y no número: hay normas sin numerar.",
+            "example": "6109"
+          },
+          "estado": {
+            "type": "string",
+            "description": "Lo que SAIJ dice de su vigencia, con sus palabras.",
+            "example": "Vigente, de alcance general"
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date",
+            "description": "Fecha de sanción."
+          },
+          "publicada": {
+            "type": "string",
+            "format": "date",
+            "description": "Fecha de publicación en el boletín de la provincia."
+          },
+          "nombre": {
+            "type": "string",
+            "description": "El nombre con el que se la conoce."
+          },
+          "titulo": {
+            "type": "string",
+            "description": "De qué trata, en una línea."
+          },
+          "materias": {
+            "type": "string",
+            "description": "Los términos con que SAIJ la clasifica. Vienen separados por guiones, aunque no siempre: 63.984 de las 81.281 con sumario los usan."
+          },
+          "digesto": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provincia",
+          "provincia_id",
+          "tipo"
+        ]
+      },
+      "ProvinciaConNormas": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Código INDEC.",
+            "example": "06"
+          },
+          "nombre": {
+            "type": "string",
+            "example": "Buenos Aires"
+          },
+          "prefijo": {
+            "type": "string",
+            "description": "Con el que empiezan sus identificadores en SAIJ.",
+            "example": "LPB"
+          },
+          "normas": {
+            "type": "integer",
+            "description": "Cuántas hay guardadas de esta jurisdicción."
+          }
+        }
+      },
+      "ResultadoProvincial": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "description": "Cuántas cumplen los criterios, más allá de esta página."
+          },
+          "pagina": {
+            "type": "integer"
+          },
+          "normas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NormaProvincial"
+            }
+          },
+          "hay_mas": {
+            "type": "boolean",
+            "description": "Si hay más de las que entran en esta página."
           }
         }
       }

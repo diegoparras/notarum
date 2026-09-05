@@ -137,6 +137,10 @@ curl https://tu-instancia/v1/ediciones/primera/2026-09-01
 | `GET /v1/anexos/{sección}/{nro}/{id}/{fecha}.pdf` | el PDF del anexo |
 | `GET /v1/rubros/{sección}` | el catálogo de rubros |
 | `GET /v1/buscar?…&fuente=indice\|sitio\|auto` | búsqueda por texto y fecha |
+| `GET /v1/provincial?texto=&provincia=&tipo=&desde=&hasta=&vigentes=` | normativa de las 24 provincias |
+| `GET /v1/provincial/provincias` | las jurisdicciones y cuántas normas hay de cada una |
+| `GET /v1/provincial/tipos` | los tipos de norma provincial |
+| `GET /v1/provincial/{id}` | una norma provincial, con su ficha en SAIJ |
 | `GET /v1/salud` | estado del servicio, del sitio y de la caché |
 | `GET /v1/openapi.json` | el contrato, validado por un test |
 
@@ -154,8 +158,10 @@ Cada error dice de quién es la culpa, para que sepas a quién mirar:
 
 ### 3. El MCP, en `/mcp` y por entrada estándar
 
-Para que un modelo consulte el Boletín como una herramienta más. Seis:
-`edicion`, `aviso`, `buscar`, `calendario`, `rubros` y `estado`.
+Para que un modelo consulte el Boletín como una herramienta más. Nueve:
+`edicion`, `aviso`, `buscar`, `calendario`, `rubros` y `estado` para el
+Boletín nacional, y `provincial_buscar`, `provincial_norma` y
+`provincial_tipos` para las leyes de las provincias.
 
 ```json
 {
@@ -311,6 +317,32 @@ guarda su huella, así que se muestra una vez y ni notarum puede recuperarlo.
 
 Cada zona tiene su propia cuota —lector, API, MCP, login—, así que bajar el
 límite de la API no deja la interfaz inusable.
+
+### La normativa de las provincias
+
+El Boletín Oficial de la Nación no publica las leyes provinciales: cada
+provincia tiene su propio boletín. Esa parte la cubre la **Base SAIJ de
+Normativa Provincial** del Ministerio de Justicia — 81.403 leyes, decretos
+leyes, códigos y las 41 constituciones de las 24 jurisdicciones, desde 1855.
+
+```bash
+notarum provincial
+```
+
+Baja el catálogo y lo guarda. Tarda unos segundos y se puede volver a correr:
+si el portal no publicó nada nuevo, no baja nada. Después queda en
+`/provincial` en el lector, en `/v1/provincial` en la API y como
+`provincial_buscar` en el MCP.
+
+De cada norma están la provincia, el tipo, el número, las fechas de sanción y
+publicación, el estado de vigencia, el título, las materias y el enlace a su
+ficha en SAIJ. **El texto completo no**: se midió sobre una muestra al azar y
+SAIJ lo publica para el 7% de las normas, así que notarum enlaza a la fuente
+en vez de prometer una copia que casi siempre estaría vacía.
+
+El catálogo se sirve desde memoria: 77 MB y 340 ms de carga, medidos con la
+base entera. Los paga sólo quien lo sincroniza — una instancia que no use la
+parte provincial no carga nada. Se apaga del todo con `NOTARUM_SIN_SAIJ`.
 
 ### Federar con Lockatus
 

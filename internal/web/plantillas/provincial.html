@@ -1,0 +1,81 @@
+{{define "titulo"}}Normativa provincial{{end}}
+{{define "cuerpo"}}
+
+<h1>Normativa provincial</h1>
+<p class="bajada">
+  Leyes, decretos, códigos y constituciones de las 24 provincias. Es lo que el
+  Boletín Oficial de la Nación no publica: cada provincia tiene el suyo. Sale
+  de la Base SAIJ del Ministerio de Justicia.
+</p>
+
+{{if not .Cargado}}
+<div class="vacio">
+  <strong>Esta instancia todavía no bajó la normativa provincial</strong>
+  Quien la opera tiene que correr <code>notarum provincial</code> una vez. Son
+  81 mil normas y tarda unos segundos.
+</div>
+{{else}}
+
+<form class="barra" method="get" action="/provincial">
+  <input type="search" name="texto" value="{{.Texto}}"
+         placeholder="educación, expropiación, un tema…" aria-label="Texto a buscar" autofocus>
+  <select name="provincia" aria-label="Provincia">
+    <option value="">todas las provincias</option>
+    {{$p := .Provincia}}
+    {{range .Provincias}}
+      <option value="{{.ID}}"{{if eq .ID $p}} selected{{end}}>{{.Nombre}} ({{.Normas}})</option>
+    {{end}}
+  </select>
+  <select name="tipo" aria-label="Tipo de norma">
+    <option value="">todo tipo</option>
+    {{$t := .Tipo}}
+    {{range .Tipos}}
+      <option value="{{.Tipo}}"{{if eq .Tipo $t}} selected{{end}}>{{.Tipo}} ({{.Normas}})</option>
+    {{end}}
+  </select>
+  <input type="number" name="desde" value="{{if .Desde}}{{.Desde}}{{end}}" placeholder="desde" min="1800" max="2200" aria-label="Año desde" style="width:6.5em">
+  <input type="number" name="hasta" value="{{if .Hasta}}{{.Hasta}}{{end}}" placeholder="hasta" min="1800" max="2200" aria-label="Año hasta" style="width:6.5em">
+  <label class="casilla"><input type="checkbox" name="vigentes" value="1"{{if .Vigentes}} checked{{end}}> sólo vigentes</label>
+  <button class="boton" type="submit">Buscar</button>
+</form>
+
+{{if .Error}}
+  <div class="vacio"><strong>No se pudo buscar</strong>{{.Error}}</div>
+{{else}}
+  <div class="aviso-nota">
+    {{.Resultado.Total}} norma{{if ne .Resultado.Total 1}}s{{end}}
+    de {{.Guardadas}} en el catálogo.
+    {{if .Resultado.Truncado}}Se muestran las primeras {{len .Resultado.Normas}}.{{end}}
+  </div>
+
+  {{range .Resultado.Normas}}
+    <a class="aviso" href="/provincial/{{.ID}}">
+      <div class="aviso-organismo">{{.Provincia}}</div>
+      <div class="aviso-norma">{{.Descripcion}}</div>
+      <div class="aviso-sintesis">{{.Titulo}}</div>
+      <div class="aviso-pie">
+        {{if .Fecha}}<span class="dato-mono">{{.Fecha}}</span>{{end}}
+        <span class="dato-mono">{{.ID}}</span>
+        {{if .Vigente}}<span class="marca-chica">vigente</span>
+        {{else if .Estado}}<span class="marca-chica gris">{{.Estado}}</span>{{end}}
+      </div>
+    </a>
+  {{else}}
+    <div class="vacio">
+      <strong>No hay normas con esos criterios</strong>
+      Probá con menos filtros, o con otras palabras. Para encontrar la
+      constitución de una provincia conviene elegir el tipo en vez de buscarla
+      por texto.
+    </div>
+  {{end}}
+
+  {{if .Paginas}}
+  <nav class="paginas">
+    {{if .Anterior}}<a class="boton suave" href="{{.Anterior}}">← anteriores</a>{{end}}
+    <span class="dato-mono">página {{.Pagina}}</span>
+    {{if .Siguiente}}<a class="boton suave" href="{{.Siguiente}}">siguientes →</a>{{end}}
+  </nav>
+  {{end}}
+{{end}}
+{{end}}
+{{end}}

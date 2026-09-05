@@ -168,6 +168,15 @@ h2 { font-size: 17px; font-weight: 600; margin: 32px 0 12px; }
 
 /* -------------------------------------------------------------------- varios */
 
+/* La normativa provincial: una lista larga que se filtra, así que la barra
+   de filtros tiene más campos y las páginas se navegan de a una. */
+.casilla { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--tinta-suave); white-space: nowrap; }
+.paginas { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 26px; }
+.materias { display: flex; flex-wrap: wrap; gap: 6px; }
+.datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px 20px; margin: 20px 0; padding: 16px 18px; background: var(--crema-hondo); border-radius: var(--radio); font-size: 14px; }
+.dato-nombre { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--tinta-tenue); margin-bottom: 2px; }
+.miga { font-size: 14px; margin-bottom: 18px; }
+
 /* Entrar por el hub de la suite: es la vía principal cuando está encendida,
    así que va primero y con el mismo peso visual que el botón propio. */
 .boton.hub { display: block; text-align: center; text-decoration: none; margin-bottom: 18px; }

@@ -98,18 +98,42 @@ func (s *Servidor) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.handler.ServeHTTP(w, r)
 }
 
+// rutasDeLaAPI son los caminos que atiende /v1, en la notación de OpenAPI.
+//
+// Están en una lista y no sueltos en rutas() para que el contrato no se pueda
+// desactualizar sin que nadie se entere: hay un test que compara esta lista
+// contra openapi.json. Agregar una ruta acá y olvidarse de documentarla
+// rompe la suite, que es lo que tiene que pasar.
+func (s *Servidor) rutasDeLaAPI() []ruta {
+	return []ruta{
+		{"/v1/calendario/{anio}/{seccion}", s.verCalendario},
+		{"/v1/ediciones/{seccion}/{fecha}", s.verEdicion},
+		{"/v1/ediciones/{seccion}", s.verRango},
+		{"/v1/avisos/{seccion}/{id}/{fecha}", s.verAviso},
+		{"/v1/anexos/{seccion}/{nro}/{id}/{fecha}", s.verAnexo},
+		{"/v1/rubros/{seccion}", s.verRubros},
+		{"/v1/buscar", s.buscar},
+		{"/v1/secciones", s.verSecciones},
+		{"/v1/provincial", s.buscarProvincial},
+		{"/v1/provincial/provincias", s.verProvincias},
+		{"/v1/provincial/tipos", s.verTiposProvinciales},
+		{"/v1/provincial/{id}", s.verNormaProvincial},
+		{"/v1/salud", s.verSalud},
+		{"/v1/openapi.json", s.verOpenAPI},
+	}
+}
+
+// ruta es un camino de la API con quien lo atiende.
+type ruta struct {
+	Camino  string
+	Atiende http.HandlerFunc
+}
+
 func (s *Servidor) rutas() {
 	m := s.mux
-	m.HandleFunc("GET /v1/calendario/{anio}/{seccion}", s.verCalendario)
-	m.HandleFunc("GET /v1/ediciones/{seccion}/{fecha}", s.verEdicion)
-	m.HandleFunc("GET /v1/ediciones/{seccion}", s.verRango)
-	m.HandleFunc("GET /v1/avisos/{seccion}/{id}/{fecha}", s.verAviso)
-	m.HandleFunc("GET /v1/anexos/{seccion}/{nro}/{id}/{fecha}", s.verAnexo)
-	m.HandleFunc("GET /v1/rubros/{seccion}", s.verRubros)
-	m.HandleFunc("GET /v1/buscar", s.buscar)
-	m.HandleFunc("GET /v1/secciones", s.verSecciones)
-	m.HandleFunc("GET /v1/salud", s.verSalud)
-	m.HandleFunc("GET /v1/openapi.json", s.verOpenAPI)
+	for _, r := range s.rutasDeLaAPI() {
+		m.HandleFunc("GET "+r.Camino, r.Atiende)
+	}
 	if s.mcp != nil {
 		m.Handle("/mcp", s.mcp)
 		m.Handle("/mcp/", s.mcp)

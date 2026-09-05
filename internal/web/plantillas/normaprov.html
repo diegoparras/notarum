@@ -1,0 +1,52 @@
+{{define "titulo"}}{{.Norma.Descripcion}}{{end}}
+{{define "cuerpo"}}
+
+<p class="miga"><a href="{{.Volver}}">← normativa provincial</a></p>
+
+<article class="aviso-detalle">
+  <div class="aviso-organismo">{{.Norma.Provincia}}</div>
+  <h1>{{.Norma.Descripcion}}</h1>
+  {{if .Norma.TituloResumido}}<p class="bajada">{{.Norma.TituloResumido}}</p>{{end}}
+
+  <div class="datos">
+    {{if .Norma.Fecha}}<div><span class="dato-nombre">sancionada</span><span class="dato-mono">{{.Norma.Fecha}}</span></div>{{end}}
+    {{if .Norma.FechaPublicacio}}<div><span class="dato-nombre">publicada</span><span class="dato-mono">{{.Norma.FechaPublicacio}}</span></div>{{end}}
+    {{if .Norma.Estado}}<div><span class="dato-nombre">estado</span>{{.Norma.Estado}}</div>{{end}}
+    <div><span class="dato-nombre">identificador</span><span class="dato-mono">{{.Norma.ID}}</span></div>
+  </div>
+
+  {{if .Norma.Nombre}}
+    {{if ne .Norma.Nombre .Norma.TituloResumido}}
+    <p class="docs-parrafo">También se la conoce como <strong>{{.Norma.Nombre}}</strong>.</p>
+    {{end}}
+  {{end}}
+
+  {{if .Materias}}
+  <h2>Materias</h2>
+  <p class="materias">
+    {{range .Materias}}<span class="marca-chica gris">{{.}}</span> {{end}}
+  </p>
+  {{end}}
+
+  {{if .Norma.Digesto}}
+  <h2>Digesto</h2>
+  <p class="docs-parrafo">{{.Norma.Digesto}}</p>
+  {{end}}
+
+  <h2>El texto</h2>
+  <p class="docs-parrafo">
+    notarum guarda los datos de la norma, no su texto: SAIJ lo publica para
+    pocas de las 81 mil, así que el enlace lleva a la fuente y no a una copia
+    que estaría vacía la mayoría de las veces.
+  </p>
+  <p><a class="boton" href="{{.Norma.URLFicha}}" rel="noopener" target="_blank">Verla en SAIJ</a></p>
+
+  <h2>Buscar parecidas</h2>
+  <p class="docs-parrafo">
+    <a href="/provincial?provincia={{.Norma.ProvinciaID}}">Todas las de {{.Norma.Provincia}}</a>
+    {{if .Norma.Tipo}} ·
+    <a href="/provincial?provincia={{.Norma.ProvinciaID}}&amp;tipo={{.Norma.Tipo}}">{{.Norma.Tipo}} de {{.Norma.Provincia}}</a>
+    {{end}}
+  </p>
+</article>
+{{end}}

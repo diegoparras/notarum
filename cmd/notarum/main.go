@@ -28,6 +28,7 @@ import (
 	"github.com/diegoparras/notarum/internal/infoleg"
 	"github.com/diegoparras/notarum/internal/lockatus"
 	"github.com/diegoparras/notarum/internal/mcp"
+	"github.com/diegoparras/notarum/internal/saij"
 	"github.com/diegoparras/notarum/internal/servicio"
 )
 
@@ -55,6 +56,8 @@ func ejecutar(args []string) error {
 		return servirMCP(args)
 	case "infoleg":
 		return sincronizarInfoLEG(args)
+	case "provincial", "saij":
+		return sincronizarSAIJ(args)
 	case "usuarios", "usuario":
 		return administrarUsuarios(args)
 	case "version", "--version", "-v":
@@ -120,11 +123,20 @@ func ayuda() {
       Baja el catálogo de normativa de InfoLEG y lo guarda. Con eso, cada
       aviso del Boletín muestra la norma que InfoLEG mantiene actualizada.
       Son unas 428 mil normas; se puede cortar y volver a correr.
+      Se apaga con NOTARUM_SIN_INFOLEG; la parte provincial, con
+      NOTARUM_SIN_SAIJ.
 
   notarum usuarios crear <nombre> [--rol admin|persona]
       Crea una cuenta. La clave se pide por teclado y no queda en el historial
       del shell. Mientras no exista ninguna cuenta, notarum funciona sin login
       y con todo abierto, que es como viene.
+
+  notarum provincial
+      Baja la Base SAIJ de Normativa Provincial que publica el Ministerio de
+      Justicia en datos.jus.gob.ar: 81 mil leyes, decretos, códigos y las
+      constituciones de las 24 provincias, desde 1855. Es lo que el Boletín
+      nacional no trae. Se puede volver a correr: si el portal no publicó
+      nada nuevo, no baja nada.
 
   notarum version
 `)
@@ -210,6 +222,11 @@ func armarServicio(cfg configComun) (*servicio.Servicio, func(), error) {
 			UserAgent: cfg.userAgent,
 			Intervalo: cfg.intervalo,
 		}))
+	}
+	// La normativa provincial, lo mismo. Y no cuesta nada mientras nadie la
+	// sincronice: el índice se arma la primera vez que alguien lo consulta.
+	if entorno("NOTARUM_SIN_SAIJ", "") == "" {
+		srv = srv.ConSAIJ(saij.NuevoCliente(saij.Opciones{UserAgent: cfg.userAgent}))
 	}
 	return srv, func() { _ = alm.Cerrar() }, nil
 }
@@ -700,4 +717,47 @@ func armarHub(hayCuentas bool) (*lockatus.Cliente, error) {
 		return nil, err
 	}
 	return c, nil
+}
+
+// sincronizarSAIJ baja la base de normativa provincial y la guarda.
+func sincronizarSAIJ(args []string) error {
+	fs := flag.NewFlagSet("provincial", flag.ContinueOnError)
+	dirCache := fs.String("cache", entorno("NOTARUM_CACHE", "/datos/cache"), "directorio de caché (motor disco)")
+	motor := fs.String("almacen", entorno("NOTARUM_ALMACEN", "disco"), "dónde guardar: disco, sqlite o postgres")
+	rutaDB := fs.String("db", entorno("NOTARUM_DB", "/datos/notarum.db"), "archivo de la base (motor sqlite)")
+	userAgent := fs.String("user-agent", entorno("NOTARUM_USER_AGENT", uaPorDefecto), "User-Agent hacia los sitios")
+	trabajo := fs.String("trabajo", entorno("NOTARUM_TRABAJO", ""), "dónde bajar el catálogo (por defecto, el temporal del sistema)")
+	formatoLog := fs.String("log", entorno("NOTARUM_LOG", "text"), "formato de log: text o json")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	armarLog(*formatoLog)
+
+	srv, cerrar, err := armarServicio(configComun{
+		motor: *motor, dirCache: *dirCache, rutaDB: *rutaDB,
+		userAgent: *userAgent, intervalo: 500 * time.Millisecond,
+	})
+	if err != nil {
+		return err
+	}
+	defer cerrar()
+
+	ctx, cancelar := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancelar()
+
+	inicio := time.Now()
+	estado, err := srv.SincronizarSAIJ(ctx, *trabajo)
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			slog.Info("cortado por pedido del usuario; lo que había queda como estaba")
+			return nil
+		}
+		return err
+	}
+	slog.Info("listo",
+		"normas", estado.Normas,
+		"provincias", estado.Provincias,
+		"catalogo_publicado", estado.CatalogoAlDia.Format("2006-01-02"),
+		"tardo", time.Since(inicio).Round(time.Second).String())
+	return nil
 }
