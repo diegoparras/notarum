@@ -81,4 +81,54 @@
 Creá uno arriba. Nombralo por lo que va a hacer: cuando tengas varios, es lo
 único que te va a decir cuál revocar.</div>
 {{end}}
+
+{{if .HayAsistente}}
+<h2>El asistente de consultas</h2>
+<p class="docs-parrafo">
+  Con una clave de OpenRouter, la <a href="/docs#asistente">documentación</a>
+  te arma la consulta en el lenguaje que le pidas. La clave es tuya y lo que
+  gastes lo pagás vos: notarum sólo la guarda cifrada para poder usarla en tu
+  nombre.
+</p>
+
+{{if .ClaveIA}}
+  <div class="modo-acceso">
+    <span class="marca-chica">clave cargada</span>
+    <span class="modo-explicacion dato-mono">{{.ClaveIA}}</span>
+    <form method="post" action="/cuenta/clave-ia/borrar" style="margin-left:auto">
+      <button class="boton suave" type="submit">Sacarla</button>
+    </form>
+  </div>
+{{else}}
+  <form method="post" action="/cuenta/clave-ia" class="barra">
+    <span class="clave-caja" style="flex:1 1 320px">
+      <input type="password" name="clave_ia" id="clave_ia" required
+             autocomplete="off" spellcheck="false" placeholder="sk-or-v1-…">
+      <button type="button" class="ojo" id="ojo_ia" aria-label="Mostrar la clave" aria-pressed="false">👁</button>
+    </span>
+    <button class="boton" type="submit">Guardar la clave</button>
+  </form>
+  <p class="pie-nota">
+    Se saca de <a href="https://openrouter.ai/keys" rel="noopener" target="_blank">openrouter.ai/keys</a>.
+    Se prueba contra el proveedor antes de guardarla, y no se muestra de vuelta.
+  </p>
+{{end}}
+
+<script>
+// El ojito, igual que en la entrada: una clave pegada mal no se ve hasta que
+// falla, y este campo no se puede releer después.
+(function () {
+  var campo = document.getElementById('clave_ia');
+  var ojo = document.getElementById('ojo_ia');
+  if (!campo || !ojo) return;
+  ojo.addEventListener('click', function () {
+    var oculta = campo.type === 'password';
+    campo.type = oculta ? 'text' : 'password';
+    ojo.textContent = oculta ? '🙈' : '👁';
+    ojo.setAttribute('aria-pressed', oculta ? 'true' : 'false');
+    campo.focus();
+  });
+})();
+</script>
+{{end}}
 {{end}}

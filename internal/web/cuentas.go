@@ -48,6 +48,10 @@ type datosCuenta struct {
 	PorMinutoConToken int
 	Modo              string
 	Explicacion       string
+	// HayAsistente y ClaveIA son del generador de consultas. ClaveIA es sólo
+	// una pista para reconocer cuál está cargada, nunca la clave.
+	HayAsistente bool
+	ClaveIA      string
 }
 
 // yo devuelve quién está mirando, o nil si nadie entró.
@@ -169,6 +173,10 @@ func (s *Sitio) dibujarCuenta(w http.ResponseWriter, r *http.Request, u *cuentas
 		PorMinutoConToken: s.vigente().CuotaDe(u),
 		Modo:              string(s.vigente().Modo),
 		Explicacion:       s.vigente().Explicacion(),
+		HayAsistente:      s.PuedeAsistir(),
+	}
+	if pista, hay := s.registro.PistaClaveIA(u.Nombre); hay {
+		d.ClaveIA = pista
 	}
 	d.Angosto = true
 	for _, t := range s.registro.Tokens(u.Nombre) {

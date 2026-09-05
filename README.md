@@ -342,6 +342,27 @@ Es de quien administra: hace falta una cuenta con rol `admin`. Los mismos
 trabajos siguen estando por consola (`notarum rellenar`, `notarum infoleg`,
 `notarum provincial`) para quien prefiera automatizarlos.
 
+### El asistente de consultas
+
+La documentación dice qué rutas hay, pero traducir eso al cliente HTTP de n8n
+o a un script es un trabajo aparte. En `/docs` hay una caja donde se escribe
+lo que se quiere:
+
+> la consulta para resúmenes de un rango de fechas en n8n
+
+…y sale armada, con las rutas de esa instancia y el contrato delante. El
+contexto se arma del mismo `openapi.json` y de la misma lista de herramientas
+MCP de las que se dibuja la documentación, así que no se puede desactualizar.
+
+**La clave del proveedor la pone cada persona** desde su cuenta y paga lo
+suyo: notarum no tiene una propia. Es de OpenRouter, se prueba antes de
+guardarla, se guarda cifrada con AES-GCM y nunca se muestra de vuelta —sólo
+los primeros y los últimos caracteres, para reconocer cuál está cargada—. Se
+puede sacar cuando se quiera.
+
+El modelo no ejecuta nada: escribe algo para copiar y pegar, y se ve antes de
+correrlo.
+
 ### La normativa de las provincias
 
 El Boletín Oficial de la Nación no publica las leyes provinciales: cada

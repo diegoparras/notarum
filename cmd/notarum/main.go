@@ -23,6 +23,7 @@ import (
 
 	"github.com/diegoparras/notarum/internal/almacen"
 	"github.com/diegoparras/notarum/internal/api"
+	"github.com/diegoparras/notarum/internal/asistente"
 	"github.com/diegoparras/notarum/internal/boletin"
 	"github.com/diegoparras/notarum/internal/cuentas"
 	"github.com/diegoparras/notarum/internal/infoleg"
@@ -322,6 +323,9 @@ func servir(args []string) error {
 		Servicio: srv, PorMinuto: limite, Version: version,
 		TokenMCP: *tokenMCP, SinMCP: *sinMCP, SinWeb: *sinWeb,
 		Registro: reg, Politica: politica, Hub: hub, Tareas: ejecutor,
+		// El asistente se enciende solo: cada persona pone su clave de
+		// OpenRouter desde su cuenta, así que no hay nada que configurar acá.
+		Asistente: asistente.NuevoCliente(asistente.Opciones{}),
 	})
 
 	http := &http.Server{

@@ -192,6 +192,13 @@ h2 { font-size: 17px; font-weight: 600; margin: 32px 0 12px; }
 
 /* -------------------------------------------------------------------- varios */
 
+/* El asistente de consultas: una caja para escribir y el resultado abajo. */
+.asistente { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; }
+.asistente textarea { flex: 1 1 340px; min-height: 62px; resize: vertical; font: inherit;
+  padding: 11px 13px; border-radius: 11px; border: 1px solid var(--linea);
+  background: var(--crema); color: var(--tinta); }
+.asistente textarea:focus { outline: 2px solid var(--acento); outline-offset: -1px; }
+
 /* La configuración del panel: una grilla de campos cortos, porque son números
    de una o dos cifras y ponerlos uno abajo del otro haría una lista larguísima. */
 .config { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));

@@ -8,6 +8,7 @@
 </p>
 
 <nav class="docs-indice">
+  {{if .HayAsistente}}<a href="#asistente">Asistente</a>{{end}}
   <a href="#acceso">Acceso</a>
   <a href="#api">API</a>
   <a href="#formas">Formas</a>
@@ -15,6 +16,49 @@
   <a href="#errores">Errores</a>
   <a href="/v1/openapi.json">openapi.json</a>
 </nav>
+
+{{if .HayAsistente}}
+<h2 id="asistente">Que te la arme el asistente</h2>
+<p class="docs-parrafo">
+  Escribí qué consulta necesitás y en qué lenguaje o herramienta, y sale
+  armada con las rutas de esta instancia. Por ejemplo: <em>«la consulta para
+  resúmenes de un rango de fechas en n8n»</em>.
+</p>
+
+{{if .ErrorAsistente}}<div class="aviso-error">{{.ErrorAsistente}}</div>{{end}}
+
+{{if .Yo}}
+  {{if .TieneClaveIA}}
+  <form method="post" action="/docs/generar" class="asistente">
+    <textarea name="pedido" rows="2" required
+      placeholder="la consulta para resúmenes de un rango de fechas en n8n">{{.Asistente.Pedido}}</textarea>
+    <button class="boton" type="submit">Armar la consulta</button>
+  </form>
+
+  {{if .Asistente.Generado}}
+  <pre class="docs-bloque"><code>{{.Asistente.Generado}}</code></pre>
+  <p class="pie-nota">
+    Lo armó {{.Asistente.Modelo}} con la documentación de esta instancia
+    delante · {{.Asistente.TokensEntrada}} tokens de entrada y
+    {{.Asistente.TokensSalida}} de salida, que se cobran a tu cuenta de
+    OpenRouter. Revisalo antes de correrlo: un modelo se puede equivocar.
+  </p>
+  {{end}}
+  {{else}}
+  <div class="vacio">
+    <strong>Cargá tu clave de OpenRouter</strong>
+    El asistente usa tu cuenta del proveedor y lo que gastes lo pagás vos.
+    Se carga en <a href="/cuenta">tu cuenta</a>.
+  </div>
+  {{end}}
+{{else}}
+  <div class="vacio">
+    <strong>El asistente es para quien tiene cuenta</strong>
+    <a href="/entrar">Entrá</a> y cargá tu clave de OpenRouter: la generación
+    la paga cada uno con la suya.
+  </div>
+{{end}}
+{{end}}
 
 <h2 id="acceso">Acceso</h2>
 <div class="modo-acceso">

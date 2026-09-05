@@ -20,6 +20,7 @@ import (
 	"unicode"
 
 	"github.com/diegoparras/notarum/internal/almacen"
+	"github.com/diegoparras/notarum/internal/asistente"
 	"github.com/diegoparras/notarum/internal/boletin"
 	"github.com/diegoparras/notarum/internal/contrato"
 	"github.com/diegoparras/notarum/internal/cuentas"
@@ -54,6 +55,8 @@ type Sitio struct {
 	hub *lockatus.Cliente
 	// tareas corre los trabajos largos que se lanzan desde el panel.
 	tareas *tareas.Ejecutor
+	// asistente arma consultas a partir de un pedido en castellano.
+	asistente *asistente.Cliente
 }
 
 // ConCuentas habilita el login y la gestión de tokens.
@@ -127,6 +130,9 @@ func (s *Sitio) rutas() {
 	s.mux.HandleFunc("POST /entrar", s.hacerEntrar)
 	s.mux.HandleFunc("GET /salir", s.salir)
 	s.mux.HandleFunc("GET /admin", s.verAdmin)
+	s.mux.HandleFunc("POST /docs/generar", s.generar)
+	s.mux.HandleFunc("POST /cuenta/clave-ia", s.guardarClaveIA)
+	s.mux.HandleFunc("POST /cuenta/clave-ia/borrar", s.borrarClaveIA)
 	s.mux.HandleFunc("POST /admin/politica", s.guardarPolitica)
 	s.mux.HandleFunc("POST /admin/politica/olvidar", s.olvidarPolitica)
 	s.mux.HandleFunc("POST /admin/tareas/{tipo}", s.lanzarTarea)
@@ -756,6 +762,12 @@ type datosDocs struct {
 	// instancia no es algo que la documentación pueda dar por sabido, porque
 	// lo decide quien la levanta.
 	Politica cuentas.Politica
+
+	// El asistente que arma la consulta.
+	Asistente      datosAsistente
+	HayAsistente   bool
+	TieneClaveIA   bool
+	ErrorAsistente string
 }
 
 // docs dibuja la documentación de la API y del MCP.
@@ -764,6 +776,16 @@ type datosDocs struct {
 // OpenAPI embebido y la lista de herramientas—, así que no puede quedar
 // desactualizada: si se agrega una ruta o una herramienta, aparece sola.
 func (s *Sitio) docs(w http.ResponseWriter, r *http.Request) {
+	s.dibujarDocs(w, r, "", "", http.StatusOK)
+}
+
+// dibujarDocs arma la página. El asistente vive acá porque es donde alguien
+// está leyendo qué rutas hay: es el momento en que necesita la consulta.
+func (s *Sitio) dibujarDocs(w http.ResponseWriter, r *http.Request, pedido, errMsg string, codigo int) {
+	s.dibujarDocsCon(w, r, datosAsistente{Pedido: pedido}, errMsg, codigo)
+}
+
+func (s *Sitio) dibujarDocsCon(w http.ResponseWriter, r *http.Request, a datosAsistente, errMsg string, codigo int) {
 	doc, err := contrato.Leer()
 	if err != nil {
 		s.fallo(w, r, http.StatusInternalServerError, "No se pudo leer el contrato",
@@ -776,12 +798,18 @@ func (s *Sitio) docs(w http.ResponseWriter, r *http.Request) {
 		ConMCP: s.conMCP,
 		Base:   baseVisible(r),
 
-		Politica: s.vigente(),
+		Politica:       s.vigente(),
+		Asistente:      a,
+		HayAsistente:   s.PuedeAsistir(),
+		ErrorAsistente: errMsg,
+	}
+	if u := s.yo(r); u != nil && s.registro != nil {
+		d.TieneClaveIA = s.registro.TieneClaveIA(u.Nombre)
 	}
 	for _, h := range mcp.Herramientas() {
 		d.Herramientas = append(d.Herramientas, aHerramientaDoc(h))
 	}
-	s.mostrar(w, r, "docs", d, http.StatusOK)
+	s.mostrar(w, r, "docs", d, codigo)
 }
 
 // baseVisible arma la dirección tal como la ve quien está mirando, para que
