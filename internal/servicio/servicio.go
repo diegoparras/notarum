@@ -47,6 +47,13 @@ type Servicio struct {
 	// infoleg enriquece los avisos con la norma actualizada. Es opcional: sin
 	// él notarum sirve el Boletín igual, sólo que sin ese agregado.
 	infoleg *infoleg.Cliente
+	// buscadorInfoLEG enciende la búsqueda sobre las 428 mil normas
+	// nacionales. Va apagado por defecto: son 357 MB en memoria, medidos con
+	// el catálogo real, y no se le imponen a quien no lo pidió.
+	buscadorInfoLEG bool
+	infoUnaVez      sync.Once
+	infoMu          sync.RWMutex
+	infoIndice      *infoleg.Indice
 	// saij trae la normativa de las provincias, que el Boletín nacional no
 	// publica. También es opcional.
 	saij *saij.Cliente

@@ -35,7 +35,7 @@ import (
 )
 
 // version se puede fijar en el build: -ldflags "-X main.version=1.2.3".
-var version = "1.6.0"
+var version = "1.7.0"
 
 func main() {
 	if err := ejecutar(os.Args[1:]); err != nil {
@@ -230,6 +230,9 @@ func armarServicio(cfg configComun) (*servicio.Servicio, func(), error) {
 	if entorno("NOTARUM_SIN_SAIJ", "") == "" {
 		srv = srv.ConSAIJ(saij.NuevoCliente(saij.Opciones{UserAgent: cfg.userAgent}))
 	}
+	// El buscador de normativa nacional se pide: son unos 350 MB en memoria,
+	// medidos con el catálogo real, y no se le imponen a quien no lo usa.
+	srv = srv.ConBuscadorInfoLEG(entorno("NOTARUM_BUSCADOR_INFOLEG", "") != "")
 	return srv, func() { _ = alm.Cerrar() }, nil
 }
 
@@ -292,18 +295,21 @@ func servir(args []string) error {
 	if err != nil {
 		return err
 	}
-	// Sin cuentas, la instancia arranca abierta y ofrece crear la primera
-	// desde el navegador. El código va al log —que es lo que ve quien la
-	// levantó— porque una instancia expuesta a internet no puede regalarle el
-	// administrador a quien pase primero.
-	if !reg.HayUsuarios() {
-		codigo, err := reg.CodigoDeArranque()
-		if err != nil {
-			return err
-		}
-		slog.Warn("esta instancia todavía no tiene cuentas",
-			"para_crear_la_primera_cuenta", "abrí /empezar en el navegador",
-			"codigo_de_arranque", cuentas.CodigoLegible(codigo))
+	// La cuenta que administra sale de la configuración, como en el resto de
+	// la suite: si la clave está en el entorno, esa es; si no, se genera y se
+	// imprime una vez. Cambiarla en el entorno y reiniciar la vuelve a poner,
+	// así que no hay forma de quedarse afuera de la propia instancia.
+	generada, err := reg.AsegurarAdmin(
+		entorno("NOTARUM_ADMIN_USUARIO", cuentas.UsuarioAdminPorDefecto),
+		entorno("NOTARUM_ADMIN_CLAVE", ""))
+	if err != nil {
+		return err
+	}
+	if generada != "" {
+		slog.Warn("se creó la cuenta que administra; esta clave se muestra una sola vez",
+			"usuario", entorno("NOTARUM_ADMIN_USUARIO", cuentas.UsuarioAdminPorDefecto),
+			"clave", generada,
+			"para_no_verla_mas", "poné NOTARUM_ADMIN_CLAVE en la configuración")
 	}
 	politica, err := armarPolitica(reg.HayUsuarios(), limite)
 	if err != nil {

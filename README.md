@@ -25,7 +25,7 @@ crudo y bien tipado, y eso es todo su valor.
 
 ```bash
 docker run -d -p 8080:8080 -v notarum-datos:/datos \
-  -e NOTARUM_ALMACEN=sqlite ghcr.io/diegoparras/notarum:1.6.0
+  -e NOTARUM_ALMACEN=sqlite ghcr.io/diegoparras/notarum:1.7.0
 ```
 
 Abrí `http://localhost:8080` y ya estás leyendo el Boletín de hoy.
@@ -141,6 +141,9 @@ curl https://tu-instancia/v1/ediciones/primera/2026-09-01
 | `GET /v1/provincial/provincias` | las jurisdicciones y cuántas normas hay de cada una |
 | `GET /v1/provincial/tipos` | los tipos de norma provincial |
 | `GET /v1/provincial/{id}` | una norma provincial, con su ficha en SAIJ |
+| `GET /v1/nacional?texto=&tipo=&desde=&hasta=&con_texto=` | las 428 mil normas nacionales de InfoLEG |
+| `GET /v1/nacional/tipos` | los tipos de norma nacional |
+| `GET /v1/nacional/{id}` | una norma nacional, con su ficha y su texto |
 | `GET /v1/salud` | estado del servicio, del sitio y de la caché |
 | `GET /v1/openapi.json` | el contrato, validado por un test |
 
@@ -158,9 +161,10 @@ Cada error dice de quién es la culpa, para que sepas a quién mirar:
 
 ### 3. El MCP, en `/mcp` y por entrada estándar
 
-Para que un modelo consulte el Boletín como una herramienta más. Nueve:
+Para que un modelo consulte el Boletín como una herramienta más. Doce:
 `edicion`, `aviso`, `buscar`, `calendario`, `rubros` y `estado` para el
-Boletín nacional, y `provincial_buscar`, `provincial_norma` y
+Boletín; `nacional_buscar`, `nacional_norma` y `nacional_tipos` para la
+normativa nacional de InfoLEG; y `provincial_buscar`, `provincial_norma` y
 `provincial_tipos` para las leyes de las provincias.
 
 ```json
@@ -233,8 +237,8 @@ conocidas: 73 avisos el 15/7/2026, 52 el 10/3/2025, 100 el 1/9/2026.
 docker run -d --name notarum -p 8080:8080 \
   -v notarum-datos:/datos \
   -e NOTARUM_ALMACEN=sqlite \
-  -e "NOTARUM_USER_AGENT=notarum/1.6 (+https://tu-dominio.com)" \
-  ghcr.io/diegoparras/notarum:1.6.0
+  -e "NOTARUM_USER_AGENT=notarum/1.7 (+https://tu-dominio.com)" \
+  ghcr.io/diegoparras/notarum:1.7.0
 ```
 
 El volumen en `/datos` no es opcional en la práctica: sin él, cada redeploy
@@ -247,7 +251,7 @@ vuelve a bajar todo el Boletín desde cero.
 | Campo | Valor |
 |---|---|
 | Source → Type | `Image` |
-| Image | `ghcr.io/diegoparras/notarum:1.6.0` |
+| Image | `ghcr.io/diegoparras/notarum:1.7.0` |
 | Volume | `notarum-datos` montado en `/datos` |
 | Domain → Port | `8080`, con HTTPS |
 
@@ -259,7 +263,7 @@ NOTARUM_DB=/datos/notarum.db
 NOTARUM_POR_MINUTO=60
 NOTARUM_INTERVALO=500ms
 NOTARUM_LOG=json
-NOTARUM_USER_AGENT=notarum/1.6 (+https://tu-dominio.com)
+NOTARUM_USER_AGENT=notarum/1.7 (+https://tu-dominio.com)
 ```
 
 Deploy, y entrá a la raíz. La guía completa, con las dos formas de resolver el
@@ -278,7 +282,7 @@ registry y el detalle de cada paso, está en
 | `NOTARUM_POSTGRES_HOST` … | — | o las piezas sueltas: `_PUERTO`, `_BASE`, `_USUARIO`, `_CLAVE`, `_SSL`, `_ESQUEMA` |
 | `NOTARUM_POR_MINUTO` | `60` | pedidos por minuto por IP; `0` lo desactiva |
 | `NOTARUM_INTERVALO` | `500ms` | espera entre pedidos al Boletín |
-| `NOTARUM_USER_AGENT` | `notarum/1.6 (+…)` | poné una URL de contacto real |
+| `NOTARUM_USER_AGENT` | `notarum/1.7 (+…)` | poné una URL de contacto real |
 | `NOTARUM_LOG` | `json` | `json` o `text` |
 | `NOTARUM_MCP_TOKEN` | vacío | si se define, `/mcp` exige `Bearer` |
 | `NOTARUM_SIN_MCP` | vacío | apaga `/mcp` |
@@ -298,6 +302,9 @@ lector público con la API por token. Las tres son legítimas.
 | `NOTARUM_CUOTA_LECTOR` | `600` | los de las páginas web, que van aparte |
 | `NOTARUM_CUOTA_LOGIN` | `10` | intentos de entrada por minuto |
 | `NOTARUM_SECRETO_SESION` | se genera | firma las sesiones; fijalo para que sobrevivan al reinicio |
+| `NOTARUM_ADMIN_USUARIO` | `admin` | la cuenta que administra |
+| `NOTARUM_ADMIN_CLAVE` | se genera | su clave; sin esto se genera una y se imprime en el log una vez |
+| `NOTARUM_BUSCADOR_INFOLEG` | vacío | con `1`, enciende la búsqueda de normativa nacional (~350 MB) |
 
 - **abierto**: leer no pide nada. Las cuentas sirven para tener más cuota y
   para el MCP.
@@ -328,11 +335,11 @@ Lo que se configura ahí se guarda y pisa a las variables de entorno, así que
 abrir o cerrar la instancia no obliga a volver a desplegar. Siempre se puede
 volver a lo que diga la configuración del servicio.
 
-**La primera cuenta también se crea desde el navegador.** Una instancia recién
-montada imprime en su log un código de arranque y ofrece `/empezar`; con ese
-código se crea la cuenta que administra, y la puerta se cierra sola. En
-EasyPanel el log se lee en la pestaña de registros: no hace falta ninguna
-consola.
+**La cuenta que administra sale de la configuración**, como en el resto de la
+suite: `NOTARUM_ADMIN_USUARIO` y `NOTARUM_ADMIN_CLAVE`. Si no se define la
+clave, se genera una y se imprime en el log al arrancar —una sola vez—. Y si
+alguna vez te quedás afuera, ponés otra en el entorno y reiniciás: se aplica
+sola.
 
 Los trabajos de poner en marcha: Son trabajos de minutos, así que corren en segundo
 plano y la pantalla muestra cómo van; se puede cerrar la página y volver
@@ -341,6 +348,21 @@ después.
 Es de quien administra: hace falta una cuenta con rol `admin`. Los mismos
 trabajos siguen estando por consola (`notarum rellenar`, `notarum infoleg`,
 `notarum provincial`) para quien prefiera automatizarlos.
+
+### Buscar normativa, no ediciones
+
+`/v1/buscar` recorre los avisos del Boletín día por día: sirve para saber qué
+se publicó en un período. Pero para encontrar una norma sin saber en qué día
+salió hacen falta los catálogos.
+
+- **`/v1/nacional`** busca en las 428 mil normas de InfoLEG. Pedir «ley 24240»
+  trae esa ley primero, no las que la modifican. Se enciende con
+  `NOTARUM_BUSCADOR_INFOLEG=1`: son unos 350 MB en memoria, medidos con el
+  catálogo real, así que no vienen puestos.
+- **`/v1/provincial`** busca en las 81 mil provinciales, y no cuesta pedirlo.
+
+Los dos aceptan los números con puntos o sin ellos: `24.240` y `24240` dan lo
+mismo.
 
 ### El asistente de consultas
 

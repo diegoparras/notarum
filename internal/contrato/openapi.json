@@ -39,6 +39,10 @@
     {
       "name": "provincial",
       "description": "Normativa de las 24 provincias: leyes, decretos, códigos y constituciones. Sale de la Base SAIJ del Ministerio de Justicia, que es lo que el Boletín Oficial de la Nación no publica."
+    },
+    {
+      "name": "nacional",
+      "description": "Normativa nacional de InfoLEG: 428 mil leyes, decretos, resoluciones y disposiciones. Es la forma de encontrar una norma sin saber en qué edición del Boletín salió."
     }
   ],
   "paths": {
@@ -769,6 +773,205 @@
           }
         }
       }
+    },
+    "/v1/nacional": {
+      "get": {
+        "tags": [
+          "nacional"
+        ],
+        "summary": "Buscar normativa nacional",
+        "description": "Busca en las 428 mil normas de InfoLEG por título y materias. A diferencia de /v1/buscar, que recorre las ediciones del Boletín día por día, acá no hace falta saber la fecha. Buscar el tipo y el número —\"ley 24240\"— trae esa norma primero. Necesita NOTARUM_BUSCADOR_INFOLEG=1 en la instancia.",
+        "operationId": "buscarNacional",
+        "parameters": [
+          {
+            "name": "texto",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Palabras a buscar. No hace falta poner los acentos ni los puntos de los números."
+          },
+          {
+            "name": "tipo",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Ley, Decreto, Resolución… La lista está en /v1/nacional/tipos."
+          },
+          {
+            "name": "desde",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Año de sanción más viejo."
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Año de sanción más nuevo."
+          },
+          {
+            "name": "con_texto",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Con 1 deja sólo las que tienen el texto publicado."
+          },
+          {
+            "name": "pagina",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limite",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 30
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Las normas que cumplen.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultadoNacional"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Un año mal escrito o un rango al revés.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El buscador está apagado en esta instancia.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "El catálogo de InfoLEG todavía no se sincronizó.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/nacional/tipos": {
+      "get": {
+        "tags": [
+          "nacional"
+        ],
+        "summary": "Tipos de norma nacional",
+        "description": "Los tipos que trae el catálogo, del más frecuente al menos.",
+        "operationId": "verTiposNacionales",
+        "responses": {
+          "200": {
+            "description": "Los tipos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "tipo": {
+                        "type": "string"
+                      },
+                      "normas": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/nacional/{id}": {
+      "get": {
+        "tags": [
+          "nacional"
+        ],
+        "summary": "Una norma nacional",
+        "description": "Trae una norma entera por su identificador de InfoLEG, con sus fechas, su organismo y cuántas normas la modificaron.",
+        "operationId": "verNormaNacional",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "example": 638
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "La norma.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NormaNacional"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "El identificador no es un número.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No está en el catálogo guardado.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1397,6 +1600,68 @@
           "hay_mas": {
             "type": "boolean",
             "description": "Si hay más de las que entran en esta página."
+          }
+        }
+      },
+      "NormaNacional": {
+        "type": "object",
+        "description": "Una norma nacional de InfoLEG.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Identificador de InfoLEG.",
+            "example": 638
+          },
+          "tipo": {
+            "type": "string",
+            "example": "Ley"
+          },
+          "numero": {
+            "type": "string",
+            "example": "24240"
+          },
+          "titulo": {
+            "type": "string"
+          },
+          "fecha_sancion": {
+            "type": "string",
+            "format": "date"
+          },
+          "tiene_texto": {
+            "type": "boolean",
+            "description": "Si InfoLEG publicó el texto. Lo tienen 192.707 de las 428.380."
+          },
+          "ficha": {
+            "type": "string",
+            "description": "La página de la norma en InfoLEG."
+          },
+          "texto": {
+            "type": "string",
+            "description": "El texto original, cuando está publicado."
+          },
+          "en_notarum": {
+            "type": "string",
+            "description": "La ruta de esta API que trae la norma entera."
+          }
+        }
+      },
+      "ResultadoNacional": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "pagina": {
+            "type": "integer"
+          },
+          "normas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NormaNacional"
+            }
+          },
+          "hay_mas": {
+            "type": "boolean"
           }
         }
       }

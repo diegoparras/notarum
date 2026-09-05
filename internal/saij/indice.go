@@ -238,6 +238,12 @@ func pesoDe(n Norma, terminos []string) int {
 	// nombre: es lo que alguien escribe cuando busca una constitución.
 	queEs := normalizar(n.Tipo + " " + n.Provincia + " " + n.Numero)
 
+	// Si la búsqueda trae el número exacto, está nombrando esta norma y no
+	// mencionándola: eso gana sobre cualquier coincidencia de título.
+	if n.Numero != "" && n.Numero != "0" && esNumeroDe(n.Numero, terminos) {
+		return 20
+	}
+
 	// Se multiplica por dos para dejar lugar al desempate por palabra: sin
 	// eso, una coincidencia de palabra en las materias pasaría por delante de
 	// una del título, que casi siempre importa más.
@@ -285,6 +291,34 @@ func empiezaPalabraCon(texto, termino string) bool {
 // Alcanza con mirar bytes: el texto ya viene normalizado, sin acentos.
 func esDeLaPalabra(b byte) bool {
 	return (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9')
+}
+
+// esNumeroDe dice si la búsqueda trae el número exacto de esta norma.
+func esNumeroDe(numero string, terminos []string) bool {
+	n := normalizarNumero(numero)
+	if n == "" {
+		return false
+	}
+	for _, t := range terminos {
+		if normalizarNumero(t) == n {
+			return true
+		}
+	}
+	return false
+}
+
+// normalizarNumero saca los puntos y los ceros de adelante: la misma ley se
+// escribe 6109, 6.109 y 0006109.
+func normalizarNumero(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		} else if r != '.' && r != ' ' {
+			return ""
+		}
+	}
+	return strings.TrimLeft(b.String(), "0")
 }
 
 func tieneTodos(texto string, terminos []string) bool {

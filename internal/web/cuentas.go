@@ -86,12 +86,6 @@ func (s *Sitio) verEntrar(w http.ResponseWriter, r *http.Request) {
 			"El registro de cuentas está apagado.")
 		return
 	}
-	// Sin ninguna cuenta no hay a qué entrar: lo que corresponde es crear la
-	// primera.
-	if s.hayQueArrancar() {
-		http.Redirect(w, r, "/empezar", http.StatusFound)
-		return
-	}
 	if s.yo(r) != nil {
 		http.Redirect(w, r, "/cuenta", http.StatusFound)
 		return

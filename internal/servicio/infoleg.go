@@ -158,6 +158,12 @@ func (s *Servicio) SincronizarInfoLEG(ctx context.Context, dirTrabajo string, av
 	if err := s.infoleg.DescargarCatalogo(ctx, info.URL, rutaZip); err != nil {
 		return e, err
 	}
+	// Con el buscador encendido se guarda el zip para poder rearmar el índice
+	// al arrancar sin volver a bajar 50 MB. Si falla, la sincronización sigue:
+	// el enriquecimiento de avisos no depende de esto.
+	if err := s.guardarCatalogoInfoLEG(rutaZip); err != nil {
+		slog.Warn("no se pudo guardar el catálogo para el buscador", "err", err)
+	}
 	lector, err := infoleg.AbrirCatalogo(rutaZip)
 	if err != nil {
 		return e, err

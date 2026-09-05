@@ -94,5 +94,6 @@ func Herramientas() []Herramienta {
 			Esquema:     map[string]any{"type": "object", "properties": map[string]any{}},
 		},
 	}
-	return append(hs, herramientasProvinciales()...)
+	hs = append(hs, herramientasProvinciales()...)
+	return append(hs, herramientasNacionales()...)
 }

@@ -20,19 +20,13 @@ const (
 	zonaAPI
 	zonaMCP
 	zonaLogin
-	zonaLibre // salud, estáticos y el arranque: no se limitan ni se cierran
+	zonaLibre // salud y archivos estáticos: no se limitan ni se cierran
 )
 
 func zonaDe(r *http.Request) zona {
 	p := r.URL.Path
 	switch {
 	case p == "/v1/salud" || strings.HasPrefix(p, "/estatico/"):
-		return zonaLibre
-	case p == "/empezar":
-		// La puerta para crear la primera cuenta. Si quedara detrás del gate,
-		// una instancia en modo cerrado y sin cuentas no se podría poner en
-		// marcha: para entrar haría falta una cuenta que sólo se puede crear
-		// entrando.
 		return zonaLibre
 	case p == "/entrar" && r.Method == http.MethodPost:
 		return zonaLogin

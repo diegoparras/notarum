@@ -182,26 +182,38 @@ func BuscarProvincia(que string) (Provincia, bool) {
 	return Provincia{}, false
 }
 
-// normalizar deja un texto comparable: minúsculas y sin acentos.
+// normalizar deja un texto comparable: minúsculas, sin acentos, y sin los
+// puntos que separan los miles de un número.
+//
+// Lo del punto importa: la misma ley se escribe 6109 y 6.109, y sin esto
+// quien busca "ley 6.109" no encuentra nada.
 func normalizar(s string) string {
+	r := []rune(strings.ToLower(strings.TrimSpace(s)))
 	var b strings.Builder
-	for _, r := range strings.ToLower(strings.TrimSpace(s)) {
-		switch r {
+	b.Grow(len(s))
+	for i, c := range r {
+		switch c {
 		case 'á', 'à', 'ä', 'â':
-			r = 'a'
+			c = 'a'
 		case 'é', 'è', 'ë', 'ê':
-			r = 'e'
+			c = 'e'
 		case 'í', 'ì', 'ï', 'î':
-			r = 'i'
+			c = 'i'
 		case 'ó', 'ò', 'ö', 'ô':
-			r = 'o'
+			c = 'o'
 		case 'ú', 'ù', 'ü', 'û':
-			r = 'u'
+			c = 'u'
+		case '.':
+			if i > 0 && i+1 < len(r) && esDigitoRuna(r[i-1]) && esDigitoRuna(r[i+1]) {
+				continue
+			}
 		}
-		b.WriteRune(r)
+		b.WriteRune(c)
 	}
 	return b.String()
 }
+
+func esDigitoRuna(r rune) bool { return r >= '0' && r <= '9' }
 
 // ParsearFecha lee las fechas de la base, que vienen en AAAA-MM-DD.
 func ParsearFecha(s string) (time.Time, error) {

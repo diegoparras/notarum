@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"html/template"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -101,7 +102,7 @@ func Nuevo(srv *servicio.Servicio, version string) (*Sitio, error) {
 		// que decir en qué modo está: sin este piso mostraría cuotas en cero.
 		politica: cuentas.PoliticaPorDefecto(false),
 	}
-	for _, nombre := range []string{"edicion", "aviso", "buscar", "calendario", "norma", "docs", "entrar", "cuenta", "error", "provincial", "normaprov", "admin", "arranque"} {
+	for _, nombre := range []string{"edicion", "aviso", "buscar", "calendario", "norma", "docs", "entrar", "cuenta", "error", "provincial", "normaprov", "admin"} {
 		t, err := template.New("base").Funcs(funciones).ParseFS(archivosPlantillas,
 			"plantillas/base.html", "plantillas/"+nombre+".html")
 		if err != nil {
@@ -124,8 +125,6 @@ func (s *Sitio) rutas() {
 	s.mux.HandleFunc("GET /norma/{id}", s.norma)
 	s.mux.HandleFunc("GET /buscar", s.buscar)
 	s.mux.HandleFunc("GET /docs", s.docs)
-	s.mux.HandleFunc("GET /empezar", s.verArranque)
-	s.mux.HandleFunc("POST /empezar", s.hacerArranque)
 	s.mux.HandleFunc("GET /entrar", s.verEntrar)
 	s.mux.HandleFunc("POST /entrar", s.hacerEntrar)
 	s.mux.HandleFunc("GET /salir", s.salir)
@@ -880,4 +879,31 @@ func aHerramientaDoc(h mcp.Herramienta) herramientaDoc {
 		out.Argumentos = append(out.Argumentos, a)
 	}
 	return out
+}
+
+// IPDe dice de dónde vino un pedido, mirando primero lo que ponen los proxys.
+//
+// EasyPanel mete Traefik adelante, así que RemoteAddr es el del proxy y no el
+// de quien pide. Sin esto, todos los pedidos vendrían de la misma dirección y
+// el límite por IP sería un límite para todos juntos.
+//
+// Vive acá y no en api porque los dos la necesitan y api ya importa web: dos
+// copias se desincronizan el día que aparece otra cabecera de proxy.
+func IPDe(r *http.Request) string {
+	if v := r.Header.Get("X-Forwarded-For"); v != "" {
+		if i := strings.IndexByte(v, ','); i > 0 {
+			v = v[:i]
+		}
+		if ip := strings.TrimSpace(v); ip != "" {
+			return ip
+		}
+	}
+	if v := strings.TrimSpace(r.Header.Get("X-Real-IP")); v != "" {
+		return v
+	}
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return ip
 }
