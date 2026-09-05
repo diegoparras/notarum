@@ -181,6 +181,12 @@ func (i *Indice) Buscar(q Consulta) *Resultado {
 	if len(terminos) > 0 {
 		for _, k := range encontradas {
 			afinidad[k] = pesoDe(i.normas[k], terminos)
+			// Empatar por dónde apareció no alcanza: buscar "agua" traía
+			// primero un presupuesto municipal de Bagual, que la contiene
+			// adentro de otra palabra. Que arranque una palabra desempata.
+			if empiezanPalabras(i.buscado[k], terminos) {
+				afinidad[k]++
+			}
 		}
 	}
 	sort.SliceStable(encontradas, func(a, b int) bool {
@@ -232,15 +238,53 @@ func pesoDe(n Norma, terminos []string) int {
 	// nombre: es lo que alguien escribe cuando busca una constitución.
 	queEs := normalizar(n.Tipo + " " + n.Provincia + " " + n.Numero)
 
+	// Se multiplica por dos para dejar lugar al desempate por palabra: sin
+	// eso, una coincidencia de palabra en las materias pasaría por delante de
+	// una del título, que casi siempre importa más.
 	switch {
 	case tieneTodos(nombre, terminos):
-		return 3
+		return 6
 	case tieneTodos(nombre+" "+queEs, terminos):
-		return 2
+		return 4
 	case tieneTodos(queEs, terminos):
-		return 1
+		return 2
 	}
 	return 0 // aparece en las materias, que es mencionarla de paso
+}
+
+// empiezanPalabras dice si todos los términos arrancan alguna palabra del
+// texto. Se mira el arranque y no la palabra entera para que "agua" siga
+// encontrando "aguas" y "educacion" siga encontrando "educacional": el plural
+// y los derivados son lo normal en castellano, y lo que hay que dejar atrás
+// es la coincidencia por adentro.
+func empiezanPalabras(texto string, terminos []string) bool {
+	for _, t := range terminos {
+		if !empiezaPalabraCon(texto, t) {
+			return false
+		}
+	}
+	return true
+}
+
+func empiezaPalabraCon(texto, termino string) bool {
+	desde := 0
+	for {
+		i := strings.Index(texto[desde:], termino)
+		if i < 0 {
+			return false
+		}
+		i += desde
+		if i == 0 || !esDeLaPalabra(texto[i-1]) {
+			return true
+		}
+		desde = i + 1
+	}
+}
+
+// esDeLaPalabra dice si un byte sigue formando parte de la palabra anterior.
+// Alcanza con mirar bytes: el texto ya viene normalizado, sin acentos.
+func esDeLaPalabra(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9')
 }
 
 func tieneTodos(texto string, terminos []string) bool {

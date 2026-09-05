@@ -325,3 +325,63 @@ func TestPesoDe(t *testing.T) {
 		t.Error("buscar por tipo y número no le pega a la norma")
 	}
 }
+
+// Buscar "agua" traía primero un presupuesto de la localidad de Bagual, que
+// la contiene adentro. Lo que arranca una palabra tiene que ir antes.
+func TestNoGanaLaCoincidenciaPorAdentro(t *testing.T) {
+	i := NuevoIndice()
+	i.Reemplazar([]Norma{
+		{ID: "LPD0001188", Provincia: "San Luis", ProvinciaID: "74", Tipo: "Ley", Numero: "1188",
+			Fecha: "2026-04-14", TituloResumido: "Presupuestos municipales de Saladillo y Bagual"},
+		{ID: "LPK0005932", Provincia: "Catamarca", ProvinciaID: "10", Tipo: "Ley", Numero: "5932",
+			Fecha: "2000-01-01", TituloResumido: "Acuerdo con Yacimientos Mineros de Agua de Dionisio"},
+	})
+	r := i.Buscar(Consulta{Texto: "agua"})
+	if r.Total != 2 {
+		t.Fatalf("total = %d; las dos la contienen", r.Total)
+	}
+	if r.Normas[0].ID != "LPK0005932" {
+		t.Errorf("primero salió %q; tendría que ir la que la nombra de verdad",
+			r.Normas[0].Titulo())
+	}
+}
+
+// Pero el plural y los derivados se siguen encontrando: en castellano son lo
+// normal, y perderlos sería peor que el problema que se arregla.
+func TestElPluralYLosDerivadosSiguenValiendo(t *testing.T) {
+	i := NuevoIndice()
+	i.Reemplazar([]Norma{
+		{ID: "LPB0000001", Provincia: "Buenos Aires", ProvinciaID: "06", Tipo: "Ley",
+			Fecha: "2020-01-01", TituloResumido: "Régimen de aguas provinciales"},
+		{ID: "LPB0000002", Provincia: "Buenos Aires", ProvinciaID: "06", Tipo: "Ley",
+			Fecha: "2019-01-01", TituloResumido: "Infraestructura educacional"},
+	})
+	if r := i.Buscar(Consulta{Texto: "agua"}); r.Total != 1 {
+		t.Errorf(`"agua" no encontró "aguas": total = %d`, r.Total)
+	}
+	if r := i.Buscar(Consulta{Texto: "educacion"}); r.Total != 1 {
+		t.Errorf(`"educacion" no encontró "educacional": total = %d`, r.Total)
+	}
+}
+
+func TestEmpiezaPalabraCon(t *testing.T) {
+	casos := []struct {
+		texto, termino string
+		esperado       bool
+	}{
+		{"agua potable", "agua", true},
+		{"aguas provinciales", "agua", true}, // el plural arranca igual
+		{"regimen de aguas", "agua", true},
+		{"presupuesto de bagual", "agua", false}, // adentro de otra palabra
+		{"managua", "agua", false},
+		{"ley 6109 de chaco", "6109", true},
+		{"ley 16109", "6109", false},
+		{"", "agua", false},
+		{"agua", "agua", true},
+	}
+	for _, c := range casos {
+		if got := empiezaPalabraCon(c.texto, c.termino); got != c.esperado {
+			t.Errorf("%q en %q -> %v, se esperaba %v", c.termino, c.texto, got, c.esperado)
+		}
+	}
+}
