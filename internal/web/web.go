@@ -59,6 +59,8 @@ type Sitio struct {
 	tareas *tareas.Ejecutor
 	// programador los corre solos, todos los días.
 	programador *tareas.Programador
+	// marca dice desde cuándo guarda este almacén, o si arrancó vacío.
+	marca almacen.Marca
 	// asistente arma consultas a partir de un pedido en castellano.
 	asistente *asistente.Cliente
 }
@@ -84,6 +86,12 @@ func (s *Sitio) vigente() cuentas.Politica {
 // ConTareas le da al lector con qué correr los trabajos largos del panel.
 func (s *Sitio) ConTareas(e *tareas.Ejecutor) *Sitio {
 	s.tareas = e
+	return s
+}
+
+// ConMarca le dice al panel si lo guardado sobrevivió al despliegue anterior.
+func (s *Sitio) ConMarca(m almacen.Marca) *Sitio {
+	s.marca = m
 	return s
 }
 

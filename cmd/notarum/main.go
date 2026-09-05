@@ -320,6 +320,24 @@ func servir(args []string) error {
 		return err
 	}
 	defer cerrar()
+
+	// ¿Sobrevivió lo guardado al despliegue anterior?
+	//
+	// Un contenedor sin volumen montado arranca vacío cada vez: todo funciona
+	// —se entra, se carga una clave, se ve cargada— y al siguiente despliegue
+	// no quedó nada, sin que nadie lo diga. Se mide en vez de suponerlo.
+	marca, err := almacen.Marcar(srv.Almacen())
+	if err != nil {
+		slog.Warn("no se pudo marcar el almacén", "err", err)
+	} else if marca.Nueva {
+		slog.Warn("el almacén arrancó vacío",
+			"nota", "si ya habías guardado cosas acá, no sobrevivieron al despliegue",
+			"revisar", "que haya un volumen montado en el directorio de datos")
+	} else {
+		slog.Info("el almacén tiene datos de antes",
+			"desde", marca.Desde.Format(time.RFC3339), "arranques", marca.Arranques)
+	}
+
 	// Las cuentas se encienden solas cuando existe alguna: mientras no haya
 	// ninguna, notarum funciona abierto y sin login, como viene.
 	reg, err := armarRegistro(srv.Almacen())
@@ -382,7 +400,7 @@ func servir(args []string) error {
 		Servicio: srv, PorMinuto: limite, Version: version,
 		TokenMCP: *tokenMCP, SinMCP: *sinMCP, SinWeb: *sinWeb,
 		Registro: reg, Politica: politica, Hub: hub,
-		Tareas: ejecutor, Programador: programador,
+		Tareas: ejecutor, Programador: programador, Marca: marca,
 		// El asistente se enciende solo: cada persona pone su clave de
 		// OpenRouter desde su cuenta, así que no hay nada que configurar acá.
 		Asistente: asistente.NuevoCliente(asistente.Opciones{}),

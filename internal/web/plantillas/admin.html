@@ -23,6 +23,23 @@
   </span>
 </div>
 
+{{if .Marca.Nueva}}
+<div class="aviso-error">
+  <strong>Este arranque encontró el almacén vacío.</strong>
+  Si es la primera vez que levantás esta instancia, está bien. Si ya habías
+  cargado tu clave de OpenRouter, creado tokens o bajado los catálogos, nada de
+  eso sobrevivió al despliegue: hay que montar un volumen en el directorio de
+  datos, porque el sistema de archivos del contenedor se descarta en cada
+  redespliegue.
+</div>
+{{else}}
+<p class="docs-parrafo pie-nota">
+  El almacén guarda desde {{fechaCorta .Marca.Desde}} y va por el arranque
+  número {{.Marca.Arranques}}: lo que se carga acá sobrevive a los
+  redespliegues.
+</p>
+{{end}}
+
 <h2>Quién entra, y cuánto puede pedir</h2>
 <p class="docs-parrafo">
   Esto lo decide quien opera la instancia. Se guarda acá mismo y rige en el

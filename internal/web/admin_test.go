@@ -476,3 +476,38 @@ func TestEnCuanto(t *testing.T) {
 		}
 	}
 }
+
+// ------------------------------------------------------- la marca del almacén
+
+// Un contenedor sin volumen montado pierde todo en cada despliegue y no lo
+// dice nadie: se entra, se carga una clave, se ve cargada, y al siguiente
+// redespliegue no está. El panel tiene que avisarlo.
+func TestElPanelAvisaQueElAlmacenArrancoVacio(t *testing.T) {
+	srv, _ := armarPanel(t, func(s *Sitio, _ *tareas.Ejecutor) {
+		s.ConMarca(almacen.Marca{Nueva: true, Arranques: 1, Desde: time.Now()})
+	})
+	_, cuerpo := pedirCon(t, entrarComo(t, srv, "jefa"), srv.URL+"/admin")
+
+	if !strings.Contains(cuerpo, "encontró el almacén vacío") {
+		t.Error("el panel no avisa que el almacén arrancó vacío")
+	}
+	if !strings.Contains(cuerpo, "volumen") {
+		t.Error("no dice qué hay que revisar")
+	}
+}
+
+// Y cuando sí sobrevivió, lo dice: es la respuesta a «¿esto se guarda?».
+func TestElPanelDiceDesdeCuandoGuarda(t *testing.T) {
+	desde := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	srv, _ := armarPanel(t, func(s *Sitio, _ *tareas.Ejecutor) {
+		s.ConMarca(almacen.Marca{Desde: desde, Arranques: 7})
+	})
+	_, cuerpo := pedirCon(t, entrarComo(t, srv, "jefa"), srv.URL+"/admin")
+
+	if !strings.Contains(cuerpo, "2026-09-01") {
+		t.Error("no dice desde cuándo guarda")
+	}
+	if strings.Contains(cuerpo, "encontró el almacén vacío") {
+		t.Error("avisa que arrancó vacío cuando no lo hizo")
+	}
+}

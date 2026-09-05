@@ -75,14 +75,28 @@ func (s *Sitio) generar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Se anota antes de salir a la red y no sólo al volver.
+	//
+	// Con una sola línea al final, un pedido que no llega a terminar no deja
+	// ninguna huella: el registro queda igual que si nadie hubiera pedido
+	// nada, y desde afuera se ve como un servicio caído. Con ésta se sabe al
+	// menos que el pedido entró y hasta dónde llegó.
+	slog.Info("generando consulta", "quien", u.Nombre, "largo_del_pedido", len(pedido))
+
 	instrucciones, err := asistente.Instrucciones(baseVisible(r))
 	if err != nil {
 		s.dibujarDocs(w, r, "", "No se pudo armar el contexto del asistente.", http.StatusInternalServerError)
 		return
 	}
 
+	slog.Info("pidiéndole al proveedor", "quien", u.Nombre,
+		"largo_de_las_instrucciones", len(instrucciones))
+
 	g, err := s.asistente.Generar(r.Context(), clave, r.PostFormValue("modelo"), instrucciones, pedido)
 	if err != nil {
+		// También al log: la persona ve una explicación, pero quien opera
+		// necesita el error de verdad para saber si es del proveedor o propio.
+		slog.Warn("no se pudo generar la consulta", "quien", u.Nombre, "err", err)
 		s.dibujarDocs(w, r, "", explicarDelProveedor(err), http.StatusBadGateway)
 		return
 	}

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/diegoparras/notarum/internal/almacen"
 	"github.com/diegoparras/notarum/internal/boletin"
 	"github.com/diegoparras/notarum/internal/cuentas"
 	"github.com/diegoparras/notarum/internal/servicio"
@@ -51,6 +52,10 @@ type datosAdmin struct {
 
 	// Automatica es la actualización de todos los días, si está encendida.
 	Automatica *datosAutomatica
+
+	// Marca dice desde cuándo guarda este almacén. Si arrancó vacío, hace
+	// falta decirlo: lo que se cargue se va a perder en el próximo despliegue.
+	Marca almacen.Marca
 
 	Secciones []boletin.Seccion
 	Error     string
@@ -104,6 +109,7 @@ func (s *Sitio) dibujarAdmin(w http.ResponseWriter, r *http.Request, u *cuentas.
 		Aviso:       aviso,
 		Error:       errMsg,
 		Tareas:      map[string]tareas.Tarea{},
+		Marca:       s.marca,
 		Politica:    s.vigente(),
 		Modos:       []cuentas.Modo{cuentas.ModoAbierto, cuentas.ModoMixto, cuentas.ModoCerrado},
 	}

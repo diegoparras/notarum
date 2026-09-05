@@ -46,6 +46,8 @@ type Config struct {
 	// Asistente arma consultas a partir de un pedido en castellano. Sólo lo
 	// usa el lector web.
 	Asistente *asistente.Cliente
+	// Marca dice si lo guardado sobrevivió al despliegue anterior.
+	Marca almacen.Marca
 }
 
 // Servidor atiende las rutas de /v1.
@@ -104,6 +106,7 @@ func Nuevo(cfg Config) *Servidor {
 		if cfg.Asistente != nil {
 			sitio = sitio.ConAsistente(cfg.Asistente)
 		}
+		sitio = sitio.ConMarca(cfg.Marca)
 		s.web = sitio
 		s.conWeb = true
 	}
