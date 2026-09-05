@@ -6,6 +6,7 @@
 package web
 
 import (
+	"bytes"
 	"embed"
 	"errors"
 	"fmt"
@@ -253,11 +254,28 @@ func (s *Sitio) mostrar(w http.ResponseWriter, r *http.Request, nombre string, d
 		s.fallo(w, r, http.StatusInternalServerError, "Error interno", "no existe la plantilla "+nombre)
 		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(codigo)
-	if err := t.ExecuteTemplate(w, "base", datos); err != nil {
-		// La respuesta ya empezó a salir: sólo queda dejarlo anotado.
+	// Se dibuja en memoria y recién después se manda.
+	//
+	// Escribiendo derecho sobre la conexión, una plantilla que falla a mitad
+	// de camino deja salir media página con un código de éxito ya mandado: el
+	// navegador muestra algo roto, un proxy adelante puede cortar la
+	// respuesta a medio terminar, y lo único que queda es una línea de log.
+	// Una página entera cuesta unos kilobytes; equivocarse en silencio cuesta
+	// bastante más.
+	var pagina bytes.Buffer
+	if err := t.ExecuteTemplate(&pagina, "base", datos); err != nil {
 		slog.Error("no se pudo dibujar la página", "plantilla", nombre, "err", err)
+		s.fallo(w, r, http.StatusInternalServerError, "No se pudo dibujar la página",
+			"Quedó anotado en el registro del servidor con el detalle.")
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Length", strconv.Itoa(pagina.Len()))
+	w.WriteHeader(codigo)
+	if _, err := pagina.WriteTo(w); err != nil {
+		// Acá ya no se puede hacer nada: casi siempre es alguien que cerró la
+		// pestaña antes de que terminara de cargar.
+		slog.Debug("no se pudo mandar la página", "plantilla", nombre, "err", err)
 	}
 }
 
