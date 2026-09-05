@@ -33,7 +33,7 @@ import (
 )
 
 // version se puede fijar en el build: -ldflags "-X main.version=1.2.3".
-var version = "1.2.0"
+var version = "1.3.0"
 
 func main() {
 	if err := ejecutar(os.Args[1:]); err != nil {
@@ -240,7 +240,12 @@ type configComun struct {
 	intervalo time.Duration
 }
 
-const uaPorDefecto = "notarum/" + "1.0" + " (+https://github.com/diegoparras/notarum)"
+// uaPorDefecto sale de la versión del binario y no de una constante aparte:
+// escritas a mano se desincronizan, y este texto es con lo que los sitios
+// saben quién les está pidiendo.
+func uaPorDefecto() string {
+	return "notarum/" + version + " (+https://github.com/diegoparras/notarum)"
+}
 
 // ------------------------------------------------------------------- servir
 
@@ -252,7 +257,7 @@ func servir(args []string) error {
 	rutaDB := fs.String("db", entorno("NOTARUM_DB", "/datos/notarum.db"), "archivo de la base (motor sqlite)")
 	porMinuto := fs.String("por-minuto", entorno("NOTARUM_POR_MINUTO", "60"), "pedidos por minuto por IP (0 desactiva)")
 	intervalo := fs.String("intervalo", entorno("NOTARUM_INTERVALO", "500ms"), "espera entre pedidos al sitio")
-	userAgent := fs.String("user-agent", entorno("NOTARUM_USER_AGENT", uaPorDefecto), "User-Agent hacia el sitio")
+	userAgent := fs.String("user-agent", entorno("NOTARUM_USER_AGENT", uaPorDefecto()), "User-Agent hacia el sitio")
 	formatoLog := fs.String("log", entorno("NOTARUM_LOG", "json"), "formato de log: text o json")
 	tokenMCP := fs.String("mcp-token", entorno("NOTARUM_MCP_TOKEN", ""), "si se pone, /mcp exige Bearer con este token")
 	sinMCP := fs.Bool("sin-mcp", entorno("NOTARUM_SIN_MCP", "") != "", "apagar el endpoint /mcp")
@@ -349,7 +354,7 @@ func servirMCP(args []string) error {
 	motor := fs.String("almacen", entorno("NOTARUM_ALMACEN", "disco"), "dónde guardar: disco, sqlite o postgres")
 	rutaDB := fs.String("db", entorno("NOTARUM_DB", "/datos/notarum.db"), "archivo de la base (motor sqlite)")
 	intervalo := fs.String("intervalo", entorno("NOTARUM_INTERVALO", "500ms"), "espera entre pedidos al sitio")
-	userAgent := fs.String("user-agent", entorno("NOTARUM_USER_AGENT", uaPorDefecto), "User-Agent hacia el sitio")
+	userAgent := fs.String("user-agent", entorno("NOTARUM_USER_AGENT", uaPorDefecto()), "User-Agent hacia el sitio")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -452,7 +457,7 @@ func sincronizarInfoLEG(args []string) error {
 	motor := fs.String("almacen", entorno("NOTARUM_ALMACEN", "disco"), "dónde guardar: disco, sqlite o postgres")
 	rutaDB := fs.String("db", entorno("NOTARUM_DB", "/datos/notarum.db"), "archivo de la base (motor sqlite)")
 	intervalo := fs.String("intervalo", entorno("NOTARUM_INTERVALO", "500ms"), "espera entre pedidos")
-	userAgent := fs.String("user-agent", entorno("NOTARUM_USER_AGENT", uaPorDefecto), "User-Agent hacia los sitios")
+	userAgent := fs.String("user-agent", entorno("NOTARUM_USER_AGENT", uaPorDefecto()), "User-Agent hacia los sitios")
 	trabajo := fs.String("trabajo", entorno("NOTARUM_TRABAJO", ""), "dónde bajar el catálogo (por defecto, el temporal del sistema)")
 	formatoLog := fs.String("log", entorno("NOTARUM_LOG", "text"), "formato de log: text o json")
 	if err := fs.Parse(args); err != nil {
@@ -506,7 +511,7 @@ func rellenar(args []string) error {
 	motor := fs.String("almacen", entorno("NOTARUM_ALMACEN", "disco"), "dónde guardar: disco, sqlite o postgres")
 	rutaDB := fs.String("db", entorno("NOTARUM_DB", "/datos/notarum.db"), "archivo de la base (motor sqlite)")
 	intervalo := fs.String("intervalo", entorno("NOTARUM_INTERVALO", "500ms"), "espera entre pedidos al sitio")
-	userAgent := fs.String("user-agent", entorno("NOTARUM_USER_AGENT", uaPorDefecto), "User-Agent hacia el sitio")
+	userAgent := fs.String("user-agent", entorno("NOTARUM_USER_AGENT", uaPorDefecto()), "User-Agent hacia el sitio")
 	conAvisos := fs.Bool("con-avisos", false, "bajar además el texto de cada aviso (mucho más lento)")
 	formatoLog := fs.String("log", entorno("NOTARUM_LOG", "text"), "formato de log: text o json")
 	if err := fs.Parse(args); err != nil {
@@ -725,7 +730,7 @@ func sincronizarSAIJ(args []string) error {
 	dirCache := fs.String("cache", entorno("NOTARUM_CACHE", "/datos/cache"), "directorio de caché (motor disco)")
 	motor := fs.String("almacen", entorno("NOTARUM_ALMACEN", "disco"), "dónde guardar: disco, sqlite o postgres")
 	rutaDB := fs.String("db", entorno("NOTARUM_DB", "/datos/notarum.db"), "archivo de la base (motor sqlite)")
-	userAgent := fs.String("user-agent", entorno("NOTARUM_USER_AGENT", uaPorDefecto), "User-Agent hacia los sitios")
+	userAgent := fs.String("user-agent", entorno("NOTARUM_USER_AGENT", uaPorDefecto()), "User-Agent hacia los sitios")
 	trabajo := fs.String("trabajo", entorno("NOTARUM_TRABAJO", ""), "dónde bajar el catálogo (por defecto, el temporal del sistema)")
 	formatoLog := fs.String("log", entorno("NOTARUM_LOG", "text"), "formato de log: text o json")
 	if err := fs.Parse(args); err != nil {

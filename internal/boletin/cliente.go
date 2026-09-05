@@ -79,7 +79,7 @@ func NuevoCliente(o Opciones) *Cliente {
 		o.Base = BaseSitio
 	}
 	if o.UserAgent == "" {
-		o.UserAgent = "notarum/1.0 (+https://github.com/diegoparras/notarum)"
+		o.UserAgent = "notarum (+https://github.com/diegoparras/notarum)"
 	}
 	if o.Intervalo <= 0 {
 		o.Intervalo = 500 * time.Millisecond
