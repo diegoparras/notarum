@@ -28,6 +28,10 @@ RUN apk add --no-cache ca-certificates wget && \
     mkdir -p /datos/cache && \
     chown -R notarum:notarum /datos
 
+# El origen, para que el registro sepa de qué repositorio salió esta imagen:
+# es lo que la deja vinculada al repo y con su procedencia a la vista.
+LABEL org.opencontainers.image.source="https://github.com/diegoparras/notarum"       org.opencontainers.image.description="API abierta del Boletín Oficial de la República Argentina"       org.opencontainers.image.licenses="MIT"
+
 COPY --from=build /out/notarum /usr/local/bin/notarum
 
 USER notarum
