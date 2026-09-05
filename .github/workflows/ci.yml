@@ -75,3 +75,43 @@ jobs:
           go-version: "1.25"
           cache: true
       - run: go test -tags red -v -timeout 10m ./internal/boletin/
+
+  # Publicar la imagen. Antes salía de la máquina de quien tuviera Docker
+  # prendido, que es una forma de que la versión publicada dependa de dónde se
+  # apretó el botón. Acá sale del mismo commit que pasó los tests, siempre.
+  publicar:
+    name: Publicar la imagen
+    needs: probar
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # La versión sale del binario y no de una constante escrita a mano acá:
+      # dos lugares con el mismo número se desincronizan.
+      - name: Sacar la versión del código
+        id: version
+        run: |
+          v=$(grep -oP 'var version = "\K[^"]+' cmd/notarum/main.go)
+          echo "numero=$v" >> "$GITHUB_OUTPUT"
+          echo "notarum $v"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          build-args: VERSION=${{ steps.version.outputs.numero }}
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.numero }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
