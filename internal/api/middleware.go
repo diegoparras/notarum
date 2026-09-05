@@ -152,14 +152,8 @@ func conLog(siguiente http.Handler) http.Handler {
 		defer func() {
 			codigo := reg.codigo
 			if codigo == 0 {
-				// Nadie escribió nada. Si el handler volvió bien, Go manda un
-				// 200; si entró en pánico, no manda nada y hay que decirlo en
-				// vez de anotar un 200 que no ocurrió.
+				// Nadie escribió nada, y el handler volvió: Go manda un 200.
 				codigo = http.StatusOK
-				if p := recover(); p != nil {
-					codigo = 0
-					defer panic(p) // que siga hasta conPanico, que arma la respuesta
-				}
 			}
 			slog.Info("pedido",
 				"metodo", r.Method,
@@ -176,6 +170,11 @@ func conLog(siguiente http.Handler) http.Handler {
 }
 
 // conPanico evita que un error propio tire el servidor entero.
+//
+// Va por dentro de conLog y no por fuera: atrapado acá, el pedido vuelve por
+// el camino normal y queda registrado con su 500, y la traza se toma donde se
+// rompió. Al revés había que recuperar y volver a lanzar el pánico, y la traza
+// terminaba apuntando al middleware en vez de al error.
 func conPanico(siguiente http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {

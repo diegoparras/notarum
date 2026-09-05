@@ -108,7 +108,7 @@ func Nuevo(cfg Config) *Servidor {
 		s.conWeb = true
 	}
 	s.rutas()
-	s.handler = conPanico(conLog(conCORS(nuevaGuardia(cfg.Registro, s.politica).envolver(s.mux))))
+	s.handler = conLog(conPanico(conCORS(nuevaGuardia(cfg.Registro, s.politica).envolver(s.mux))))
 	return s
 }
 

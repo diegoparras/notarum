@@ -10,7 +10,8 @@ import (
 	"testing"
 )
 
-// Un pedido que entra en pánico tiene que quedar registrado igual.
+// Un pedido que entra en pánico tiene que quedar registrado igual, y con su
+// código de error.
 //
 // Escrito de la otra forma —la línea después de atender— el pánico desenrolla
 // la pila sin pasar por el log, y queda una instancia que falla contra un
@@ -25,7 +26,7 @@ func TestUnPedidoQueEntraEnPanicoQuedaEnElLog(t *testing.T) {
 	explota := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		panic("se rompió algo adentro")
 	})
-	h := conPanico(conLog(explota))
+	h := conLog(conPanico(explota))
 
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/docs/generar", nil))
@@ -43,6 +44,12 @@ func TestUnPedidoQueEntraEnPanicoQuedaEnElLog(t *testing.T) {
 		switch l["msg"] {
 		case "pedido":
 			vioElPedido = true
+			// Con su 500, no con un 200 ni con un 0: el pedido falló y el
+			// registro tiene que decirlo. Es lo que da el orden de la cadena,
+			// con conPanico por dentro de conLog.
+			if c, _ := l["codigo"].(float64); int(c) != http.StatusInternalServerError {
+				t.Errorf("el pedido quedó anotado con el código %v", l["codigo"])
+			}
 			if l["ruta"] != "/docs/generar" {
 				t.Errorf("la ruta quedó como %v", l["ruta"])
 			}
