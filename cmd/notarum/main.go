@@ -34,7 +34,7 @@ import (
 )
 
 // version se puede fijar en el build: -ldflags "-X main.version=1.2.3".
-var version = "1.3.0"
+var version = "1.4.0"
 
 func main() {
 	if err := ejecutar(os.Args[1:]); err != nil {
