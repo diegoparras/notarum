@@ -66,6 +66,8 @@ func ejecutar(args []string) error {
 		return sincronizarSAIJ(args)
 	case "usuarios", "usuario":
 		return administrarUsuarios(args)
+	case "migrar":
+		return migrar(args)
 	case "version", "--version", "-v":
 		fmt.Println("notarum " + version)
 		return nil
@@ -158,6 +160,13 @@ func ayuda() {
       constituciones de las 24 provincias, desde 1855. Es lo que el Boletín
       nacional no trae. Se puede volver a correr: si el portal no publicó
       nada nuevo, no baja nada.
+
+  notarum migrar --origen sqlite --db /datos/notarum.db
+      Pasa lo guardado a donde apunte la configuración actual. Sirve para
+      cambiar de motor sin volver a bajar los catálogos, que son cientos de
+      miles de normas y varios minutos de un portal que no es nuestro.
+      El índice de búsqueda de avisos se rearma solo: vive en otra tabla y
+      cada motor lo arma a su manera.
 
   notarum version
 `)
@@ -988,5 +997,90 @@ func esperarALasFuentes(ctx context.Context, e *tareas.Ejecutor, avisar func(str
 			return ctx.Err()
 		}
 	}
+	return nil
+}
+
+// ------------------------------------------------------------------ migrar
+
+// migrar pasa lo guardado de un motor a otro.
+//
+// El destino es el que dice la configuración de siempre, así que migrar es:
+// poner las variables del motor nuevo y correr esto una vez con el viejo como
+// origen. Después se reinicia y ya está.
+func migrar(args []string) error {
+	fs := flag.NewFlagSet("migrar", flag.ContinueOnError)
+	origen := fs.String("origen", "sqlite", "de dónde traer: disco, sqlite o postgres")
+	dirCache := fs.String("cache", entorno("NOTARUM_CACHE", "/datos/cache"), "directorio del origen, con el motor disco")
+	rutaDB := fs.String("db", entorno("NOTARUM_DB", "/datos/notarum.db"), "archivo del origen, con el motor sqlite")
+	formatoLog := fs.String("log", entorno("NOTARUM_LOG", "text"), "formato de log: text o json")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	armarLog(*formatoLog)
+
+	destinoMotor := entorno("NOTARUM_ALMACEN", "disco")
+	if strings.EqualFold(destinoMotor, *origen) {
+		return fmt.Errorf("el origen y el destino son el mismo motor (%s): "+
+			"poné primero la configuración del motor nuevo", destinoMotor)
+	}
+
+	viejo, err := armarAlmacen(*origen, *dirCache, *rutaDB)
+	if err != nil {
+		return fmt.Errorf("no se pudo abrir el origen: %w", err)
+	}
+	defer viejo.Cerrar()
+
+	nuevo, err := armarAlmacen(destinoMotor, entorno("NOTARUM_CACHE", "/datos/cache"),
+		entorno("NOTARUM_DB", "/datos/notarum.db"))
+	if err != nil {
+		return fmt.Errorf("no se pudo abrir el destino: %w", err)
+	}
+	defer nuevo.Cerrar()
+
+	slog.Info("migrando", "de", viejo.Metricas().Motor, "a", nuevo.Metricas().Motor,
+		"entradas_en_el_origen", viejo.Metricas().Entradas)
+
+	inicio := time.Now()
+	a, err := almacen.Migrar(viejo, nuevo, func(a almacen.Avance) {
+		slog.Info("copiando", "entradas", a.Copiadas)
+	})
+	if err != nil {
+		return err
+	}
+	slog.Info("copiado", "entradas", a.Copiadas, "tardo", time.Since(inicio).Round(time.Second))
+
+	// El índice de búsqueda se rearma desde las ediciones copiadas: traducir
+	// un índice entre dos motores es la clase de cosa que sale mal en silencio.
+	indice, sabe := nuevo.(almacen.Indexador)
+	if !sabe {
+		slog.Info("el motor de destino no indexa avisos; no hay nada que rearmar")
+		return nil
+	}
+	claves, err := almacen.Ediciones(nuevo)
+	if err != nil {
+		return err
+	}
+	var indexadas int
+	for _, clave := range claves {
+		crudo, hay := nuevo.Leer(clave)
+		if !hay {
+			continue
+		}
+		var ed boletin.Edicion
+		if err := json.Unmarshal(crudo, &ed); err != nil {
+			continue
+		}
+		if err := indice.IndexarEdicion(&ed); err != nil {
+			slog.Warn("no se pudo indexar una edición", "clave", clave, "err", err)
+			continue
+		}
+		indexadas++
+		if indexadas%500 == 0 {
+			slog.Info("reindexando", "ediciones", indexadas, "de", len(claves))
+		}
+	}
+	slog.Info("listo", "entradas", a.Copiadas, "ediciones_indexadas", indexadas,
+		"tardo", time.Since(inicio).Round(time.Second),
+		"ahora", "reiniciá el servicio para que use el motor nuevo")
 	return nil
 }
