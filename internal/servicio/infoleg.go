@@ -180,6 +180,10 @@ func (s *Servicio) SincronizarInfoLEG(ctx context.Context, dirTrabajo string, av
 	// qué apareció que no estaba. Son unos cientos de miles de números: menos
 	// memoria que una sola edición del Boletín.
 	vistas := make([]int, 0, infoleg.NormasEsperadas)
+	// Por lotes: de a una, cada norma es una transacción con su espera al
+	// disco —o un viaje por la red con Postgres—, y son cientos de miles. Es
+	// la diferencia entre minutos y horas.
+	lote := almacen.NuevoAcumulador(s.cache)
 	leidas, err := infoleg.LeerCatalogo(lector, func(n infoleg.Norma) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -193,11 +197,11 @@ func (s *Servicio) SincronizarInfoLEG(ctx context.Context, dirTrabajo string, av
 			return nil
 		}
 		// La norma entera, indexada por su id de InfoLEG.
-		if err := s.cache.Guardar(claveNorma(n.ID), crudo, almacen.SinVencimiento); err != nil {
+		if err := lote.Sumar(claveNorma(n.ID), crudo, almacen.SinVencimiento); err != nil {
 			return err
 		}
 		// Y la referencia liviana con la que la encuentra un aviso.
-		if err := s.cache.Guardar(clave, []byte(strconv.Itoa(n.ID)), almacen.SinVencimiento); err != nil {
+		if err := lote.Sumar(clave, []byte(strconv.Itoa(n.ID)), almacen.SinVencimiento); err != nil {
 			return err
 		}
 		guardadas++
@@ -214,6 +218,11 @@ func (s *Servicio) SincronizarInfoLEG(ctx context.Context, dirTrabajo string, av
 		return nil
 	})
 	if err != nil {
+		return e, err
+	}
+	// Lo que quedó en el último lote sin llenar: sin esto, hasta mil normas se
+	// leerían y no se guardarían, en silencio.
+	if err := lote.Vaciar(); err != nil {
 		return e, err
 	}
 

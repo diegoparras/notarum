@@ -446,3 +446,48 @@ func esErrorDeConsultaFTS(err error) bool {
 	m := strings.ToLower(err.Error())
 	return strings.Contains(m, "fts5") || strings.Contains(m, "malformed match")
 }
+
+// GuardarLote escribe muchas entradas en una sola transacción.
+//
+// De a una, SQLite abre una transacción por escritura y espera al disco en
+// cada una. Con 428 mil normas eso son 428 mil esperas; en una transacción
+// sola, una. Es la diferencia entre una sincronización de minutos y una de
+// horas.
+func (s *SQLite) GuardarLote(entradas []Entrada) error {
+	if len(entradas) == 0 {
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`
+		INSERT INTO entradas (clave, datos, guardado_en, vence_en) VALUES (?, ?, ?, ?)
+		ON CONFLICT(clave) DO UPDATE SET datos = excluded.datos,
+			guardado_en = excluded.guardado_en, vence_en = excluded.vence_en`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	ahora := time.Now().UnixMilli()
+	for _, e := range entradas {
+		if strings.TrimSpace(e.Clave) == "" {
+			return errors.New("clave de almacén vacía")
+		}
+		var vence any
+		if e.TTL > 0 {
+			vence = time.Now().Add(e.TTL).UnixMilli()
+		}
+		if _, err := stmt.Exec(e.Clave, e.Datos, ahora, vence); err != nil {
+			return fmt.Errorf("no se pudo guardar %q: %w", e.Clave, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	s.escritos.Add(int64(len(entradas)))
+	return nil
+}

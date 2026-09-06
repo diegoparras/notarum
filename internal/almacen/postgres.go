@@ -422,3 +422,50 @@ func (p *Postgres) Cobertura(sec boletin.Seccion, desde, hasta boletin.Fecha) (i
 		string(sec), desde.API(), hasta.API()).Scan(&n)
 	return n, err
 }
+
+// GuardarLote escribe muchas entradas en una sola transacción.
+//
+// De a una, cada escritura es un viaje por la red: con 428 mil normas eso son
+// 428 mil viajes, y es lo que hacía inviable Postgres para sincronizar. En una
+// transacción con una sentencia de varias filas, son unos cientos de viajes.
+func (p *Postgres) GuardarLote(entradas []Entrada) error {
+	if len(entradas) == 0 {
+		return nil
+	}
+	tx, err := p.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`
+		INSERT INTO ` + p.t("entradas") + ` (clave, datos, guardado_en, vence_en)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (clave) DO UPDATE SET
+			datos = EXCLUDED.datos,
+			guardado_en = EXCLUDED.guardado_en,
+			vence_en = EXCLUDED.vence_en`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	ahora := time.Now().UnixMilli()
+	for _, e := range entradas {
+		if strings.TrimSpace(e.Clave) == "" {
+			return errors.New("clave de almacén vacía")
+		}
+		var vence any
+		if e.TTL > 0 {
+			vence = time.Now().Add(e.TTL).UnixMilli()
+		}
+		if _, err := stmt.Exec(e.Clave, e.Datos, ahora, vence); err != nil {
+			return fmt.Errorf("no se pudo guardar %q: %w", e.Clave, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	p.escritos.Add(int64(len(entradas)))
+	return nil
+}

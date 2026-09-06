@@ -118,6 +118,7 @@ func (s *Servicio) guardarRelaciones(ctx context.Context, url string, sentido in
 	if err != nil {
 		return 0, 0, err
 	}
+	lote := almacen.NuevoAcumulador(s.cache)
 	for id, rs := range porNorma {
 		if ctx.Err() != nil {
 			return normas, relaciones, ctx.Err()
@@ -128,11 +129,14 @@ func (s *Servicio) guardarRelaciones(ctx context.Context, url string, sentido in
 		if err != nil {
 			continue
 		}
-		if err := s.cache.Guardar(clave(id), crudo, almacen.SinVencimiento); err != nil {
+		if err := lote.Sumar(clave(id), crudo, almacen.SinVencimiento); err != nil {
 			return normas, relaciones, err
 		}
 		normas++
 		relaciones += len(rs)
+	}
+	if err := lote.Vaciar(); err != nil {
+		return normas, relaciones, err
 	}
 	if normas == 0 {
 		return 0, 0, errors.New("la base complementaria no trajo ninguna relación")
