@@ -10,6 +10,7 @@
 </p>
 
 <nav class="docs-indice">
+  <a href="#fuentes">Qué hay</a>
   {{if .HayAsistente}}<a href="#asistente">Asistente</a>{{end}}
   <a href="#acceso">Acceso</a>
   <a href="#api">API</a>
@@ -20,6 +21,45 @@
 </nav>
 
 {{if .HayAsistente}}
+<h2 id="fuentes">Qué hay acá</h2>
+<p class="docs-parrafo">
+  Tres fuentes distintas, cada una con sus rutas. Saber cuál te sirve es la
+  mitad del trabajo.
+</p>
+
+<div class="fuentes">
+  <div class="fuente">
+    <h3>El Boletín Oficial</h3>
+    <p>
+      Lo que se publicó cada día: decretos, resoluciones, edictos, licitaciones.
+      Se consulta por fecha y sección. Es la norma <em>como salió ese día</em>.
+    </p>
+    <p class="dato-mono">/v1/ediciones · /v1/avisos · /v1/buscar</p>
+  </div>
+  <div class="fuente">
+    <h3>Normativa nacional</h3>
+    <p>
+      Las 428 mil normas de InfoLEG, con sus modificaciones al día. Acá no hace
+      falta saber la fecha: se busca por tipo y número, como <em>ley 24240</em>.
+    </p>
+    <p class="dato-mono">/v1/nacional</p>
+  </div>
+  <div class="fuente">
+    <h3>Normativa provincial</h3>
+    <p>
+      Las 81 mil leyes, decretos y constituciones de las 24 provincias, desde
+      1855. Es lo que el Boletín nacional no publica.
+    </p>
+    <p class="dato-mono">/v1/provincial</p>
+  </div>
+</div>
+
+<p class="docs-parrafo">
+  Cada ruta de más abajo trae un botón <strong>Armar esta consulta</strong>:
+  ponés los valores que necesitás y sale la dirección, la línea de terminal y
+  el nodo de n8n, hechos. No hay que editar nada a mano.
+</p>
+
 <h2 id="asistente">Que te la arme el asistente</h2>
 <p class="docs-parrafo">
   Escribí qué consulta necesitás y en qué lenguaje o herramienta, y sale
@@ -126,12 +166,12 @@
   cambia nunca.
 </p>
 
-{{range .Doc.Grupos}}
+{{range .Grupos}}
 <h3 class="docs-grupo">{{.Nombre}}</h3>
 {{if .Descripcion}}<p class="docs-parrafo">{{.Descripcion}}</p>{{end}}
 
 {{range .Rutas}}
-<div class="ruta">
+<div class="ruta" id="{{.Ancla}}">
   <div class="ruta-linea">
     <span class="ruta-metodo">{{.Metodo}}</span>
     <code class="ruta-camino">{{.Camino}}</code>
@@ -139,36 +179,62 @@
   <p class="ruta-resumen">{{.Resumen}}</p>
   {{if .Descripcion}}<p class="ruta-detalle">{{.Descripcion}}</p>{{end}}
 
-  {{if .Parametros}}
-  <table class="docs-tabla">
-    <thead><tr><th>parámetro</th><th>dónde</th><th>tipo</th><th></th></tr></thead>
-    <tbody>
-    {{range .Parametros}}
-      <tr>
-        <td><code>{{.Nombre}}</code>{{if .Obligatorio}} <span class="marca-chica">obligatorio</span>{{end}}</td>
-        <td class="dato-mono">{{.En}}</td>
-        <td class="dato-mono">{{.Tipo}}{{if .PorDefecto}} · por defecto {{.PorDefecto}}{{end}}</td>
-        <td>
-          {{if .Descripcion}}{{.Descripcion}}{{end}}
-          {{if .Opciones}}<div class="docs-opciones">{{range .Opciones}}<code>{{.}}</code>{{end}}</div>{{end}}
-        </td>
-      </tr>
+  <details class="esquema"{{if .Elegida}} open{{end}}>
+    <summary>Armar esta consulta</summary>
+
+    {{if .Campos}}
+    <form method="get" action="/docs#{{.Ancla}}" class="armar">
+      <input type="hidden" name="ruta" value="{{.Ancla}}">
+      <table class="docs-tabla">
+        <thead><tr><th>parámetro</th><th>valor</th><th></th></tr></thead>
+        <tbody>
+        {{range .Campos}}
+          <tr>
+            <td>
+              <label for="{{$.Base}}{{.Nombre}}"><code>{{.Nombre}}</code></label>
+              {{if .Obligatorio}} <span class="marca-chica">obligatorio</span>{{end}}
+              {{if eq .En "path"}} <span class="marca-chica gris">va en el camino</span>{{end}}
+            </td>
+            <td>
+              {{if .Opciones}}
+              <select name="p_{{.Nombre}}">
+                {{if not .Obligatorio}}<option value="">(sin filtrar)</option>{{end}}
+                {{$elegido := .Valor}}
+                {{range .Opciones}}<option value="{{.}}"{{if eq . $elegido}} selected{{end}}>{{.}}</option>{{end}}
+              </select>
+              {{else}}
+              <input type="text" name="p_{{.Nombre}}" value="{{.Valor}}"
+                     placeholder="{{if .PorDefecto}}{{.PorDefecto}}{{else}}sin filtrar{{end}}">
+              {{end}}
+            </td>
+            <td class="ruta-detalle">
+              {{if .Descripcion}}{{.Descripcion}}{{end}}
+              {{if .Tipo}} <span class="dato-mono">{{.Tipo}}</span>{{end}}
+            </td>
+          </tr>
+        {{end}}
+        </tbody>
+      </table>
+      <button class="boton" type="submit">Armar con estos valores</button>
+    </form>
     {{end}}
-    </tbody>
-  </table>
-  {{end}}
 
-  <div class="ruta-ejemplo"><code>{{curl $.Base $.PideToken .}}</code></div>
+    <h4 class="docs-subtitulo">La dirección</h4>
+    <div class="ruta-ejemplo"><code>{{.URL}}</code></div>
 
-  <details class="esquema">
-    <summary>El nodo de n8n para esta ruta</summary>
+    <h4 class="docs-subtitulo">Desde la terminal</h4>
+    <div class="ruta-ejemplo"><code>{{.Curl}}</code></div>
+
+    {{if .N8N}}
+    <h4 class="docs-subtitulo">El nodo de n8n</h4>
     <p class="pie-nota">
       Copialo y pegalo en el lienzo de n8n. Lo arma notarum con su propio
       contrato, no un modelo: sale siempre válido y no cuesta nada.
       {{if $.PideToken}}En el nodo, cambiá <code>TU_TOKEN</code> por el tuyo y
       dejá la palabra <code>Bearer</code> adelante.{{end}}
     </p>
-    <pre class="docs-bloque"><code>{{n8n $.Base $.PideToken .}}</code></pre>
+    <pre class="docs-bloque"><code>{{.N8N}}</code></pre>
+    {{end}}
   </details>
 
   <div class="ruta-respuestas">

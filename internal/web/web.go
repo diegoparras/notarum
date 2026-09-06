@@ -806,6 +806,9 @@ type datosDocs struct {
 	// lo decide quien la levanta.
 	Politica cuentas.Politica
 
+	// Grupos son las rutas con su consulta ya armada, lista para copiar.
+	Grupos []grupoVista
+
 	// El asistente que arma la consulta.
 	Asistente      tareas.Tarea
 	HayAsistente   bool
@@ -858,6 +861,7 @@ func (s *Sitio) dibujarDocs(w http.ResponseWriter, r *http.Request, errMsg strin
 	for _, h := range mcp.Herramientas() {
 		d.Herramientas = append(d.Herramientas, aHerramientaDoc(h))
 	}
+	d.Grupos = armarGrupos(doc, d.Base, d.PideToken, r.URL.Query())
 	s.mostrar(w, r, "docs", d, codigo)
 }
 
@@ -974,4 +978,83 @@ func n8nDe(base string, conToken bool, r contrato.Ruta) string {
 		return "no se pudo armar el nodo: " + err.Error()
 	}
 	return nodo
+}
+
+// ----------------------------------------------- armar la consulta desde acá
+
+// grupoVista y rutaVista son las rutas del contrato con su consulta ya armada.
+//
+// Se arma en Go y no en la plantilla: cada ruta necesita sus valores, los
+// suyos y no los de otra, y eso en una plantilla sale ilegible.
+type grupoVista struct {
+	Nombre      string
+	Descripcion string
+	Rutas       []rutaVista
+}
+
+type rutaVista struct {
+	contrato.Ruta
+	// Ancla identifica esta ruta en la página, para volver a ella después de
+	// armar la consulta.
+	Ancla string
+	// Elegida dice si es la que se acaba de armar: es la que se abre sola.
+	Elegida bool
+	// Campos son los parámetros con el valor que va en cada uno.
+	Campos []campoVista
+	// URL, Curl y N8N son la consulta armada, lista para copiar.
+	URL  string
+	Curl string
+	N8N  string
+}
+
+type campoVista struct {
+	contrato.Parametro
+	Valor string
+}
+
+// armarGrupos arma, para cada ruta, la consulta con los valores que se hayan
+// puesto en el formulario, o con los del ejemplo si no se puso ninguno.
+func armarGrupos(doc *contrato.Documento, base string, pideToken bool, query url.Values) []grupoVista {
+	elegida := query.Get("ruta")
+	var grupos []grupoVista
+	for _, g := range doc.Grupos {
+		gv := grupoVista{Nombre: g.Nombre, Descripcion: g.Descripcion}
+		for _, r := range g.Rutas {
+			ancla := anclaDe(r)
+			esta := elegida != "" && elegida == ancla
+
+			// Sólo se toman los valores de la ruta que se armó: si no, un
+			// "texto" escrito para una ruta se colaría en todas las demás.
+			valores := armador.Valores{}
+			if esta {
+				for _, p := range r.Parametros {
+					if v := strings.TrimSpace(query.Get("p_" + p.Nombre)); v != "" {
+						valores[p.Nombre] = v
+					}
+				}
+			}
+
+			rv := rutaVista{Ruta: r, Ancla: ancla, Elegida: esta}
+			for _, p := range r.Parametros {
+				rv.Campos = append(rv.Campos, campoVista{
+					Parametro: p, Valor: armador.ValorDe(p, valores),
+				})
+			}
+			rv.URL = armador.URL(base, r, valores)
+			rv.Curl = armador.Curl(base, r, valores, pideToken)
+			if nodo, err := armador.N8N(base, r, valores, pideToken); err == nil {
+				rv.N8N = nodo
+			}
+			gv.Rutas = append(gv.Rutas, rv)
+		}
+		grupos = append(grupos, gv)
+	}
+	return grupos
+}
+
+// anclaDe arma un identificador estable para una ruta: sirve de ancla en la
+// página y de nombre en el formulario.
+func anclaDe(r contrato.Ruta) string {
+	limpio := strings.NewReplacer("/", "-", "{", "", "}", "", ".", "-").Replace(r.Camino)
+	return strings.ToLower(r.Metodo) + limpio
 }

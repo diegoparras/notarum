@@ -375,3 +375,38 @@ h2 { font-size: 17px; font-weight: 600; margin: 32px 0 12px; }
 
 .fila-revocada td { opacity: 0.55; }
 .docs-tabla form { margin: 0; }
+
+/* Armar la consulta desde la documentación.
+   Cada ruta trae su formulario: se ponen los valores y sale la consulta hecha,
+   en vez de un ejemplo fijo que después hay que editar a mano. */
+.docs-subtitulo {
+  font-size: 12px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--tinta-tenue); margin: 16px 0 6px; font-weight: 600;
+}
+.armar { margin: 4px 0 6px; }
+.armar input[type="text"], .armar select {
+  width: 100%; box-sizing: border-box;
+  font-family: var(--mono); font-size: 13px;
+  padding: 6px 9px; border: 1px solid var(--borde);
+  border-radius: 9px; background: var(--crema); color: var(--tinta);
+}
+.armar input[type="text"]:focus, .armar select:focus {
+  outline: none; border-color: var(--acento);
+  box-shadow: 0 0 0 3px var(--acento-tenue);
+}
+.armar .docs-tabla td { vertical-align: top; }
+/* La columna del valor, con lugar para escribir; la de la explicación, angosta
+   para que no empuje al campo contra el borde. */
+.armar .docs-tabla td:nth-child(2) { width: 34%; min-width: 160px; }
+.armar .docs-tabla td:nth-child(3) { font-size: 12.5px; }
+
+/* Las tres fuentes, arriba de todo: qué hay acá y para qué sirve cada cosa. */
+.fuentes { display: grid; gap: 12px; margin: 16px 0 24px; }
+@media (min-width: 720px) { .fuentes { grid-template-columns: repeat(3, 1fr); } }
+.fuente {
+  background: var(--crema-hondo); border-radius: var(--radio);
+  padding: 14px 16px; border-left: 3px solid var(--acento);
+}
+.fuente h3 { margin: 0 0 4px; font-size: 15px; }
+.fuente p { margin: 0 0 8px; font-size: 13px; color: var(--tinta-suave); line-height: 1.6; }
+.fuente .dato-mono { font-size: 12.5px; }

@@ -235,3 +235,64 @@ func TestDocsMuestraElAcceso(t *testing.T) {
 		t.Error("el modo salió vacío")
 	}
 }
+
+// La documentación arma la consulta con los valores que uno pone, no con un
+// ejemplo fijo que después hay que editar a mano.
+func TestArmarLaConsultaConValoresPropios(t *testing.T) {
+	srv := sitioDePrueba(t)
+	_, html := pedir(t, srv,
+		"/docs?ruta=get-v1-provincial&p_texto=agua&p_provincia=mendoza&p_vigentes=1")
+
+	// La dirección armada, con lo que se puso.
+	for _, esperado := range []string{"texto=agua", "provincia=mendoza", "vigentes=1"} {
+		if !strings.Contains(html, esperado) {
+			t.Errorf("la consulta armada no lleva %q", esperado)
+		}
+	}
+	// Y en el nodo de n8n, cada uno en su lugar.
+	if !strings.Contains(html, `\&#34;value\&#34;: \&#34;mendoza\&#34;`) &&
+		!strings.Contains(html, "&#34;value&#34;: &#34;mendoza&#34;") {
+		t.Error("el nodo de n8n no lleva el valor que se puso")
+	}
+}
+
+// Los valores de una ruta no se cuelan en las demás: cada una arma la suya.
+func TestLosValoresNoSeCuelanEnOtrasRutas(t *testing.T) {
+	srv := sitioDePrueba(t)
+	_, html := pedir(t, srv, "/docs?ruta=get-v1-provincial&p_texto=agua")
+
+	// La ruta nacional también tiene un parámetro "texto", y no tiene por qué
+	// quedar con lo que se escribió para la provincial.
+	i := strings.Index(html, `id="get-v1-nacional"`)
+	if i < 0 {
+		t.Fatal("no está la ruta nacional")
+	}
+	fin := strings.Index(html[i:], `id="get-v1-nacional-tipos"`)
+	if fin < 0 {
+		fin = len(html) - i
+	}
+	if strings.Contains(html[i:i+fin], "texto=agua") {
+		t.Error("lo escrito para una ruta se coló en otra")
+	}
+}
+
+// Las fuentes que no son el Boletín también se arman desde acá: son las que
+// más falta hacen, porque nadie se acuerda de sus parámetros.
+func TestSeArmanLasRutasDeInfoLEGYProvincial(t *testing.T) {
+	srv := sitioDePrueba(t)
+	_, html := pedir(t, srv, "/docs")
+
+	for _, ancla := range []string{
+		"get-v1-nacional", "get-v1-nacional-tipos", "get-v1-nacional-id",
+		"get-v1-provincial", "get-v1-provincial-provincias",
+		"get-v1-provincial-tipos", "get-v1-provincial-id",
+	} {
+		if !strings.Contains(html, `id="`+ancla+`"`) {
+			t.Errorf("falta la ruta %s", ancla)
+		}
+	}
+	// Y cada una con su formulario, no sólo con un ejemplo para copiar.
+	if strings.Count(html, "Armar con estos valores") < 10 {
+		t.Errorf("hay %d formularios para armar", strings.Count(html, "Armar con estos valores"))
+	}
+}

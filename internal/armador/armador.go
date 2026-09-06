@@ -34,7 +34,7 @@ func URL(base string, r contrato.Ruta, v Valores) string {
 	camino := r.Camino
 	var query []string
 	for _, p := range r.Parametros {
-		valor := valorDe(p, v)
+		valor := ValorDe(p, v)
 		if valor == "" {
 			continue
 		}
@@ -54,7 +54,10 @@ func URL(base string, r contrato.Ruta, v Valores) string {
 // valorDe elige qué poner en un parámetro: lo que se pidió, o el ejemplo del
 // contrato, o lo que trae por defecto. Los que no son obligatorios y no tienen
 // nada quedan afuera: una query llena de parámetros vacíos no ayuda a nadie.
-func valorDe(p contrato.Parametro, v Valores) string {
+// ValorDe dice qué va en un parámetro: lo que se pidió, o el ejemplo del
+// contrato. Se exporta para que la interfaz muestre en cada campo del
+// formulario exactamente lo que va a mandar.
+func ValorDe(p contrato.Parametro, v Valores) string {
 	if valor, hay := v[p.Nombre]; hay {
 		return strings.TrimSpace(valor)
 	}
@@ -146,7 +149,7 @@ func N8N(base string, r contrato.Ruta, v Valores, conToken bool) (string, error)
 		if par.En == "path" {
 			continue
 		}
-		if valor := valorDe(par, v); valor != "" {
+		if valor := ValorDe(par, v); valor != "" {
 			query = append(query, parN8N{Nombre: par.Nombre, Valor: valor})
 		}
 	}
@@ -183,7 +186,7 @@ func soloElCamino(base string, r contrato.Ruta, v Valores) string {
 		if p.En != "path" {
 			continue
 		}
-		if valor := valorDe(p, v); valor != "" {
+		if valor := ValorDe(p, v); valor != "" {
 			camino = strings.ReplaceAll(camino, "{"+p.Nombre+"}", valor)
 		}
 	}
