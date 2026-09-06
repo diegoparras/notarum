@@ -165,6 +165,8 @@
     <p class="pie-nota">
       Copialo y pegalo en el lienzo de n8n. Lo arma notarum con su propio
       contrato, no un modelo: sale siempre válido y no cuesta nada.
+      {{if $.PideToken}}En el nodo, cambiá <code>TU_TOKEN</code> por el tuyo y
+      dejá la palabra <code>Bearer</code> adelante.{{end}}
     </p>
     <pre class="docs-bloque"><code>{{n8n $.Base $.PideToken .}}</code></pre>
   </details>

@@ -228,10 +228,22 @@ func IDNuevo() (string, error) {
 // TokenDeCabecera saca el valor de un "Authorization: Bearer ...".
 func TokenDeCabecera(cabecera string) string {
 	c := strings.TrimSpace(cabecera)
-	if len(c) < 7 || !strings.EqualFold(c[:7], "bearer ") {
-		return ""
+	if len(c) >= 7 && strings.EqualFold(c[:7], "bearer ") {
+		return strings.TrimSpace(c[7:])
 	}
-	return strings.TrimSpace(c[7:])
+	// Sin la palabra, pero con nuestro prefijo: es un token nuestro al que le
+	// falta el esquema, y no puede ser otra cosa.
+	//
+	// Pasa todo el tiempo al pegar el token en un campo de un editor visual
+	// —n8n, Postman— que ya traía "Bearer TU_TOKEN" escrito: se pega encima
+	// del valor entero y se lleva puesta la palabra. Rechazarlo era mandar a
+	// alguien a buscar un error de credenciales que no tenía, con el token
+	// correcto en la mano. El secreto es el token; la palabra no aporta nada
+	// que proteger.
+	if strings.HasPrefix(c, PrefijoToken) {
+		return c
+	}
+	return ""
 }
 
 // derivar es la función de derivación, aparte para poder cambiarla en un solo

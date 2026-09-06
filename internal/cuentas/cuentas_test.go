@@ -187,10 +187,19 @@ func TestTokenDeCabecera(t *testing.T) {
 		"bearer ntrm_abc":    "ntrm_abc",
 		"BEARER  ntrm_abc ":  "ntrm_abc",
 		"":                   "",
-		"ntrm_abc":           "", // sin el esquema no vale
 		"Basic dXNlcjpwYXNz": "",
 		"Bearer":             "",
 		"Bearer ":            "",
+		"Token ntrm_abc":     "",
+		"cualquier cosa":     "",
+		// Con nuestro prefijo pero sin el esquema, vale. Pasa al pegar el
+		// token encima de un campo que ya decía "Bearer TU_TOKEN", que es lo
+		// que hacen los editores visuales: se pega sobre el valor entero y se
+		// lleva puesta la palabra. Rechazarlo mandaba a buscar un error de
+		// credenciales inexistente con el token correcto en la mano, y la
+		// palabra no es lo que protege nada.
+		"ntrm_abc":   "ntrm_abc",
+		" ntrm_abc ": "ntrm_abc",
 	}
 	for cabecera, esperado := range casos {
 		if got := TokenDeCabecera(cabecera); got != esperado {
