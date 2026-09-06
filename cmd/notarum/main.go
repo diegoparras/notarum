@@ -99,6 +99,12 @@ func ayuda() {
         NOTARUM_SECRETO_SESION              firma las sesiones          [se genera]
         NOTARUM_MEMORIA_MAX                 techo de memoria, 512MB o 1GB
                                             [lo que diga el contenedor]
+        NOTARUM_BUSCADOR_INFOLEG            enciende la búsqueda de normativa
+                                            nacional (unos 480 MB)      [no]
+
+      Las variables de sí o no entienden 1/0, si/no, true/false y on/off. La
+      normativa provincial no necesita ninguna: su índice se arma solo la
+      primera vez que alguien consulta.
 
       Los catálogos se actualizan solos todos los días. Los mismos botones del
       panel los actualizan en el momento.
@@ -157,6 +163,30 @@ func ayuda() {
 }
 
 // ---------------------------------------------------------------- configurar
+
+// encendido lee una variable de sí o no.
+//
+// Cualquier valor no vacío contando como sí hacía que NOTARUM_SIN_MCP=0
+// apagara el MCP y NOTARUM_BUSCADOR_INFOLEG=false lo encendiera: lo contrario
+// exacto de lo que quiso escribir quien lo escribió, y sin ningún aviso. Es de
+// los errores que uno no encuentra nunca, porque el archivo dice lo que uno
+// quería.
+func encendido(clave string, porDefecto bool) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(clave))) {
+	case "":
+		return porDefecto
+	case "0", "no", "false", "off", "n", "apagado":
+		return false
+	case "1", "si", "sí", "yes", "true", "on", "y", "encendido":
+		return true
+	default:
+		// Algo que no se entiende se toma como sí —es lo que quiso hacer quien
+		// se tomó el trabajo de escribirla— pero se dice, para que se note.
+		slog.Warn("no se entendió el valor de una variable; se toma como sí",
+			"variable", clave, "valor", os.Getenv(clave))
+		return true
+	}
+}
 
 func entorno(clave, porDefecto string) string {
 	if v := strings.TrimSpace(os.Getenv(clave)); v != "" {
@@ -231,7 +261,7 @@ func armarServicio(cfg configComun) (*servicio.Servicio, func(), error) {
 	})
 	srv := servicio.Nuevo(cli, alm)
 	// InfoLEG es un accesorio: si se apaga, notarum sirve el Boletín igual.
-	if entorno("NOTARUM_SIN_INFOLEG", "") == "" {
+	if !encendido("NOTARUM_SIN_INFOLEG", false) {
 		srv = srv.ConInfoLEG(infoleg.NuevoCliente(infoleg.Opciones{
 			UserAgent: cfg.userAgent,
 			Intervalo: cfg.intervalo,
@@ -239,12 +269,12 @@ func armarServicio(cfg configComun) (*servicio.Servicio, func(), error) {
 	}
 	// La normativa provincial, lo mismo. Y no cuesta nada mientras nadie la
 	// sincronice: el índice se arma la primera vez que alguien lo consulta.
-	if entorno("NOTARUM_SIN_SAIJ", "") == "" {
+	if !encendido("NOTARUM_SIN_SAIJ", false) {
 		srv = srv.ConSAIJ(saij.NuevoCliente(saij.Opciones{UserAgent: cfg.userAgent}))
 	}
 	// El buscador de normativa nacional se pide: son unos 350 MB en memoria,
 	// medidos con el catálogo real, y no se le imponen a quien no lo usa.
-	if entorno("NOTARUM_BUSCADOR_INFOLEG", "") != "" {
+	if encendido("NOTARUM_BUSCADOR_INFOLEG", false) {
 		srv = srv.ConBuscadorInfoLEG(true)
 		slog.Warn("el buscador de normativa nacional está encendido",
 			"memoria_estimada", "unos 480 MB con el catálogo entero",
@@ -282,8 +312,8 @@ func servir(args []string) error {
 	userAgent := fs.String("user-agent", entorno("NOTARUM_USER_AGENT", uaPorDefecto()), "User-Agent hacia el sitio")
 	formatoLog := fs.String("log", entorno("NOTARUM_LOG", "json"), "formato de log: text o json")
 	tokenMCP := fs.String("mcp-token", entorno("NOTARUM_MCP_TOKEN", ""), "si se pone, /mcp exige Bearer con este token")
-	sinMCP := fs.Bool("sin-mcp", entorno("NOTARUM_SIN_MCP", "") != "", "apagar el endpoint /mcp")
-	sinWeb := fs.Bool("sin-web", entorno("NOTARUM_SIN_WEB", "") != "", "apagar el lector web y dejar sólo la API")
+	sinMCP := fs.Bool("sin-mcp", encendido("NOTARUM_SIN_MCP", false), "apagar el endpoint /mcp")
+	sinWeb := fs.Bool("sin-web", encendido("NOTARUM_SIN_WEB", false), "apagar el lector web y dejar sólo la API")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -383,7 +413,7 @@ func servir(args []string) error {
 	if err != nil {
 		return err
 	}
-	if entorno("NOTARUM_SIN_ACTUALIZACION_AUTOMATICA", "") == "" {
+	if !encendido("NOTARUM_SIN_ACTUALIZACION_AUTOMATICA", false) {
 		programador.Agregar(tareas.Programado{
 			Tipo:  "infoleg",
 			Hacer: trabajoInfoLEG(srv),
