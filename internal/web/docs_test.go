@@ -101,8 +101,20 @@ func TestDocsEjemplosCopiables(t *testing.T) {
 	srv := sitioDePrueba(t)
 	_, html := pedir(t, srv, "/docs")
 
-	if !strings.Contains(html, "curl "+srv.URL+"/v1/ediciones/primera/2026-09-01") {
+	if !strings.Contains(html, srv.URL+"/v1/ediciones/primera/2026-09-01") {
 		t.Error("el ejemplo no trae la dirección de esta instancia")
+	}
+	if !strings.Contains(html, "curl -s") {
+		t.Error("el ejemplo no es una línea de curl")
+	}
+	// La URL va entre comillas —escapadas por la plantilla— porque sin ellas
+	// el shell corta la dirección en el &.
+	if !strings.Contains(html, "&#34;"+srv.URL) {
+		t.Error("la dirección no quedó entrecomillada")
+	}
+	// Y el nodo de n8n, que es lo que se pega en el lienzo.
+	if !strings.Contains(html, "n8n-nodes-base.httpRequest") {
+		t.Error("no está el nodo de n8n")
 	}
 	// Un hueco sin llenar en un ejemplo sería un copiar y pegar roto.
 	i := strings.Index(html, "ruta-ejemplo")

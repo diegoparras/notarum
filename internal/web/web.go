@@ -22,6 +22,7 @@ import (
 	"unicode"
 
 	"github.com/diegoparras/notarum/internal/almacen"
+	"github.com/diegoparras/notarum/internal/armador"
 	"github.com/diegoparras/notarum/internal/asistente"
 	"github.com/diegoparras/notarum/internal/boletin"
 	"github.com/diegoparras/notarum/internal/contrato"
@@ -173,6 +174,8 @@ var funciones = template.FuncMap{
 	"haceCuanto": haceCuanto,
 	"enCuanto":   enCuanto,
 	"cuantoVa":   cuantoVa,
+	"curl":       curlDe,
+	"n8n":        n8nDe,
 	"fechaCorta": fechaCorta,
 	"dict":       dict,
 }
@@ -806,6 +809,7 @@ type datosDocs struct {
 	// El asistente que arma la consulta.
 	Asistente      tareas.Tarea
 	HayAsistente   bool
+	PideToken      bool
 	TieneClaveIA   bool
 	ErrorAsistente string
 }
@@ -834,7 +838,11 @@ func (s *Sitio) dibujarDocs(w http.ResponseWriter, r *http.Request, errMsg strin
 		ConMCP: s.conMCP,
 		Base:   baseVisible(r),
 
-		Politica:       s.vigente(),
+		Politica: s.vigente(),
+		// Si esta instancia deja pedir sin identificarse, los ejemplos no
+		// tienen por qué mostrar un token: sería decirle a alguien que
+		// necesita algo que no necesita.
+		PideToken:      !s.vigente().PermiteAPI(nil),
 		HayAsistente:   s.PuedeAsistir(),
 		ErrorAsistente: errMsg,
 	}
@@ -948,4 +956,22 @@ func IPDe(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return ip
+}
+
+// curlDe y n8nDe arman, para una ruta, lo que hay que escribir en cada
+// herramienta. Lo hace notarum con su propio contrato y no un modelo: un nodo
+// de n8n es una estructura fija con los datos de la ruta adentro, así que sale
+// siempre válido, sin clave de nadie y sin costar nada.
+func curlDe(base string, conToken bool, r contrato.Ruta) string {
+	return armador.Curl(base, r, nil, conToken)
+}
+
+func n8nDe(base string, conToken bool, r contrato.Ruta) string {
+	nodo, err := armador.N8N(base, r, nil, conToken)
+	if err != nil {
+		// No puede pasar —lo que se serializa son structs propios— pero si
+		// pasara, mejor decirlo que mostrar un bloque vacío.
+		return "no se pudo armar el nodo: " + err.Error()
+	}
+	return nodo
 }

@@ -1,7 +1,7 @@
+{{define "cabeza"}}{{if .Asistente.EstaCorriendo}}<meta http-equiv="refresh" content="3">{{end}}{{end}}
 {{define "titulo"}}Documentación{{end}}
 {{define "cuerpo"}}
 
-{{if .Asistente.EstaCorriendo}}<meta http-equiv="refresh" content="3">{{end}}
 
 <h1>Documentación</h1>
 <p class="bajada">
@@ -158,7 +158,16 @@
   </table>
   {{end}}
 
-  {{if .Ejemplo}}<div class="ruta-ejemplo"><code>curl {{$.Base}}{{.Ejemplo}}</code></div>{{end}}
+  <div class="ruta-ejemplo"><code>{{curl $.Base $.PideToken .}}</code></div>
+
+  <details class="esquema">
+    <summary>El nodo de n8n para esta ruta</summary>
+    <p class="pie-nota">
+      Copialo y pegalo en el lienzo de n8n. Lo arma notarum con su propio
+      contrato, no un modelo: sale siempre válido y no cuesta nada.
+    </p>
+    <pre class="docs-bloque"><code>{{n8n $.Base $.PideToken .}}</code></pre>
+  </details>
 
   <div class="ruta-respuestas">
     {{range .Respuestas}}<span class="respuesta"><b>{{.Codigo}}</b> {{.Descripcion}}</span>{{end}}

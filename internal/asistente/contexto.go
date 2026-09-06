@@ -1,9 +1,11 @@
 package asistente
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/diegoparras/notarum/internal/armador"
 	"github.com/diegoparras/notarum/internal/contrato"
 	"github.com/diegoparras/notarum/internal/mcp"
 )
@@ -36,7 +38,11 @@ REGLAS
 - La dirección de esta instancia es ` + base + `. Usala en los ejemplos.
 - Las fechas van en AAAA-MM-DD.
 - Si la persona no dice el lenguaje, usá curl.
-- Para n8n devolvé el JSON del nodo, listo para pegar en el editor.
+- Para n8n devolvé exactamente la forma del ejemplo de más abajo: el objeto
+  con "nodes", "connections" y "pinData". Un JSON que no tenga esa forma se
+  pega en el lienzo y no aparece nada. El nodo va con
+  "type": "n8n-nodes-base.httpRequest", y los parámetros de consulta en
+  "queryParameters", no pegados a la URL.
 - Si hace falta un token, mostralo como TU_TOKEN y aclará en un comentario que
   se crea en ` + base + `/cuenta.
 - Escribí en castellano rioplatense, sin "tú" ni "vosotros".
@@ -71,6 +77,16 @@ LAS RUTAS DE LA API
 		for _, arg := range argumentosDe(h) {
 			fmt.Fprintf(&b, "  - %s\n", arg)
 		}
+	}
+
+	// El ejemplo de n8n sale del mismo armador que usa la documentación: así
+	// el modelo ve una forma que de verdad funciona, y no una escrita a mano
+	// acá que se desactualiza cuando n8n cambia el nodo.
+	if ejemplo, err := ejemploN8N(base, doc); err == nil {
+		b.WriteString("\n\nASÍ ES UN NODO DE n8n QUE FUNCIONA\n")
+		b.WriteString("Es el de una de estas rutas. Copiá la forma, cambiá los valores.\n")
+		b.WriteString(ejemplo)
+		b.WriteString("\n")
 	}
 
 	b.WriteString(`
@@ -124,4 +140,16 @@ func argumentosDe(h mcp.Herramienta) []string {
 // más lo desordena.
 func unaLinea(s string) string {
 	return strings.Join(strings.Fields(s), " ")
+}
+
+// ejemploN8N arma un nodo de verdad, con una ruta de verdad.
+func ejemploN8N(base string, doc *contrato.Documento) (string, error) {
+	for _, g := range doc.Grupos {
+		for _, r := range g.Rutas {
+			if len(r.Parametros) > 1 {
+				return armador.N8N(base, r, nil, true)
+			}
+		}
+	}
+	return "", errors.New("el contrato no trajo ninguna ruta con parámetros")
 }

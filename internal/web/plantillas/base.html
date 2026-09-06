@@ -6,6 +6,10 @@
 <title>{{template "titulo" .}} · notarum</title>
 <meta name="description" content="Lector abierto del Boletín Oficial de la República Argentina.">
 <link rel="stylesheet" href="/estatico/estilo.css?v={{.Version}}">
+{{/* Lo que cada página necesite en la cabeza. El refresco automático va acá y
+     no en el cuerpo: en el cuerpo el navegador lo puede ignorar, que es lo que
+     hacía que una tarea en curso no se actualizara sola. */}}
+{{block "cabeza" .}}{{end}}
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%231f5f8b'/><g fill='none' stroke='%23fff8f3' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'><path d='M16 8.5V24'/><path d='M11.5 24h9'/><path d='M7 11.4h18'/><circle cx='16' cy='7' r='1.4'/><path d='M7 11.4 4.3 17.2M7 11.4l2.7 5.8'/><path d='M4.3 17.2a2.7 2.7 0 0 0 5.4 0'/><path d='M25 11.4l-2.7 5.8M25 11.4l2.7 5.8'/><path d='M22.3 17.2a2.7 2.7 0 0 0 5.4 0'/></g></svg>">
 </head>
 <body>
