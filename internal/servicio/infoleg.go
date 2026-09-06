@@ -33,6 +33,9 @@ type EstadoInfoLEG struct {
 	UltimaFechaBO  string    `json:"ultima_fecha_boletin,omitempty"`
 	CatalogoAlDia  time.Time `json:"catalogo_publicado,omitempty"`
 	SincronizadoEn time.Time `json:"sincronizado_en,omitempty"`
+	// Relaciones dice cuántas se guardaron de las bases complementarias: qué
+	// modificó a cada norma y qué modifica cada una.
+	Relaciones EstadoRelaciones `json:"relaciones,omitzero"`
 }
 
 // InfoLEGDisponible dice si esta instancia puede enriquecer avisos.
@@ -207,6 +210,12 @@ func (s *Servicio) SincronizarInfoLEG(ctx context.Context, dirTrabajo string, av
 		return e, err
 	}
 
+	// Las relaciones, después del catálogo: si algo falla acá, lo principal
+	// ya está guardado.
+	e.Relaciones = s.sincronizarRelaciones(ctx, info, dirTrabajo, func(que string) {
+		slog.Info("relaciones de InfoLEG", "paso", que)
+	})
+
 	e.Sincronizado = true
 	e.Normas = guardadas
 	e.CatalogoAlDia = info.Actualizado
@@ -216,6 +225,7 @@ func (s *Servicio) SincronizarInfoLEG(ctx context.Context, dirTrabajo string, av
 	}
 	slog.Info("catálogo de InfoLEG sincronizado",
 		"leidas", leidas, "guardadas", guardadas, "con_texto", e.ConTexto,
-		"ultima_fecha_boletin", e.UltimaFechaBO)
+		"ultima_fecha_boletin", e.UltimaFechaBO,
+		"relaciones", e.Relaciones.Relaciones)
 	return e, nil
 }

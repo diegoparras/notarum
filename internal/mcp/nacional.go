@@ -55,6 +55,27 @@ func herramientasNacionales() []Herramienta {
 			},
 		},
 		{
+			Nombre: "nacional_relaciones",
+			Titulo: "Qué modificó a una norma, y qué modificó ella",
+			Descripcion: "Devuelve las normas relacionadas con una: cuáles la modificaron y cuáles modificó ella, " +
+				"con el tipo, el número, el organismo y la fecha de cada una. El catálogo dice cuántas son pero no " +
+				"cuáles; esto da la lista. Sirve para saber si una ley sigue diciendo lo que decía, y para ver el " +
+				"alcance de un decreto que toca varias leyes de una vez.",
+			Esquema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"id": map[string]any{"type": "integer", "description": "Identificador de InfoLEG, un número. Sale de nacional_buscar."},
+					"sentido": map[string]any{
+						"type":        "string",
+						"enum":        []string{"ambos", "modificada_por", "modifica_a"},
+						"default":     "ambos",
+						"description": "Qué lado traer. Por defecto los dos.",
+					},
+				},
+				"required": []string{"id"},
+			},
+		},
+		{
 			Nombre:      "nacional_tipos",
 			Titulo:      "Tipos de norma nacional",
 			Descripcion: "Devuelve los tipos de norma que trae el catálogo de InfoLEG, del más frecuente al menos. Conviene mirarlo antes de filtrar, para usar los valores tal como están escritos.",
@@ -170,4 +191,46 @@ func vistasNac(normas []infoleg.EnIndice) []vistaNormaNac {
 		v = append(v, x)
 	}
 	return v
+}
+
+func (s *Servidor) hNacionalRelaciones(_ context.Context, crudo json.RawMessage) *ResultadoHerramienta {
+	var a struct {
+		ID      int    `json:"id"`
+		Sentido string `json:"sentido"`
+	}
+	if err := json.Unmarshal(crudo, &a); err != nil {
+		return errorDeHerramienta(err.Error())
+	}
+	if a.ID <= 0 {
+		return errorDeHerramienta(`falta "id": es el identificador de InfoLEG, un número`)
+	}
+	if s.srv.NormaGuardada(a.ID) == nil {
+		return errorDeHerramienta("no hay ninguna norma con el identificador " +
+			strconv.Itoa(a.ID) + " en el catálogo guardado. Buscala con nacional_buscar.")
+	}
+	switch a.Sentido {
+	case "", "ambos", "modificada_por", "modifica_a":
+	default:
+		return errorDeHerramienta(`"sentido" tiene que ser ambos, modificada_por o modifica_a`)
+	}
+
+	salida := struct {
+		ID            int                `json:"id"`
+		ModificadaPor []infoleg.Relacion `json:"modificada_por,omitempty"`
+		ModificaA     []infoleg.Relacion `json:"modifica_a,omitempty"`
+		Nota          string             `json:"nota,omitempty"`
+	}{ID: a.ID}
+	if a.Sentido != "modifica_a" {
+		salida.ModificadaPor = s.srv.ModificadaPor(a.ID)
+	}
+	if a.Sentido != "modificada_por" {
+		salida.ModificaA = s.srv.ModificaA(a.ID)
+	}
+	if len(salida.ModificadaPor) == 0 && len(salida.ModificaA) == 0 {
+		// Que no haya relaciones y que no se hayan bajado las bases
+		// complementarias se ven igual desde acá, y llevan a cosas distintas.
+		salida.Nota = "sin relaciones guardadas; puede que esta norma no tenga ninguna, " +
+			"o que la instancia no haya sincronizado las bases complementarias de InfoLEG"
+	}
+	return comoJSON(salida)
 }

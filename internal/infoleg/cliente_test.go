@@ -293,3 +293,61 @@ func TestCancelacion(t *testing.T) {
 		t.Error("se esperaba un error por cancelación")
 	}
 }
+
+// El portal publica tres ZIP y hay que distinguirlos por el nombre. Es fácil
+// confundirlos: "modificatorias" y "modificadas" comparten el arranque, y
+// tomar la primera que coincida deja las relaciones al revés.
+func TestBuscarCatalogoDistingueLasTresBases(t *testing.T) {
+	respuesta := `{"success":true,"result":{"metadata_modified":"2026-09-01T10:00:00.000000",
+	 "resources":[
+	  {"name":"Base Infoleg Normativa Nacional - Muestreo","format":"CSV","url":"https://x/muestra.csv"},
+	  {"name":"Base Complementaria Infoleg de Normas Modificatorias","format":"ZIP","url":"https://x/mtorias.zip","size":300},
+	  {"name":"Base Infoleg Normativa Nacional","format":"ZIP","url":"https://x/base.zip","size":100},
+	  {"name":"Base Complementaria Infoleg de Normas Modificadas","format":"ZIP","url":"https://x/mdas.zip","size":200}
+	 ]}}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(respuesta))
+	}))
+	defer srv.Close()
+
+	info, err := NuevoCliente(Opciones{BaseDatos: srv.URL, Intervalo: time.Nanosecond}).
+		BuscarCatalogo(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.URL != "https://x/base.zip" {
+		t.Errorf("la base completa quedó en %q", info.URL)
+	}
+	if info.Modificadas.URL != "https://x/mdas.zip" {
+		t.Errorf("las modificadas quedaron en %q", info.Modificadas.URL)
+	}
+	if info.Modificatorias.URL != "https://x/mtorias.zip" {
+		t.Errorf("las modificatorias quedaron en %q", info.Modificatorias.URL)
+	}
+	if info.Actualizado.IsZero() {
+		t.Error("no se leyó cuándo se actualizó")
+	}
+}
+
+// Y si el portal deja de publicarlas, notarum sigue sirviendo el catálogo: se
+// pierden las relaciones, no todo lo demás.
+func TestSinLasComplementariasElCatalogoSirveIgual(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte(`{"success":true,"result":{"metadata_modified":"2026-09-01T10:00:00.000000",
+		 "resources":[{"name":"Base Infoleg Normativa Nacional","format":"ZIP","url":"https://x/base.zip"}]}}`))
+	}))
+	defer srv.Close()
+
+	info, err := NuevoCliente(Opciones{BaseDatos: srv.URL, Intervalo: time.Nanosecond}).
+		BuscarCatalogo(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.URL == "" {
+		t.Error("no encontró la base completa")
+	}
+	if info.Modificadas.Hay() || info.Modificatorias.Hay() {
+		t.Error("inventó complementarias que el portal no publicó")
+	}
+}

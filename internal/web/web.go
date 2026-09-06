@@ -729,6 +729,11 @@ type datosNorma struct {
 	Cuerpo template.HTML
 	Volver string
 	Error  string
+	// Las normas del otro lado: cuáles modificaron a ésta y cuáles modificó
+	// ella. La ficha decía "modificada 7 veces" y no cuáles, que es el dato
+	// que hace falta justo cuando uno está mirando la norma.
+	ModificadaPor []infoleg.Relacion
+	ModificaA     []infoleg.Relacion
 }
 
 // norma muestra el texto que InfoLEG mantiene actualizado, que es lo que el
@@ -748,6 +753,10 @@ func (s *Sitio) norma(w http.ResponseWriter, r *http.Request) {
 
 	d := datosNorma{comun: s.base("", "")}
 	d.Angosto = true
+	// Se leen antes que el texto: aunque InfoLEG no lo haya publicado —que es
+	// lo que pasa casi siempre— saber qué la modificó sigue sirviendo.
+	d.ModificadaPor = s.srv.ModificadaPor(id)
+	d.ModificaA = s.srv.ModificaA(id)
 	// El volver se toma del propio sitio y nunca de lo que venga afuera, para
 	// que nadie use esta página como trampolín a otro lado.
 	if v := r.URL.Query().Get("volver"); strings.HasPrefix(v, "/av/") && !strings.Contains(v, "//") {

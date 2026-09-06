@@ -26,10 +26,31 @@
 
   <div class="cuerpo">{{.Cuerpo}}</div>
 
+  {{template "relaciones" dict "Titulo" "Qué la modificó" "Rel" .ModificadaPor "Vacio" "Ninguna norma la modificó, según InfoLEG."}}
+  {{template "relaciones" dict "Titulo" "A qué normas modificó" "Rel" .ModificaA "Vacio" ""}}
+
   <div class="navegar">
     {{if .Volver}}<a href="{{.Volver}}">← volver al aviso</a>{{else}}<span></span>{{end}}
     <a href="{{.Norma.URLFicha}}">verla en InfoLEG →</a>
   </div>
 </article>
+{{end}}
+{{end}}
+
+{{define "relaciones"}}
+{{if .Rel}}
+<h2 class="docs-subtitulo">{{.Titulo}}</h2>
+<div class="relaciones">
+  {{range .Rel}}
+  <a class="relacion" href="/norma/{{.ID}}">
+    <span class="relacion-norma">{{.Descripcion}}</span>
+    {{if .Titulo}}<span class="relacion-titulo">{{.Titulo}}</span>{{end}}
+    <span class="relacion-pie">
+      {{if .Fecha}}<span class="dato-mono">BO {{.Fecha}}</span>{{end}}
+      {{if .Organismo}}{{.Organismo}}{{end}}
+    </span>
+  </a>
+  {{end}}
+</div>
 {{end}}
 {{end}}

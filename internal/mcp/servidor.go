@@ -152,6 +152,8 @@ func (s *Servidor) llamar(ctx context.Context, params json.RawMessage) *Resultad
 		return s.hNacionalBuscar(ctx, p.Argumentos)
 	case "nacional_norma":
 		return s.hNacionalNorma(ctx, p.Argumentos)
+	case "nacional_relaciones":
+		return s.hNacionalRelaciones(ctx, p.Argumentos)
 	case "nacional_tipos":
 		return s.hNacionalTipos(ctx)
 	default:

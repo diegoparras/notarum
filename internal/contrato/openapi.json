@@ -1,1670 +1,1854 @@
 {
-  "openapi": "3.0.3",
-  "info": {
-    "title": "notarum",
-    "version": "1.0.0",
-    "description": "API abierta de sólo lectura del Boletín Oficial de la República Argentina. Entrega el calendario de ediciones, cada edición por sección y fecha con sus avisos, cada aviso con su texto, los anexos en PDF y el catálogo de rubros. No opina, no clasifica, no puntúa: entrega el dato crudo y bien tipado.\n\nSin clave para leer. Límite de pedidos por IP. Los datos son del Boletín Oficial; notarum es sólo una caché legible.",
-    "license": {
-      "name": "MIT",
-      "url": "https://opensource.org/licenses/MIT"
-    },
-    "contact": {
-      "name": "notarum",
-      "url": "https://github.com/diegoparras/notarum"
-    }
+ "openapi": "3.0.3",
+ "info": {
+  "title": "notarum",
+  "version": "1.0.0",
+  "description": "API abierta de sólo lectura del Boletín Oficial de la República Argentina. Entrega el calendario de ediciones, cada edición por sección y fecha con sus avisos, cada aviso con su texto, los anexos en PDF y el catálogo de rubros. No opina, no clasifica, no puntúa: entrega el dato crudo y bien tipado.\n\nSin clave para leer. Límite de pedidos por IP. Los datos son del Boletín Oficial; notarum es sólo una caché legible.",
+  "license": {
+   "name": "MIT",
+   "url": "https://opensource.org/licenses/MIT"
   },
-  "servers": [
-    {
-      "url": "/",
-      "description": "esta instancia"
-    }
-  ],
-  "tags": [
-    {
-      "name": "ediciones",
-      "description": "Sumarios por sección y fecha"
-    },
-    {
-      "name": "avisos",
-      "description": "Textos completos y anexos"
-    },
-    {
-      "name": "catalogo",
-      "description": "Calendario, secciones y rubros"
-    },
-    {
-      "name": "servicio",
-      "description": "Estado del servicio"
-    },
-    {
-      "name": "provincial",
-      "description": "Normativa de las 24 provincias: leyes, decretos, códigos y constituciones. Sale de la Base SAIJ del Ministerio de Justicia, que es lo que el Boletín Oficial de la Nación no publica."
-    },
-    {
-      "name": "nacional",
-      "description": "Normativa nacional de InfoLEG: 428 mil leyes, decretos, resoluciones y disposiciones. Es la forma de encontrar una norma sin saber en qué edición del Boletín salió."
-    }
-  ],
-  "paths": {
-    "/v1/secciones": {
-      "get": {
-        "tags": [
-          "catalogo"
-        ],
-        "summary": "Secciones publicables",
-        "operationId": "verSecciones",
-        "responses": {
-          "200": {
-            "description": "Las secciones que esta API sabe leer",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "required": [
-                      "id",
-                      "nombre",
-                      "descripcion"
-                    ],
-                    "properties": {
-                      "id": {
-                        "type": "string",
-                        "enum": [
-                          "primera",
-                          "segunda",
-                          "tercera"
-                        ]
-                      },
-                      "nombre": {
-                        "type": "string"
-                      },
-                      "descripcion": {
-                        "type": "string"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/calendario/{anio}/{seccion}": {
-      "get": {
-        "tags": [
-          "catalogo"
-        ],
-        "summary": "Días con edición de un año",
-        "operationId": "verCalendario",
-        "parameters": [
-          {
-            "name": "anio",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "minimum": 1990
-            },
-            "example": 2026
-          },
-          {
-            "$ref": "#/components/parameters/Seccion"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "El calendario del año",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Calendario"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/PedidoInvalido"
-          },
-          "502": {
-            "$ref": "#/components/responses/FalloDelSitio"
-          }
-        }
-      }
-    },
-    "/v1/ediciones/{seccion}/{fecha}": {
-      "get": {
-        "tags": [
-          "ediciones"
-        ],
-        "summary": "Edición de una sección en una fecha",
-        "description": "El sumario completo de ese día. Si ese día no hubo edición devuelve 404 con `sin_edicion: true`, que no es una falla.",
-        "operationId": "verEdicion",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/Seccion"
-          },
-          {
-            "$ref": "#/components/parameters/Fecha"
-          },
-          {
-            "name": "rubro",
-            "in": "query",
-            "required": false,
-            "description": "Filtra por nombre de rubro; acepta el nombre exacto o un prefijo, sin distinguir mayúsculas.",
-            "schema": {
-              "type": "string"
-            },
-            "example": "DECRETOS"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "La edición",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Edicion"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/PedidoInvalido"
-          },
-          "404": {
-            "description": "Ese día no hubo edición",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "502": {
-            "$ref": "#/components/responses/FalloDelSitio"
-          }
-        }
-      }
-    },
-    "/v1/ediciones/{seccion}": {
-      "get": {
-        "tags": [
-          "ediciones"
-        ],
-        "summary": "Resúmenes de un rango de fechas",
-        "description": "Devuelve un resumen por día (sin avisos) para las ediciones que ya están en la caché local. Las que todavía no se bajaron se listan en `faltantes`: se llenan con `notarum rellenar`, porque la API no baja un año entero adentro de un pedido HTTP. El tope del rango son 366 días.",
-        "operationId": "verRango",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/Seccion"
-          },
-          {
-            "name": "desde",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "date"
-            },
-            "example": "2026-09-01"
-          },
-          {
-            "name": "hasta",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "date"
-            },
-            "example": "2026-09-30"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Los resúmenes disponibles",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Rango"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/PedidoInvalido"
-          },
-          "502": {
-            "$ref": "#/components/responses/FalloDelSitio"
-          }
-        }
-      }
-    },
-    "/v1/avisos/{seccion}/{id}/{fecha}": {
-      "get": {
-        "tags": [
-          "avisos"
-        ],
-        "summary": "Un aviso con su texto completo",
-        "operationId": "verAviso",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/Seccion"
-          },
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "El id del aviso. En la primera sección es numérico; en la segunda y la tercera puede ser alfanumérico (por ejemplo A1522579).",
-            "schema": {
-              "type": "string"
-            },
-            "example": "346633"
-          },
-          {
-            "$ref": "#/components/parameters/Fecha"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "El aviso",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Detalle"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/PedidoInvalido"
-          },
-          "404": {
-            "$ref": "#/components/responses/NoEncontrado"
-          },
-          "502": {
-            "$ref": "#/components/responses/FalloDelSitio"
-          }
-        }
-      }
-    },
-    "/v1/anexos/{seccion}/{nro}/{id}/{fecha}": {
-      "get": {
-        "tags": [
-          "avisos"
-        ],
-        "summary": "El PDF de un anexo",
-        "description": "Devuelve el archivo tal como lo publica el Boletín. La ruta es la que viene en el campo `url` de cada anexo del detalle; admite el sufijo `.pdf` en la fecha.",
-        "operationId": "verAnexo",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/Seccion"
-          },
-          {
-            "name": "nro",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "example": "12"
-          },
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "example": "7756488"
-          },
-          {
-            "name": "fecha",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "example": "20260901.pdf"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "El PDF",
-            "content": {
-              "application/pdf": {
-                "schema": {
-                  "type": "string",
-                  "format": "binary"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/PedidoInvalido"
-          },
-          "502": {
-            "$ref": "#/components/responses/FalloDelSitio"
-          }
-        }
-      }
-    },
-    "/v1/rubros/{seccion}": {
-      "get": {
-        "tags": [
-          "catalogo"
-        ],
-        "summary": "Catálogo de rubros de una sección",
-        "operationId": "verRubros",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/Seccion"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Los rubros",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Rubro"
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/PedidoInvalido"
-          },
-          "502": {
-            "$ref": "#/components/responses/FalloDelSitio"
-          }
-        }
-      }
-    },
-    "/v1/buscar": {
-      "get": {
-        "tags": [
-          "avisos"
-        ],
-        "summary": "Búsqueda por texto y fecha",
-        "description": "Busca avisos por texto y fecha. Con el motor de almacenamiento sqlite hay un índice local: `fuente=indice` busca sobre él sin pedirle nada al Boletín (más rápido, sin tope de rango); `fuente=sitio` siempre consulta la búsqueda avanzada del Boletín; `fuente=auto` (por defecto) usa el índice cuando tiene historia del rango y si no va al sitio. La respuesta dice cuál se usó.",
-        "operationId": "buscar",
-        "parameters": [
-          {
-            "name": "seccion",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "primera",
-                "segunda",
-                "tercera"
-              ]
-            }
-          },
-          {
-            "name": "texto",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "example": "decreto"
-          },
-          {
-            "name": "desde",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "date"
-            },
-            "example": "2026-09-01"
-          },
-          {
-            "name": "hasta",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "date"
-            },
-            "example": "2026-09-03"
-          },
-          {
-            "name": "rubro",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "pagina",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "default": 1
-            }
-          },
-          {
-            "name": "fuente",
-            "in": "query",
-            "required": false,
-            "description": "De dónde traer los resultados.",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "auto",
-                "indice",
-                "sitio"
-              ],
-              "default": "auto"
-            }
-          },
-          {
-            "name": "limite",
-            "in": "query",
-            "required": false,
-            "description": "Resultados por página; sólo con fuente indice.",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 500,
-              "default": 50
-            }
-          },
-          {
-            "name": "todas",
-            "in": "query",
-            "required": false,
-            "description": "Exigir todas las palabras; sólo con fuente sitio.",
-            "schema": {
-              "type": "boolean",
-              "default": false
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Los resultados",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Busqueda"
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/responses/PedidoInvalido"
-          },
-          "502": {
-            "$ref": "#/components/responses/FalloDelSitio"
-          }
-        }
-      }
-    },
-    "/v1/salud": {
-      "get": {
-        "tags": [
-          "servicio"
-        ],
-        "summary": "Estado del servicio",
-        "operationId": "verSalud",
-        "responses": {
-          "200": {
-            "description": "El estado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Salud"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/openapi.json": {
-      "get": {
-        "tags": [
-          "servicio"
-        ],
-        "summary": "Este contrato",
-        "operationId": "verOpenAPI",
-        "responses": {
-          "200": {
-            "description": "El contrato",
-            "content": {
-              "application/json": {}
-            }
-          }
-        }
-      }
-    },
-    "/v1/provincial": {
-      "get": {
-        "tags": [
-          "provincial"
-        ],
-        "summary": "Buscar normativa provincial",
-        "description": "Busca en las 81 mil normas de las 24 provincias. Sin filtros devuelve todo el catálogo paginado, de la más nueva a la más vieja. Cuando hay texto, primero va lo que se llama así y después lo que lo menciona de paso.",
-        "operationId": "buscarProvincial",
-        "parameters": [
-          {
-            "name": "texto",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "description": "Palabras a buscar en el título y las materias. No hace falta poner los acentos; todas las palabras tienen que estar."
-          },
-          {
-            "name": "provincia",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "description": "Nombre, código INDEC o prefijo. Sin esto busca en las 24."
-          },
-          {
-            "name": "tipo",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "description": "Ley, Decreto Ley, Constitución Provincial… La lista está en /v1/provincial/tipos."
-          },
-          {
-            "name": "desde",
-            "in": "query",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Año de sanción más viejo."
-          },
-          {
-            "name": "hasta",
-            "in": "query",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Año de sanción más nuevo."
-          },
-          {
-            "name": "vigentes",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "description": "Con 1 deja fuera lo derogado, lo caduco y las modificatorias."
-          },
-          {
-            "name": "pagina",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "default": 1
-            }
-          },
-          {
-            "name": "limite",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 200,
-              "default": 30
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Las normas que cumplen.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResultadoProvincial"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Una provincia que no existe, o un año mal escrito.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Esta instancia todavía no bajó el catálogo provincial.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/provincial/provincias": {
-      "get": {
-        "tags": [
-          "provincial"
-        ],
-        "summary": "Las 24 jurisdicciones",
-        "description": "Devuelve las provincias con su código INDEC y cuántas normas hay guardadas de cada una.",
-        "operationId": "verProvincias",
-        "responses": {
-          "200": {
-            "description": "Las jurisdicciones.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ProvinciaConNormas"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/provincial/tipos": {
-      "get": {
-        "tags": [
-          "provincial"
-        ],
-        "summary": "Tipos de norma provincial",
-        "description": "Devuelve los tipos que trae el catálogo, del más frecuente al menos. Sirve para saber por qué valor filtrar.",
-        "operationId": "verTiposProvinciales",
-        "responses": {
-          "200": {
-            "description": "Los tipos.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "tipo": {
-                        "type": "string"
-                      },
-                      "normas": {
-                        "type": "integer"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/provincial/{id}": {
-      "get": {
-        "tags": [
-          "provincial"
-        ],
-        "summary": "Una norma provincial",
-        "description": "Trae una norma por su identificador de SAIJ.",
-        "operationId": "verNormaProvincial",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Identificador de SAIJ, como LPB1000000.",
-            "example": "LPB1000000"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "La norma, con el enlace a su ficha en SAIJ.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NormaProvincial"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No hay una norma con ese identificador.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Esta instancia todavía no bajó el catálogo provincial.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/nacional": {
-      "get": {
-        "tags": [
-          "nacional"
-        ],
-        "summary": "Buscar normativa nacional",
-        "description": "Busca en las 428 mil normas de InfoLEG por título y materias. A diferencia de /v1/buscar, que recorre las ediciones del Boletín día por día, acá no hace falta saber la fecha. Buscar el tipo y el número —\"ley 24240\"— trae esa norma primero. Necesita NOTARUM_BUSCADOR_INFOLEG=1 en la instancia.",
-        "operationId": "buscarNacional",
-        "parameters": [
-          {
-            "name": "texto",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "description": "Palabras a buscar. No hace falta poner los acentos ni los puntos de los números."
-          },
-          {
-            "name": "tipo",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "description": "Ley, Decreto, Resolución… La lista está en /v1/nacional/tipos."
-          },
-          {
-            "name": "desde",
-            "in": "query",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Año de sanción más viejo."
-          },
-          {
-            "name": "hasta",
-            "in": "query",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Año de sanción más nuevo."
-          },
-          {
-            "name": "con_texto",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "description": "Con 1 deja sólo las que tienen el texto publicado."
-          },
-          {
-            "name": "pagina",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "default": 1
-            }
-          },
-          {
-            "name": "limite",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 200,
-              "default": 30
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Las normas que cumplen.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResultadoNacional"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Un año mal escrito o un rango al revés.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "El buscador está apagado en esta instancia.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "El catálogo de InfoLEG todavía no se sincronizó.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/nacional/tipos": {
-      "get": {
-        "tags": [
-          "nacional"
-        ],
-        "summary": "Tipos de norma nacional",
-        "description": "Los tipos que trae el catálogo, del más frecuente al menos.",
-        "operationId": "verTiposNacionales",
-        "responses": {
-          "200": {
-            "description": "Los tipos.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "tipo": {
-                        "type": "string"
-                      },
-                      "normas": {
-                        "type": "integer"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/nacional/{id}": {
-      "get": {
-        "tags": [
-          "nacional"
-        ],
-        "summary": "Una norma nacional",
-        "description": "Trae una norma entera por su identificador de InfoLEG, con sus fechas, su organismo y cuántas normas la modificaron.",
-        "operationId": "verNormaNacional",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            },
-            "example": 638
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "La norma.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NormaNacional"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "El identificador no es un número.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No está en el catálogo guardado.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  },
-  "components": {
-    "parameters": {
-      "Seccion": {
-        "name": "seccion",
-        "in": "path",
-        "required": true,
-        "schema": {
-          "type": "string",
-          "enum": [
-            "primera",
-            "segunda",
-            "tercera"
-          ]
-        },
-        "example": "primera"
-      },
-      "Fecha": {
-        "name": "fecha",
-        "in": "path",
-        "required": true,
-        "schema": {
-          "type": "string",
-          "format": "date"
-        },
-        "example": "2026-09-01"
-      }
-    },
-    "responses": {
-      "PedidoInvalido": {
-        "description": "El pedido está mal armado",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
-            }
-          }
-        }
-      },
-      "NoEncontrado": {
-        "description": "No existe",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
-            }
-          }
-        }
-      },
-      "FalloDelSitio": {
-        "description": "El Boletín Oficial no contestó o cambió de forma",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
-            }
-          }
-        }
-      }
-    },
-    "schemas": {
-      "Error": {
-        "type": "object",
-        "required": [
-          "error",
-          "origen"
-        ],
-        "properties": {
-          "error": {
-            "type": "string"
-          },
-          "detalle": {
-            "type": "string"
-          },
-          "origen": {
-            "type": "string",
-            "enum": [
-              "sitio",
-              "notarum",
-              "pedido"
-            ],
-            "description": "De quién es la culpa: del Boletín Oficial, de notarum, o de cómo se armó el pedido."
-          },
-          "sin_edicion": {
-            "type": "boolean",
-            "description": "Ese día no hubo edición."
-          }
-        }
-      },
-      "Aviso": {
-        "type": "object",
-        "required": [
-          "id",
-          "seccion",
-          "fecha",
-          "rubro",
-          "organismo",
-          "tiene_anexos",
-          "repetido",
-          "suplemento",
-          "url"
-        ],
-        "properties": {
-          "id": {
-            "type": "string",
-            "example": "346633"
-          },
-          "seccion": {
-            "type": "string",
-            "enum": [
-              "primera",
-              "segunda",
-              "tercera"
-            ]
-          },
-          "fecha": {
-            "type": "string",
-            "format": "date"
-          },
-          "rubro": {
-            "type": "string",
-            "example": "DECRETOS"
-          },
-          "organismo": {
-            "type": "string",
-            "example": "PODER EJECUTIVO"
-          },
-          "norma": {
-            "type": "string",
-            "example": "Decreto 845/2026"
-          },
-          "referencia": {
-            "type": "string",
-            "example": "DECTO-2026-845-APN-PTE"
-          },
-          "sintesis": {
-            "type": "string",
-            "example": "Disposiciones."
-          },
-          "tiene_anexos": {
-            "type": "boolean"
-          },
-          "repetido": {
-            "type": "boolean",
-            "description": "El aviso viene de un rubro \"ANTERIOR\": ya se publicó en una edición previa."
-          },
-          "suplemento": {
-            "type": "boolean",
-            "description": "El aviso salió en el suplemento de ese día."
-          },
-          "url": {
-            "type": "string",
-            "format": "uri",
-            "description": "El aviso en el sitio oficial."
-          }
-        }
-      },
-      "Detalle": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Aviso"
-          },
-          {
-            "type": "object",
-            "required": [
-              "texto",
-              "html",
-              "anexos"
-            ],
-            "properties": {
-              "texto": {
-                "type": "string",
-                "description": "El cuerpo en texto plano, párrafos separados por línea en blanco."
-              },
-              "html": {
-                "type": "string",
-                "description": "El cuerpo en HTML saneado: sin estilos ni scripts, con las tablas conservadas."
-              },
-              "anexos": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Anexo"
-                }
-              },
-              "fecha_publicacion": {
-                "type": "string",
-                "format": "date",
-                "description": "La fecha impresa al pie del aviso."
-              }
-            }
-          }
-        ]
-      },
-      "Anexo": {
-        "type": "object",
-        "required": [
-          "id",
-          "numero",
-          "nombre",
-          "url"
-        ],
-        "properties": {
-          "id": {
-            "type": "string",
-            "example": "7756488"
-          },
-          "numero": {
-            "type": "string",
-            "example": "12"
-          },
-          "nombre": {
-            "type": "string",
-            "example": "Anexo - 12"
-          },
-          "url": {
-            "type": "string",
-            "description": "Ruta en esta API para bajar el PDF.",
-            "example": "/v1/anexos/primera/12/7756488/20260901.pdf"
-          }
-        }
-      },
-      "Edicion": {
-        "type": "object",
-        "required": [
-          "seccion",
-          "fecha",
-          "cantidad",
-          "por_rubro",
-          "avisos"
-        ],
-        "properties": {
-          "seccion": {
-            "type": "string",
-            "enum": [
-              "primera",
-              "segunda",
-              "tercera"
-            ]
-          },
-          "fecha": {
-            "type": "string",
-            "format": "date"
-          },
-          "cantidad": {
-            "type": "integer"
-          },
-          "por_rubro": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "integer"
-            }
-          },
-          "con_suplemento": {
-            "type": "boolean"
-          },
-          "avisos": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Aviso"
-            }
-          }
-        }
-      },
-      "Resumen": {
-        "type": "object",
-        "required": [
-          "seccion",
-          "fecha",
-          "cantidad",
-          "por_rubro"
-        ],
-        "properties": {
-          "seccion": {
-            "type": "string"
-          },
-          "fecha": {
-            "type": "string",
-            "format": "date"
-          },
-          "cantidad": {
-            "type": "integer"
-          },
-          "por_rubro": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "integer"
-            }
-          },
-          "con_suplemento": {
-            "type": "boolean"
-          }
-        }
-      },
-      "Rango": {
-        "type": "object",
-        "required": [
-          "seccion",
-          "desde",
-          "hasta",
-          "ediciones",
-          "faltantes"
-        ],
-        "properties": {
-          "seccion": {
-            "type": "string"
-          },
-          "desde": {
-            "type": "string",
-            "format": "date"
-          },
-          "hasta": {
-            "type": "string",
-            "format": "date"
-          },
-          "ediciones": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Resumen"
-            }
-          },
-          "faltantes": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "date"
-            },
-            "description": "Días con edición que todavía no están en la caché local."
-          }
-        }
-      },
-      "Calendario": {
-        "type": "object",
-        "required": [
-          "anio",
-          "seccion",
-          "fechas"
-        ],
-        "properties": {
-          "anio": {
-            "type": "integer"
-          },
-          "seccion": {
-            "type": "string"
-          },
-          "fechas": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "date"
-            }
-          },
-          "con_suplemento": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "date"
-            }
-          }
-        }
-      },
-      "Rubro": {
-        "type": "object",
-        "required": [
-          "id",
-          "nombre"
-        ],
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "nombre": {
-            "type": "string"
-          }
-        }
-      },
-      "ResultadoBusqueda": {
-        "type": "object",
-        "required": [
-          "pagina",
-          "cantidad",
-          "hay_mas",
-          "avisos"
-        ],
-        "properties": {
-          "pagina": {
-            "type": "integer"
-          },
-          "cantidad": {
-            "type": "integer"
-          },
-          "hay_mas": {
-            "type": "boolean"
-          },
-          "avisos": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Aviso"
-            }
-          }
-        }
-      },
-      "Salud": {
-        "type": "object",
-        "required": [
-          "ok",
-          "en_pie_desde",
-          "sitio_responde",
-          "sitio",
-          "cache"
-        ],
-        "properties": {
-          "ok": {
-            "type": "boolean"
-          },
-          "version": {
-            "type": "string"
-          },
-          "en_pie_desde": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "sitio_responde": {
-            "type": "boolean"
-          },
-          "ultima_lectura": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "sitio": {
-            "type": "object",
-            "properties": {
-              "lecturas": {
-                "type": "integer"
-              },
-              "errores": {
-                "type": "integer"
-              },
-              "ultimo_pedido_ok": {
-                "type": "boolean"
-              },
-              "ultima_lectura": {
-                "type": "string",
-                "format": "date-time"
-              }
-            }
-          },
-          "cache": {
-            "type": "object",
-            "properties": {
-              "aciertos": {
-                "type": "integer"
-              },
-              "fallos": {
-                "type": "integer"
-              },
-              "escritos": {
-                "type": "integer"
-              },
-              "entradas": {
-                "type": "integer"
-              },
-              "motor": {
-                "type": "string",
-                "enum": [
-                  "disco",
-                  "sqlite"
-                ]
-              },
-              "avisos": {
-                "type": "integer",
-                "description": "Avisos en el índice local."
-              }
-            }
-          }
-        }
-      },
-      "Busqueda": {
-        "type": "object",
-        "required": [
-          "fuente",
-          "total",
-          "pagina",
-          "hay_mas",
-          "avisos"
-        ],
-        "properties": {
-          "fuente": {
-            "type": "string",
-            "enum": [
-              "indice",
-              "sitio"
-            ],
-            "description": "De dónde salieron los resultados. El índice local busca en el sumario y, para los avisos cuyo texto ya se bajó, también en el cuerpo; la búsqueda del Boletín busca en el texto completo pero pagina de a 100 y no informa totales."
-          },
-          "total": {
-            "type": "integer",
-            "description": "Con fuente indice, el total de avisos que coinciden. Con fuente sitio, cuántos vinieron en esta página: el Boletín no informa un total, y por eso hay que mirar hay_mas."
-          },
-          "pagina": {
-            "type": "integer"
-          },
-          "hay_mas": {
-            "type": "boolean"
-          },
-          "avisos": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Aviso"
-            }
-          },
-          "dias_indexados": {
-            "type": "integer",
-            "description": "Días del rango que están en el índice local."
-          },
-          "dias_con_edicion": {
-            "type": "integer",
-            "description": "Días del rango que tuvieron edición. Si es mayor que dias_indexados, el índice vio menos de lo que hay."
-          }
-        }
-      },
-      "NormaProvincial": {
-        "type": "object",
-        "description": "Una norma provincial. notarum guarda sus datos y el enlace a SAIJ, no su texto: SAIJ lo publica para pocas de las 81 mil.",
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "Identificador de SAIJ, del estilo LPB1000000. Es la clave.",
-            "example": "LPB1000000"
-          },
-          "provincia": {
-            "type": "string",
-            "example": "Buenos Aires"
-          },
-          "provincia_id": {
-            "type": "string",
-            "description": "Código INDEC de la jurisdicción.",
-            "example": "06"
-          },
-          "tipo": {
-            "type": "string",
-            "example": "Constitución Provincial"
-          },
-          "numero": {
-            "type": "string",
-            "description": "Texto y no número: hay normas sin numerar.",
-            "example": "6109"
-          },
-          "estado": {
-            "type": "string",
-            "description": "Lo que SAIJ dice de su vigencia, con sus palabras.",
-            "example": "Vigente, de alcance general"
-          },
-          "fecha": {
-            "type": "string",
-            "format": "date",
-            "description": "Fecha de sanción."
-          },
-          "publicada": {
-            "type": "string",
-            "format": "date",
-            "description": "Fecha de publicación en el boletín de la provincia."
-          },
-          "nombre": {
-            "type": "string",
-            "description": "El nombre con el que se la conoce."
-          },
-          "titulo": {
-            "type": "string",
-            "description": "De qué trata, en una línea."
-          },
-          "materias": {
-            "type": "string",
-            "description": "Los términos con que SAIJ la clasifica. Vienen separados por guiones, aunque no siempre: 63.984 de las 81.281 con sumario los usan."
-          },
-          "digesto": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "provincia",
-          "provincia_id",
-          "tipo"
-        ]
-      },
-      "ProvinciaConNormas": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "Código INDEC.",
-            "example": "06"
-          },
-          "nombre": {
-            "type": "string",
-            "example": "Buenos Aires"
-          },
-          "prefijo": {
-            "type": "string",
-            "description": "Con el que empiezan sus identificadores en SAIJ.",
-            "example": "LPB"
-          },
-          "normas": {
-            "type": "integer",
-            "description": "Cuántas hay guardadas de esta jurisdicción."
-          }
-        }
-      },
-      "ResultadoProvincial": {
-        "type": "object",
-        "properties": {
-          "total": {
-            "type": "integer",
-            "description": "Cuántas cumplen los criterios, más allá de esta página."
-          },
-          "pagina": {
-            "type": "integer"
-          },
-          "normas": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NormaProvincial"
-            }
-          },
-          "hay_mas": {
-            "type": "boolean",
-            "description": "Si hay más de las que entran en esta página."
-          }
-        }
-      },
-      "NormaNacional": {
-        "type": "object",
-        "description": "Una norma nacional de InfoLEG.",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "description": "Identificador de InfoLEG.",
-            "example": 638
-          },
-          "tipo": {
-            "type": "string",
-            "example": "Ley"
-          },
-          "numero": {
-            "type": "string",
-            "example": "24240"
-          },
-          "titulo": {
-            "type": "string"
-          },
-          "fecha_sancion": {
-            "type": "string",
-            "format": "date"
-          },
-          "tiene_texto": {
-            "type": "boolean",
-            "description": "Si InfoLEG publicó el texto. Lo tienen 192.707 de las 428.380."
-          },
-          "ficha": {
-            "type": "string",
-            "description": "La página de la norma en InfoLEG."
-          },
-          "texto": {
-            "type": "string",
-            "description": "El texto original, cuando está publicado."
-          },
-          "en_notarum": {
-            "type": "string",
-            "description": "La ruta de esta API que trae la norma entera."
-          }
-        }
-      },
-      "ResultadoNacional": {
-        "type": "object",
-        "properties": {
-          "total": {
-            "type": "integer"
-          },
-          "pagina": {
-            "type": "integer"
-          },
-          "normas": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NormaNacional"
-            }
-          },
-          "hay_mas": {
-            "type": "boolean"
-          }
-        }
-      }
-    }
+  "contact": {
+   "name": "notarum",
+   "url": "https://github.com/diegoparras/notarum"
   }
+ },
+ "servers": [
+  {
+   "url": "/",
+   "description": "esta instancia"
+  }
+ ],
+ "tags": [
+  {
+   "name": "ediciones",
+   "description": "Sumarios por sección y fecha"
+  },
+  {
+   "name": "avisos",
+   "description": "Textos completos y anexos"
+  },
+  {
+   "name": "catalogo",
+   "description": "Calendario, secciones y rubros"
+  },
+  {
+   "name": "servicio",
+   "description": "Estado del servicio"
+  },
+  {
+   "name": "provincial",
+   "description": "Normativa de las 24 provincias: leyes, decretos, códigos y constituciones. Sale de la Base SAIJ del Ministerio de Justicia, que es lo que el Boletín Oficial de la Nación no publica."
+  },
+  {
+   "name": "nacional",
+   "description": "Normativa nacional de InfoLEG: 428 mil leyes, decretos, resoluciones y disposiciones. Es la forma de encontrar una norma sin saber en qué edición del Boletín salió."
+  }
+ ],
+ "paths": {
+  "/v1/secciones": {
+   "get": {
+    "tags": [
+     "catalogo"
+    ],
+    "summary": "Secciones publicables",
+    "operationId": "verSecciones",
+    "responses": {
+     "200": {
+      "description": "Las secciones que esta API sabe leer",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "required": [
+           "id",
+           "nombre",
+           "descripcion"
+          ],
+          "properties": {
+           "id": {
+            "type": "string",
+            "enum": [
+             "primera",
+             "segunda",
+             "tercera"
+            ]
+           },
+           "nombre": {
+            "type": "string"
+           },
+           "descripcion": {
+            "type": "string"
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v1/calendario/{anio}/{seccion}": {
+   "get": {
+    "tags": [
+     "catalogo"
+    ],
+    "summary": "Días con edición de un año",
+    "operationId": "verCalendario",
+    "parameters": [
+     {
+      "name": "anio",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "minimum": 1990
+      },
+      "example": 2026
+     },
+     {
+      "$ref": "#/components/parameters/Seccion"
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "El calendario del año",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Calendario"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/PedidoInvalido"
+     },
+     "502": {
+      "$ref": "#/components/responses/FalloDelSitio"
+     }
+    }
+   }
+  },
+  "/v1/ediciones/{seccion}/{fecha}": {
+   "get": {
+    "tags": [
+     "ediciones"
+    ],
+    "summary": "Edición de una sección en una fecha",
+    "description": "El sumario completo de ese día. Si ese día no hubo edición devuelve 404 con `sin_edicion: true`, que no es una falla.",
+    "operationId": "verEdicion",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/Seccion"
+     },
+     {
+      "$ref": "#/components/parameters/Fecha"
+     },
+     {
+      "name": "rubro",
+      "in": "query",
+      "required": false,
+      "description": "Filtra por nombre de rubro; acepta el nombre exacto o un prefijo, sin distinguir mayúsculas.",
+      "schema": {
+       "type": "string"
+      },
+      "example": "DECRETOS"
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "La edición",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Edicion"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/PedidoInvalido"
+     },
+     "404": {
+      "description": "Ese día no hubo edición",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "502": {
+      "$ref": "#/components/responses/FalloDelSitio"
+     }
+    }
+   }
+  },
+  "/v1/ediciones/{seccion}": {
+   "get": {
+    "tags": [
+     "ediciones"
+    ],
+    "summary": "Resúmenes de un rango de fechas",
+    "description": "Devuelve un resumen por día (sin avisos) para las ediciones que ya están en la caché local. Las que todavía no se bajaron se listan en `faltantes`: se llenan con `notarum rellenar`, porque la API no baja un año entero adentro de un pedido HTTP. El tope del rango son 366 días.",
+    "operationId": "verRango",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/Seccion"
+     },
+     {
+      "name": "desde",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "date"
+      },
+      "example": "2026-09-01"
+     },
+     {
+      "name": "hasta",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "date"
+      },
+      "example": "2026-09-30"
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Los resúmenes disponibles",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Rango"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/PedidoInvalido"
+     },
+     "502": {
+      "$ref": "#/components/responses/FalloDelSitio"
+     }
+    }
+   }
+  },
+  "/v1/avisos/{seccion}/{id}/{fecha}": {
+   "get": {
+    "tags": [
+     "avisos"
+    ],
+    "summary": "Un aviso con su texto completo",
+    "operationId": "verAviso",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/Seccion"
+     },
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "description": "El id del aviso. En la primera sección es numérico; en la segunda y la tercera puede ser alfanumérico (por ejemplo A1522579).",
+      "schema": {
+       "type": "string"
+      },
+      "example": "346633"
+     },
+     {
+      "$ref": "#/components/parameters/Fecha"
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "El aviso",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Detalle"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/PedidoInvalido"
+     },
+     "404": {
+      "$ref": "#/components/responses/NoEncontrado"
+     },
+     "502": {
+      "$ref": "#/components/responses/FalloDelSitio"
+     }
+    }
+   }
+  },
+  "/v1/anexos/{seccion}/{nro}/{id}/{fecha}": {
+   "get": {
+    "tags": [
+     "avisos"
+    ],
+    "summary": "El PDF de un anexo",
+    "description": "Devuelve el archivo tal como lo publica el Boletín. La ruta es la que viene en el campo `url` de cada anexo del detalle; admite el sufijo `.pdf` en la fecha.",
+    "operationId": "verAnexo",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/Seccion"
+     },
+     {
+      "name": "nro",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "example": "12"
+     },
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "example": "7756488"
+     },
+     {
+      "name": "fecha",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "example": "20260901.pdf"
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "El PDF",
+      "content": {
+       "application/pdf": {
+        "schema": {
+         "type": "string",
+         "format": "binary"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/PedidoInvalido"
+     },
+     "502": {
+      "$ref": "#/components/responses/FalloDelSitio"
+     }
+    }
+   }
+  },
+  "/v1/rubros/{seccion}": {
+   "get": {
+    "tags": [
+     "catalogo"
+    ],
+    "summary": "Catálogo de rubros de una sección",
+    "operationId": "verRubros",
+    "parameters": [
+     {
+      "$ref": "#/components/parameters/Seccion"
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Los rubros",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/Rubro"
+         }
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/PedidoInvalido"
+     },
+     "502": {
+      "$ref": "#/components/responses/FalloDelSitio"
+     }
+    }
+   }
+  },
+  "/v1/buscar": {
+   "get": {
+    "tags": [
+     "avisos"
+    ],
+    "summary": "Búsqueda por texto y fecha",
+    "description": "Busca avisos por texto y fecha. Con el motor de almacenamiento sqlite hay un índice local: `fuente=indice` busca sobre él sin pedirle nada al Boletín (más rápido, sin tope de rango); `fuente=sitio` siempre consulta la búsqueda avanzada del Boletín; `fuente=auto` (por defecto) usa el índice cuando tiene historia del rango y si no va al sitio. La respuesta dice cuál se usó.",
+    "operationId": "buscar",
+    "parameters": [
+     {
+      "name": "seccion",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "enum": [
+        "primera",
+        "segunda",
+        "tercera"
+       ]
+      }
+     },
+     {
+      "name": "texto",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string"
+      },
+      "example": "decreto"
+     },
+     {
+      "name": "desde",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "date"
+      },
+      "example": "2026-09-01"
+     },
+     {
+      "name": "hasta",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "format": "date"
+      },
+      "example": "2026-09-03"
+     },
+     {
+      "name": "rubro",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "string"
+      }
+     },
+     {
+      "name": "pagina",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "default": 1
+      }
+     },
+     {
+      "name": "fuente",
+      "in": "query",
+      "required": false,
+      "description": "De dónde traer los resultados.",
+      "schema": {
+       "type": "string",
+       "enum": [
+        "auto",
+        "indice",
+        "sitio"
+       ],
+       "default": "auto"
+      }
+     },
+     {
+      "name": "limite",
+      "in": "query",
+      "required": false,
+      "description": "Resultados por página; sólo con fuente indice.",
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 500,
+       "default": 50
+      }
+     },
+     {
+      "name": "todas",
+      "in": "query",
+      "required": false,
+      "description": "Exigir todas las palabras; sólo con fuente sitio.",
+      "schema": {
+       "type": "boolean",
+       "default": false
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Los resultados",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Busqueda"
+        }
+       }
+      }
+     },
+     "400": {
+      "$ref": "#/components/responses/PedidoInvalido"
+     },
+     "502": {
+      "$ref": "#/components/responses/FalloDelSitio"
+     }
+    }
+   }
+  },
+  "/v1/salud": {
+   "get": {
+    "tags": [
+     "servicio"
+    ],
+    "summary": "Estado del servicio",
+    "operationId": "verSalud",
+    "responses": {
+     "200": {
+      "description": "El estado",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Salud"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v1/openapi.json": {
+   "get": {
+    "tags": [
+     "servicio"
+    ],
+    "summary": "Este contrato",
+    "operationId": "verOpenAPI",
+    "responses": {
+     "200": {
+      "description": "El contrato",
+      "content": {
+       "application/json": {}
+      }
+     }
+    }
+   }
+  },
+  "/v1/provincial": {
+   "get": {
+    "tags": [
+     "provincial"
+    ],
+    "summary": "Buscar normativa provincial",
+    "description": "Busca en las 81 mil normas de las 24 provincias. Sin filtros devuelve todo el catálogo paginado, de la más nueva a la más vieja. Cuando hay texto, primero va lo que se llama así y después lo que lo menciona de paso.",
+    "operationId": "buscarProvincial",
+    "parameters": [
+     {
+      "name": "texto",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Palabras a buscar en el título y las materias. No hace falta poner los acentos; todas las palabras tienen que estar."
+     },
+     {
+      "name": "provincia",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Nombre, código INDEC o prefijo. Sin esto busca en las 24."
+     },
+     {
+      "name": "tipo",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Ley, Decreto Ley, Constitución Provincial… La lista está en /v1/provincial/tipos."
+     },
+     {
+      "name": "desde",
+      "in": "query",
+      "schema": {
+       "type": "integer"
+      },
+      "description": "Año de sanción más viejo."
+     },
+     {
+      "name": "hasta",
+      "in": "query",
+      "schema": {
+       "type": "integer"
+      },
+      "description": "Año de sanción más nuevo."
+     },
+     {
+      "name": "vigentes",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Con 1 deja fuera lo derogado, lo caduco y las modificatorias."
+     },
+     {
+      "name": "pagina",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "default": 1
+      }
+     },
+     {
+      "name": "limite",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 200,
+       "default": 30
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Las normas que cumplen.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ResultadoProvincial"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Una provincia que no existe, o un año mal escrito.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "503": {
+      "description": "Esta instancia todavía no bajó el catálogo provincial.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v1/provincial/provincias": {
+   "get": {
+    "tags": [
+     "provincial"
+    ],
+    "summary": "Las 24 jurisdicciones",
+    "description": "Devuelve las provincias con su código INDEC y cuántas normas hay guardadas de cada una.",
+    "operationId": "verProvincias",
+    "responses": {
+     "200": {
+      "description": "Las jurisdicciones.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/ProvinciaConNormas"
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v1/provincial/tipos": {
+   "get": {
+    "tags": [
+     "provincial"
+    ],
+    "summary": "Tipos de norma provincial",
+    "description": "Devuelve los tipos que trae el catálogo, del más frecuente al menos. Sirve para saber por qué valor filtrar.",
+    "operationId": "verTiposProvinciales",
+    "responses": {
+     "200": {
+      "description": "Los tipos.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "tipo": {
+            "type": "string"
+           },
+           "normas": {
+            "type": "integer"
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v1/provincial/{id}": {
+   "get": {
+    "tags": [
+     "provincial"
+    ],
+    "summary": "Una norma provincial",
+    "description": "Trae una norma por su identificador de SAIJ.",
+    "operationId": "verNormaProvincial",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "description": "Identificador de SAIJ, como LPB1000000.",
+      "example": "LPB1000000"
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "La norma, con el enlace a su ficha en SAIJ.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/NormaProvincial"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "No hay una norma con ese identificador.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "503": {
+      "description": "Esta instancia todavía no bajó el catálogo provincial.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v1/nacional": {
+   "get": {
+    "tags": [
+     "nacional"
+    ],
+    "summary": "Buscar normativa nacional",
+    "description": "Busca en las 428 mil normas de InfoLEG por título y materias. A diferencia de /v1/buscar, que recorre las ediciones del Boletín día por día, acá no hace falta saber la fecha. Buscar el tipo y el número —\"ley 24240\"— trae esa norma primero. Necesita NOTARUM_BUSCADOR_INFOLEG=1 en la instancia.",
+    "operationId": "buscarNacional",
+    "parameters": [
+     {
+      "name": "texto",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Palabras a buscar. No hace falta poner los acentos ni los puntos de los números."
+     },
+     {
+      "name": "tipo",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Ley, Decreto, Resolución… La lista está en /v1/nacional/tipos."
+     },
+     {
+      "name": "desde",
+      "in": "query",
+      "schema": {
+       "type": "integer"
+      },
+      "description": "Año de sanción más viejo."
+     },
+     {
+      "name": "hasta",
+      "in": "query",
+      "schema": {
+       "type": "integer"
+      },
+      "description": "Año de sanción más nuevo."
+     },
+     {
+      "name": "con_texto",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Con 1 deja sólo las que tienen el texto publicado."
+     },
+     {
+      "name": "pagina",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "default": 1
+      }
+     },
+     {
+      "name": "limite",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 200,
+       "default": 30
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Las normas que cumplen.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ResultadoNacional"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Un año mal escrito o un rango al revés.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "El buscador está apagado en esta instancia.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "503": {
+      "description": "El catálogo de InfoLEG todavía no se sincronizó.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v1/nacional/tipos": {
+   "get": {
+    "tags": [
+     "nacional"
+    ],
+    "summary": "Tipos de norma nacional",
+    "description": "Los tipos que trae el catálogo, del más frecuente al menos.",
+    "operationId": "verTiposNacionales",
+    "responses": {
+     "200": {
+      "description": "Los tipos.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "properties": {
+           "tipo": {
+            "type": "string"
+           },
+           "normas": {
+            "type": "integer"
+           }
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v1/nacional/{id}": {
+   "get": {
+    "tags": [
+     "nacional"
+    ],
+    "summary": "Una norma nacional",
+    "description": "Trae una norma entera por su identificador de InfoLEG, con sus fechas, su organismo y cuántas normas la modificaron.",
+    "operationId": "verNormaNacional",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer"
+      },
+      "example": 638
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "La norma.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/NormaNacional"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "El identificador no es un número.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "No está en el catálogo guardado.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v1/nacional/{id}/modificada-por": {
+   "get": {
+    "tags": [
+     "nacional"
+    ],
+    "summary": "Qué normas modificaron a ésta",
+    "description": "El catálogo dice cuántas normas modificaron a una, pero no cuáles: saberlo sin poder verlas obliga a ir a buscarlas a otro lado igual. Acá está la lista, con el tipo, el número, el organismo y la fecha de cada una. Sale de la base complementaria de normas modificadas de InfoLEG, que se baja con la misma sincronización.",
+    "operationId": "verModificadaPor",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer"
+      },
+      "example": 638
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "La lista, con los datos de cada norma al lado.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Relaciones"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "El identificador no es un número.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "No está en el catálogo guardado.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v1/nacional/{id}/modifica-a": {
+   "get": {
+    "tags": [
+     "nacional"
+    ],
+    "summary": "Qué normas modificó ésta",
+    "description": "El otro sentido: a qué normas modificó ésta. Sirve para ver el alcance de un decreto de necesidad y urgencia, por ejemplo, que puede tocar decenas de leyes de una vez.",
+    "operationId": "verModificaA",
+    "parameters": [
+     {
+      "name": "id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer"
+      },
+      "example": 638
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "La lista, con los datos de cada norma al lado.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Relaciones"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "El identificador no es un número.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "No está en el catálogo guardado.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ "components": {
+  "parameters": {
+   "Seccion": {
+    "name": "seccion",
+    "in": "path",
+    "required": true,
+    "schema": {
+     "type": "string",
+     "enum": [
+      "primera",
+      "segunda",
+      "tercera"
+     ]
+    },
+    "example": "primera"
+   },
+   "Fecha": {
+    "name": "fecha",
+    "in": "path",
+    "required": true,
+    "schema": {
+     "type": "string",
+     "format": "date"
+    },
+    "example": "2026-09-01"
+   }
+  },
+  "responses": {
+   "PedidoInvalido": {
+    "description": "El pedido está mal armado",
+    "content": {
+     "application/json": {
+      "schema": {
+       "$ref": "#/components/schemas/Error"
+      }
+     }
+    }
+   },
+   "NoEncontrado": {
+    "description": "No existe",
+    "content": {
+     "application/json": {
+      "schema": {
+       "$ref": "#/components/schemas/Error"
+      }
+     }
+    }
+   },
+   "FalloDelSitio": {
+    "description": "El Boletín Oficial no contestó o cambió de forma",
+    "content": {
+     "application/json": {
+      "schema": {
+       "$ref": "#/components/schemas/Error"
+      }
+     }
+    }
+   }
+  },
+  "schemas": {
+   "Error": {
+    "type": "object",
+    "required": [
+     "error",
+     "origen"
+    ],
+    "properties": {
+     "error": {
+      "type": "string"
+     },
+     "detalle": {
+      "type": "string"
+     },
+     "origen": {
+      "type": "string",
+      "enum": [
+       "sitio",
+       "notarum",
+       "pedido"
+      ],
+      "description": "De quién es la culpa: del Boletín Oficial, de notarum, o de cómo se armó el pedido."
+     },
+     "sin_edicion": {
+      "type": "boolean",
+      "description": "Ese día no hubo edición."
+     }
+    }
+   },
+   "Aviso": {
+    "type": "object",
+    "required": [
+     "id",
+     "seccion",
+     "fecha",
+     "rubro",
+     "organismo",
+     "tiene_anexos",
+     "repetido",
+     "suplemento",
+     "url"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "example": "346633"
+     },
+     "seccion": {
+      "type": "string",
+      "enum": [
+       "primera",
+       "segunda",
+       "tercera"
+      ]
+     },
+     "fecha": {
+      "type": "string",
+      "format": "date"
+     },
+     "rubro": {
+      "type": "string",
+      "example": "DECRETOS"
+     },
+     "organismo": {
+      "type": "string",
+      "example": "PODER EJECUTIVO"
+     },
+     "norma": {
+      "type": "string",
+      "example": "Decreto 845/2026"
+     },
+     "referencia": {
+      "type": "string",
+      "example": "DECTO-2026-845-APN-PTE"
+     },
+     "sintesis": {
+      "type": "string",
+      "example": "Disposiciones."
+     },
+     "tiene_anexos": {
+      "type": "boolean"
+     },
+     "repetido": {
+      "type": "boolean",
+      "description": "El aviso viene de un rubro \"ANTERIOR\": ya se publicó en una edición previa."
+     },
+     "suplemento": {
+      "type": "boolean",
+      "description": "El aviso salió en el suplemento de ese día."
+     },
+     "url": {
+      "type": "string",
+      "format": "uri",
+      "description": "El aviso en el sitio oficial."
+     }
+    }
+   },
+   "Detalle": {
+    "allOf": [
+     {
+      "$ref": "#/components/schemas/Aviso"
+     },
+     {
+      "type": "object",
+      "required": [
+       "texto",
+       "html",
+       "anexos"
+      ],
+      "properties": {
+       "texto": {
+        "type": "string",
+        "description": "El cuerpo en texto plano, párrafos separados por línea en blanco."
+       },
+       "html": {
+        "type": "string",
+        "description": "El cuerpo en HTML saneado: sin estilos ni scripts, con las tablas conservadas."
+       },
+       "anexos": {
+        "type": "array",
+        "items": {
+         "$ref": "#/components/schemas/Anexo"
+        }
+       },
+       "fecha_publicacion": {
+        "type": "string",
+        "format": "date",
+        "description": "La fecha impresa al pie del aviso."
+       }
+      }
+     }
+    ]
+   },
+   "Anexo": {
+    "type": "object",
+    "required": [
+     "id",
+     "numero",
+     "nombre",
+     "url"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "example": "7756488"
+     },
+     "numero": {
+      "type": "string",
+      "example": "12"
+     },
+     "nombre": {
+      "type": "string",
+      "example": "Anexo - 12"
+     },
+     "url": {
+      "type": "string",
+      "description": "Ruta en esta API para bajar el PDF.",
+      "example": "/v1/anexos/primera/12/7756488/20260901.pdf"
+     }
+    }
+   },
+   "Edicion": {
+    "type": "object",
+    "required": [
+     "seccion",
+     "fecha",
+     "cantidad",
+     "por_rubro",
+     "avisos"
+    ],
+    "properties": {
+     "seccion": {
+      "type": "string",
+      "enum": [
+       "primera",
+       "segunda",
+       "tercera"
+      ]
+     },
+     "fecha": {
+      "type": "string",
+      "format": "date"
+     },
+     "cantidad": {
+      "type": "integer"
+     },
+     "por_rubro": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "integer"
+      }
+     },
+     "con_suplemento": {
+      "type": "boolean"
+     },
+     "avisos": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Aviso"
+      }
+     }
+    }
+   },
+   "Resumen": {
+    "type": "object",
+    "required": [
+     "seccion",
+     "fecha",
+     "cantidad",
+     "por_rubro"
+    ],
+    "properties": {
+     "seccion": {
+      "type": "string"
+     },
+     "fecha": {
+      "type": "string",
+      "format": "date"
+     },
+     "cantidad": {
+      "type": "integer"
+     },
+     "por_rubro": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "integer"
+      }
+     },
+     "con_suplemento": {
+      "type": "boolean"
+     }
+    }
+   },
+   "Rango": {
+    "type": "object",
+    "required": [
+     "seccion",
+     "desde",
+     "hasta",
+     "ediciones",
+     "faltantes"
+    ],
+    "properties": {
+     "seccion": {
+      "type": "string"
+     },
+     "desde": {
+      "type": "string",
+      "format": "date"
+     },
+     "hasta": {
+      "type": "string",
+      "format": "date"
+     },
+     "ediciones": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Resumen"
+      }
+     },
+     "faltantes": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "format": "date"
+      },
+      "description": "Días con edición que todavía no están en la caché local."
+     }
+    }
+   },
+   "Calendario": {
+    "type": "object",
+    "required": [
+     "anio",
+     "seccion",
+     "fechas"
+    ],
+    "properties": {
+     "anio": {
+      "type": "integer"
+     },
+     "seccion": {
+      "type": "string"
+     },
+     "fechas": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "format": "date"
+      }
+     },
+     "con_suplemento": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "format": "date"
+      }
+     }
+    }
+   },
+   "Rubro": {
+    "type": "object",
+    "required": [
+     "id",
+     "nombre"
+    ],
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "nombre": {
+      "type": "string"
+     }
+    }
+   },
+   "ResultadoBusqueda": {
+    "type": "object",
+    "required": [
+     "pagina",
+     "cantidad",
+     "hay_mas",
+     "avisos"
+    ],
+    "properties": {
+     "pagina": {
+      "type": "integer"
+     },
+     "cantidad": {
+      "type": "integer"
+     },
+     "hay_mas": {
+      "type": "boolean"
+     },
+     "avisos": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Aviso"
+      }
+     }
+    }
+   },
+   "Salud": {
+    "type": "object",
+    "required": [
+     "ok",
+     "en_pie_desde",
+     "sitio_responde",
+     "sitio",
+     "cache"
+    ],
+    "properties": {
+     "ok": {
+      "type": "boolean"
+     },
+     "version": {
+      "type": "string"
+     },
+     "en_pie_desde": {
+      "type": "string",
+      "format": "date-time"
+     },
+     "sitio_responde": {
+      "type": "boolean"
+     },
+     "ultima_lectura": {
+      "type": "string",
+      "format": "date-time"
+     },
+     "sitio": {
+      "type": "object",
+      "properties": {
+       "lecturas": {
+        "type": "integer"
+       },
+       "errores": {
+        "type": "integer"
+       },
+       "ultimo_pedido_ok": {
+        "type": "boolean"
+       },
+       "ultima_lectura": {
+        "type": "string",
+        "format": "date-time"
+       }
+      }
+     },
+     "cache": {
+      "type": "object",
+      "properties": {
+       "aciertos": {
+        "type": "integer"
+       },
+       "fallos": {
+        "type": "integer"
+       },
+       "escritos": {
+        "type": "integer"
+       },
+       "entradas": {
+        "type": "integer"
+       },
+       "motor": {
+        "type": "string",
+        "enum": [
+         "disco",
+         "sqlite"
+        ]
+       },
+       "avisos": {
+        "type": "integer",
+        "description": "Avisos en el índice local."
+       }
+      }
+     }
+    }
+   },
+   "Busqueda": {
+    "type": "object",
+    "required": [
+     "fuente",
+     "total",
+     "pagina",
+     "hay_mas",
+     "avisos"
+    ],
+    "properties": {
+     "fuente": {
+      "type": "string",
+      "enum": [
+       "indice",
+       "sitio"
+      ],
+      "description": "De dónde salieron los resultados. El índice local busca en el sumario y, para los avisos cuyo texto ya se bajó, también en el cuerpo; la búsqueda del Boletín busca en el texto completo pero pagina de a 100 y no informa totales."
+     },
+     "total": {
+      "type": "integer",
+      "description": "Con fuente indice, el total de avisos que coinciden. Con fuente sitio, cuántos vinieron en esta página: el Boletín no informa un total, y por eso hay que mirar hay_mas."
+     },
+     "pagina": {
+      "type": "integer"
+     },
+     "hay_mas": {
+      "type": "boolean"
+     },
+     "avisos": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Aviso"
+      }
+     },
+     "dias_indexados": {
+      "type": "integer",
+      "description": "Días del rango que están en el índice local."
+     },
+     "dias_con_edicion": {
+      "type": "integer",
+      "description": "Días del rango que tuvieron edición. Si es mayor que dias_indexados, el índice vio menos de lo que hay."
+     }
+    }
+   },
+   "NormaProvincial": {
+    "type": "object",
+    "description": "Una norma provincial. notarum guarda sus datos y el enlace a SAIJ, no su texto: SAIJ lo publica para pocas de las 81 mil.",
+    "properties": {
+     "id": {
+      "type": "string",
+      "description": "Identificador de SAIJ, del estilo LPB1000000. Es la clave.",
+      "example": "LPB1000000"
+     },
+     "provincia": {
+      "type": "string",
+      "example": "Buenos Aires"
+     },
+     "provincia_id": {
+      "type": "string",
+      "description": "Código INDEC de la jurisdicción.",
+      "example": "06"
+     },
+     "tipo": {
+      "type": "string",
+      "example": "Constitución Provincial"
+     },
+     "numero": {
+      "type": "string",
+      "description": "Texto y no número: hay normas sin numerar.",
+      "example": "6109"
+     },
+     "estado": {
+      "type": "string",
+      "description": "Lo que SAIJ dice de su vigencia, con sus palabras.",
+      "example": "Vigente, de alcance general"
+     },
+     "fecha": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha de sanción."
+     },
+     "publicada": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha de publicación en el boletín de la provincia."
+     },
+     "nombre": {
+      "type": "string",
+      "description": "El nombre con el que se la conoce."
+     },
+     "titulo": {
+      "type": "string",
+      "description": "De qué trata, en una línea."
+     },
+     "materias": {
+      "type": "string",
+      "description": "Los términos con que SAIJ la clasifica. Vienen separados por guiones, aunque no siempre: 63.984 de las 81.281 con sumario los usan."
+     },
+     "digesto": {
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "provincia",
+     "provincia_id",
+     "tipo"
+    ]
+   },
+   "ProvinciaConNormas": {
+    "type": "object",
+    "properties": {
+     "id": {
+      "type": "string",
+      "description": "Código INDEC.",
+      "example": "06"
+     },
+     "nombre": {
+      "type": "string",
+      "example": "Buenos Aires"
+     },
+     "prefijo": {
+      "type": "string",
+      "description": "Con el que empiezan sus identificadores en SAIJ.",
+      "example": "LPB"
+     },
+     "normas": {
+      "type": "integer",
+      "description": "Cuántas hay guardadas de esta jurisdicción."
+     }
+    }
+   },
+   "ResultadoProvincial": {
+    "type": "object",
+    "properties": {
+     "total": {
+      "type": "integer",
+      "description": "Cuántas cumplen los criterios, más allá de esta página."
+     },
+     "pagina": {
+      "type": "integer"
+     },
+     "normas": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/NormaProvincial"
+      }
+     },
+     "hay_mas": {
+      "type": "boolean",
+      "description": "Si hay más de las que entran en esta página."
+     }
+    }
+   },
+   "NormaNacional": {
+    "type": "object",
+    "description": "Una norma nacional de InfoLEG.",
+    "properties": {
+     "id": {
+      "type": "integer",
+      "description": "Identificador de InfoLEG.",
+      "example": 638
+     },
+     "tipo": {
+      "type": "string",
+      "example": "Ley"
+     },
+     "numero": {
+      "type": "string",
+      "example": "24240"
+     },
+     "titulo": {
+      "type": "string"
+     },
+     "fecha_sancion": {
+      "type": "string",
+      "format": "date"
+     },
+     "tiene_texto": {
+      "type": "boolean",
+      "description": "Si InfoLEG publicó el texto. Lo tienen 192.707 de las 428.380."
+     },
+     "ficha": {
+      "type": "string",
+      "description": "La página de la norma en InfoLEG."
+     },
+     "texto": {
+      "type": "string",
+      "description": "El texto original, cuando está publicado."
+     },
+     "en_notarum": {
+      "type": "string",
+      "description": "La ruta de esta API que trae la norma entera."
+     }
+    }
+   },
+   "ResultadoNacional": {
+    "type": "object",
+    "properties": {
+     "total": {
+      "type": "integer"
+     },
+     "pagina": {
+      "type": "integer"
+     },
+     "normas": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/NormaNacional"
+      }
+     },
+     "hay_mas": {
+      "type": "boolean"
+     }
+    }
+   },
+   "Relaciones": {
+    "type": "object",
+    "description": "Las normas relacionadas con una, en un sentido.",
+    "properties": {
+     "id": {
+      "type": "integer",
+      "description": "La norma por la que se preguntó."
+     },
+     "total": {
+      "type": "integer",
+      "description": "Cuántas normas hay del otro lado."
+     },
+     "origen": {
+      "type": "string",
+      "description": "De dónde salen estos datos."
+     },
+     "modificada_por": {
+      "type": "array",
+      "description": "Las normas que modificaron a ésta. Sólo en /modificada-por.",
+      "items": {
+       "$ref": "#/components/schemas/NormaRelacionada"
+      }
+     },
+     "modifica_a": {
+      "type": "array",
+      "description": "Las normas que ésta modificó. Sólo en /modifica-a.",
+      "items": {
+       "$ref": "#/components/schemas/NormaRelacionada"
+      }
+     }
+    }
+   },
+   "NormaRelacionada": {
+    "type": "object",
+    "description": "Una norma del otro lado de la relación, con sus datos.",
+    "properties": {
+     "id": {
+      "type": "integer",
+      "description": "Identificador de InfoLEG."
+     },
+     "tipo": {
+      "type": "string",
+      "description": "Ley, Decreto, Resolución…"
+     },
+     "numero": {
+      "type": "string",
+      "description": "El número de la norma."
+     },
+     "clase": {
+      "type": "string",
+      "description": "La clase, cuando el catálogo la trae."
+     },
+     "organismo": {
+      "type": "string",
+      "description": "Quién la dictó."
+     },
+     "fecha_boletin": {
+      "type": "string",
+      "description": "Cuándo salió en el Boletín, AAAA-MM-DD."
+     },
+     "titulo_sumario": {
+      "type": "string",
+      "description": "El sumario, que suele ser el organismo o la materia."
+     },
+     "titulo_resumido": {
+      "type": "string",
+      "description": "De qué trata, en pocas palabras."
+     },
+     "ficha": {
+      "type": "string",
+      "description": "La página de la norma en InfoLEG."
+     },
+     "en_notarum": {
+      "type": "string",
+      "description": "La ruta de esta API que trae la norma entera."
+     }
+    }
+   }
+  }
+ }
 }

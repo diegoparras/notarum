@@ -142,6 +142,8 @@ func (s *Servidor) rutasDeLaAPI() []ruta {
 		{"/v1/nacional", s.buscarNacional},
 		{"/v1/nacional/tipos", s.verTiposNacionales},
 		{"/v1/nacional/{id}", s.verNormaNacional},
+		{"/v1/nacional/{id}/modificada-por", s.verModificadaPor},
+		{"/v1/nacional/{id}/modifica-a", s.verModificaA},
 		{"/v1/salud", s.verSalud},
 		{"/v1/openapi.json", s.verOpenAPI},
 	}

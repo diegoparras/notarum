@@ -137,3 +137,67 @@ func (s *Servidor) verNormaNacional(w http.ResponseWriter, r *http.Request) {
 		Texto string `json:"texto,omitempty"`
 	}{n, n.URLFicha(), n.URLTexto()}, cacheProvincial)
 }
+
+// Las relaciones entre normas.
+//
+// El catálogo trae "modificada por 7" y nada más, que es un dato que no lleva
+// a ningún lado: hay que ir a buscar cuáles a otro lado igual. Estas dos rutas
+// dan la lista, con los datos de cada norma al lado para no tener que pedirlas
+// de a una.
+
+// verModificadaPor: qué normas modificaron a ésta.
+func (s *Servidor) verModificadaPor(w http.ResponseWriter, r *http.Request) {
+	s.verRelaciones(w, r, "modificada_por", s.srv.ModificadaPor)
+}
+
+// verModificaA: a qué normas modificó ésta.
+func (s *Servidor) verModificaA(w http.ResponseWriter, r *http.Request) {
+	s.verRelaciones(w, r, "modifica_a", s.srv.ModificaA)
+}
+
+func (s *Servidor) verRelaciones(w http.ResponseWriter, r *http.Request, campo string, buscar func(int) []infoleg.Relacion) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil || id <= 0 {
+		escribirError(w, r, http.StatusBadRequest, OrigenPedido,
+			"el identificador tiene que ser un número",
+			"los de InfoLEG son números, como 24240")
+		return
+	}
+	// Una lista vacía y una norma que no existe llevan a cosas distintas: la
+	// primera es que no la modificó nadie, la segunda es que hay que revisar
+	// el identificador o sincronizar el catálogo.
+	if s.srv.NormaGuardada(id) == nil {
+		escribirError(w, r, http.StatusNotFound, OrigenPedido,
+			"no hay ninguna norma con ese identificador en el catálogo guardado",
+			"puede que el catálogo de InfoLEG no esté sincronizado en esta instancia")
+		return
+	}
+
+	rs := buscar(id)
+	salida := map[string]any{
+		"id":     id,
+		"total":  len(rs),
+		campo:    vistasRelacion(rs),
+		"origen": "InfoLEG, bases complementarias de normas modificadas y modificatorias",
+	}
+	escribirJSON(w, r, http.StatusOK, salida, cacheProvincial)
+}
+
+// vistaRelacion es una norma relacionada con sus enlaces armados.
+type vistaRelacion struct {
+	infoleg.Relacion
+	Ficha     string `json:"ficha"`
+	EnNotarum string `json:"en_notarum"`
+}
+
+func vistasRelacion(rs []infoleg.Relacion) []vistaRelacion {
+	v := make([]vistaRelacion, 0, len(rs))
+	for _, r := range rs {
+		v = append(v, vistaRelacion{
+			Relacion:  r,
+			Ficha:     infoleg.URLFicha(r.ID),
+			EnNotarum: "/v1/nacional/" + strconv.Itoa(r.ID),
+		})
+	}
+	return v
+}

@@ -195,7 +195,20 @@ type InfoCatalogo struct {
 	URL         string    `json:"url"`
 	Actualizado time.Time `json:"actualizado"`
 	Bytes       int64     `json:"bytes,omitempty"`
+	// Las bases complementarias, que traen qué modificó a cada norma y qué
+	// modifica cada una. El catálogo principal sólo trae las cuentas.
+	Modificadas    Recurso `json:"modificadas,omitzero"`
+	Modificatorias Recurso `json:"modificatorias,omitzero"`
 }
+
+// Recurso es un archivo publicado en el portal.
+type Recurso struct {
+	URL   string `json:"url,omitempty"`
+	Bytes int64  `json:"bytes,omitempty"`
+}
+
+// Hay dice si el portal publicó este archivo.
+func (r Recurso) Hay() bool { return r.URL != "" }
 
 // BuscarCatalogo pregunta al portal de datos dónde está el catálogo y cuándo
 // se actualizó por última vez. La URL no se escribe a mano porque cambia con
@@ -242,25 +255,39 @@ func (c *Cliente) BuscarCatalogo(ctx context.Context) (*InfoCatalogo, error) {
 		}
 	}
 
-	// El ZIP de la base completa, no el CSV de muestra ni las complementarias.
+	// Los ZIP, no los CSV de muestra: el de la base completa y las dos
+	// complementarias, que se distinguen por el nombre.
+	var info InfoCatalogo
 	for _, r := range respuesta.Result.Resources {
 		if !strings.EqualFold(r.Formato, "ZIP") {
 			continue
 		}
 		nombre := strings.ToLower(strings.TrimSpace(r.Nombre))
-		if strings.Contains(nombre, "complementaria") {
-			continue
+		switch {
+		case !strings.Contains(nombre, "complementaria"):
+			if info.URL == "" {
+				info.URL, info.Bytes = r.URL, r.Bytes
+			}
+		// "modificatorias" contiene "modificadas" como subcadena si se compara
+		// mal: se mira la palabra entera y la más larga primero.
+		case strings.Contains(nombre, "modificatoria"):
+			info.Modificatorias = Recurso{URL: r.URL, Bytes: r.Bytes}
+		case strings.Contains(nombre, "modificada"):
+			info.Modificadas = Recurso{URL: r.URL, Bytes: r.Bytes}
 		}
-		info := &InfoCatalogo{URL: r.URL, Bytes: r.Bytes}
-		if t, err := time.Parse("2006-01-02T15:04:05.999999", respuesta.Result.MetadataModified); err == nil {
-			info.Actualizado = t
+	}
+	if info.URL == "" {
+		return nil, &ErrDelSitio{
+			Operacion: "buscar el catálogo", URL: destino,
+			Causa: errors.New("el dataset no trae el ZIP de la base completa: ¿cambió la publicación?"),
 		}
-		return info, nil
 	}
-	return nil, &ErrDelSitio{
-		Operacion: "buscar el catálogo", URL: destino,
-		Causa: errors.New("el dataset no trae el ZIP de la base completa: ¿cambió la publicación?"),
+	if t, err := time.Parse("2006-01-02T15:04:05.999999", respuesta.Result.MetadataModified); err == nil {
+		info.Actualizado = t
 	}
+	// Las complementarias pueden faltar sin que eso sea un error: notarum
+	// sigue sirviendo el catálogo, sólo que sin las relaciones.
+	return &info, nil
 }
 
 // DescargarCatalogo baja el ZIP a un archivo. Son unos 50 MB, así que va a

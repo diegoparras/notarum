@@ -410,3 +410,20 @@ h2 { font-size: 17px; font-weight: 600; margin: 32px 0 12px; }
 .fuente h3 { margin: 0 0 4px; font-size: 15px; }
 .fuente p { margin: 0 0 8px; font-size: 13px; color: var(--tinta-suave); line-height: 1.6; }
 .fuente .dato-mono { font-size: 12.5px; }
+
+/* Las normas relacionadas: qué modificó a ésta y a cuáles modificó ella.
+   La ficha decía "modificada 7 veces" sin decir cuáles, que obliga a ir a
+   buscarlas a otro lado. */
+.relaciones { display: grid; gap: 8px; margin: 8px 0 20px; }
+.relacion {
+  display: block; text-decoration: none; color: inherit;
+  background: var(--crema-hondo); border-radius: 12px; padding: 10px 13px;
+  border-left: 3px solid var(--terracota);
+}
+.relacion:hover { background: var(--acento-tenue); text-decoration: none; }
+.relacion-norma { display: block; font-weight: 600; font-size: 14px; color: var(--acento); }
+.relacion-titulo { display: block; font-size: 13.5px; margin-top: 2px; }
+.relacion-pie {
+  display: flex; gap: 10px; flex-wrap: wrap; margin-top: 5px;
+  font-size: 12px; color: var(--tinta-tenue);
+}
