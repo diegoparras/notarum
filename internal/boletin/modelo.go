@@ -17,8 +17,27 @@ const (
 	Tercera Seccion = "tercera"
 )
 
-// SeccionesValidas son las que esta API sabe leer. La cuarta sección
-// (contrataciones) no está incluida: el sitio la sirve con otra estructura.
+// SeccionesValidas son las que esta API sabe leer.
+//
+// La cuarta queda afuera a propósito, y no es lo que dice su fama: no son
+// contrataciones sino "DOMINIOS PUBLICADOS ar", el listado diario de altas de
+// dominios de internet con su titular. No es normativa.
+//
+// Aunque se la quisiera, no se puede leer entera. Medido contra el sitio:
+//
+//   - /seccion/cuarta/<fecha> contesta, pero siempre exactamente 100 entradas,
+//     en orden alfabético y cortadas en la "g".
+//   - No tiene paginación: ?pagina, ?page y ?offset devuelven los mismos 100.
+//   - El buscador avanzado del sitio no la conoce: pedirle la sección 4
+//     redirige a la página de error.
+//   - El PDF de la sección tiene 63 páginas, o sea unos 2.500 dominios por
+//     día. Esa es la única fuente completa.
+//
+// Servir los 100 del HTML sería servir el cuatro por ciento sin que se note, y
+// leer el PDF es otro proyecto: una dependencia nueva para extraer texto y un
+// parser de tablas en PDF, que se rompe cuando el Boletín cambia el diseño.
+// Además el modelo no encaja: no hay avisos con identificador ni páginas de
+// detalle, que es sobre lo que está armado todo lo demás.
 var SeccionesValidas = []Seccion{Primera, Segunda, Tercera}
 
 // ParseSeccion valida el nombre de una sección.
