@@ -175,3 +175,101 @@ func TestUnaNormaSinRelacionesNoEsUnError(t *testing.T) {
 		t.Errorf("una norma que no existe contestó %d", res.StatusCode)
 	}
 }
+
+// Las novedades: qué apareció desde una fecha.
+//
+// Lo que define si sirve: la primera sincronización no puede anunciar el
+// catálogo entero como recién aparecido —eso es lo mismo que no decir nada— y
+// la segunda tiene que traer sólo lo que se sumó.
+func TestLasNovedadesSonLoQueAparecio(t *testing.T) {
+	catalogo := catalogoConRelaciones
+	portal := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		base := "http://" + r.Host
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/api/3/action/"):
+			w.Write([]byte(`{"success":true,"result":{"metadata_modified":"2026-09-01T10:00:00.000000",
+			  "resources":[{"name":"Base Infoleg Normativa Nacional","format":"ZIP","url":"` + base + `/base.zip"}]}}`))
+		case r.URL.Path == "/base.zip":
+			w.Write(enZip(t, "base.csv", catalogo))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer portal.Close()
+
+	alm, err := almacen.NuevoDisco(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := servicio.Nuevo(boletin.NuevoCliente(boletin.Opciones{}), alm).
+		ConInfoLEG(infoleg.NuevoCliente(infoleg.Opciones{
+			BaseDatos: portal.URL, Intervalo: time.Nanosecond,
+		}))
+	if _, err := srv.SincronizarInfoLEG(t.Context(), t.TempDir(), nil); err != nil {
+		t.Fatal(err)
+	}
+	api := httptest.NewServer(Nuevo(Config{Servicio: srv, Version: "test"}))
+	t.Cleanup(api.Close)
+
+	hoy := time.Now().UTC().Format("2006-01-02")
+
+	// La primera vez no hay novedades: sería anunciar el catálogo entero.
+	_, cuerpo := pedir(t, api, "/v1/nacional/novedades?desde="+hoy)
+	var r struct {
+		Total    int  `json:"total"`
+		Completo bool `json:"completo"`
+		Normas   []struct {
+			ID int `json:"id"`
+		} `json:"normas"`
+	}
+	if err := json.Unmarshal(cuerpo, &r); err != nil {
+		t.Fatalf("no es JSON: %v", err)
+	}
+	if r.Total != 0 {
+		t.Errorf("la primera sincronización anunció %d novedades", r.Total)
+	}
+
+	// Aparece una norma que no estaba, y se vuelve a sincronizar.
+	catalogo += "27442,Ley,27442,2018-05-09,2018-05-15,DEFENSA DE LA COMPETENCIA,,0,0\n"
+	if _, err := srv.SincronizarInfoLEG(t.Context(), t.TempDir(), nil); err != nil {
+		t.Fatal(err)
+	}
+	_, cuerpo = pedir(t, api, "/v1/nacional/novedades?desde="+hoy)
+	if err := json.Unmarshal(cuerpo, &r); err != nil {
+		t.Fatal(err)
+	}
+	if r.Total != 1 || len(r.Normas) != 1 || r.Normas[0].ID != 27442 {
+		t.Fatalf("las novedades quedaron %s", cuerpo)
+	}
+	if !r.Completo {
+		t.Error("dice que el registro no alcanza, y la fecha es de hoy")
+	}
+}
+
+// Preguntar por antes de donde llega el registro no puede contestarse con
+// "no pasó nada": esa suposición es un agujero que no se nota nunca.
+func TestUnaFechaFueraDelRegistroSeAvisa(t *testing.T) {
+	srv := conRelaciones(t)
+	_, cuerpo := pedir(t, srv, "/v1/nacional/novedades?desde=2020-01-01")
+	var r struct {
+		Completo bool   `json:"completo"`
+		Nota     string `json:"nota"`
+	}
+	json.Unmarshal(cuerpo, &r)
+	if r.Completo {
+		t.Error("dice que la respuesta es completa para una fecha sin registro")
+	}
+	if !strings.Contains(r.Nota, "catálogo entero") {
+		t.Errorf("no dice qué hacer: %q", r.Nota)
+	}
+
+	// Y una fecha mal escrita se rechaza en vez de tomarse como cualquier cosa.
+	res, _ := pedir(t, srv, "/v1/nacional/novedades?desde=ayer")
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("una fecha inválida dio %d", res.StatusCode)
+	}
+	res, _ = pedir(t, srv, "/v1/nacional/novedades")
+	if res.StatusCode != http.StatusBadRequest {
+		t.Errorf("sin fecha dio %d", res.StatusCode)
+	}
+}

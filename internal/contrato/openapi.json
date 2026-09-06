@@ -1078,6 +1078,94 @@
      }
     }
    }
+  },
+  "/v1/nacional/novedades": {
+   "get": {
+    "tags": [
+     "nacional"
+    ],
+    "summary": "Normas nacionales nuevas desde una fecha",
+    "description": "Devuelve lo que apareció en el catálogo desde una fecha, para no tener que bajarlo entero todos los días. «Nuevo» quiere decir que notarum no lo había visto, y no que la norma sea reciente: el portal agrega normas viejas todo el tiempo, y una de 1998 que aparece hoy es una novedad para quien sigue el catálogo. Filtrar por la fecha de la norma se las perdería sin avisar. Se guarda registro de los últimos 120 días. La respuesta trae «completo»: si es false, el registro no llega hasta la fecha pedida y hay que bajar el catálogo una vez para volver a estar al día.",
+    "operationId": "verNovedadesNacionales",
+    "parameters": [
+     {
+      "name": "desde",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "description": "Fecha desde la que se quiere lo nuevo, en AAAA-MM-DD. Lo habitual es la de la última consulta.",
+      "example": "2026-09-01"
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Lo que apareció desde esa fecha.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Novedades"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "El identificador no es un número.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v1/provincial/novedades": {
+   "get": {
+    "tags": [
+     "provincial"
+    ],
+    "summary": "Normas provinciales nuevas desde una fecha",
+    "description": "Devuelve lo que apareció en el catálogo desde una fecha, para no tener que bajarlo entero todos los días. «Nuevo» quiere decir que notarum no lo había visto, y no que la norma sea reciente: el portal agrega normas viejas todo el tiempo, y una de 1998 que aparece hoy es una novedad para quien sigue el catálogo. Filtrar por la fecha de la norma se las perdería sin avisar. Se guarda registro de los últimos 120 días. La respuesta trae «completo»: si es false, el registro no llega hasta la fecha pedida y hay que bajar el catálogo una vez para volver a estar al día.",
+    "operationId": "verNovedadesProvinciales",
+    "parameters": [
+     {
+      "name": "desde",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string"
+      },
+      "description": "Fecha desde la que se quiere lo nuevo, en AAAA-MM-DD. Lo habitual es la de la última consulta.",
+      "example": "2026-09-01"
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Lo que apareció desde esa fecha.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Novedades"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "El identificador no es un número.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
   }
  },
  "components": {
@@ -1846,6 +1934,47 @@
      "en_notarum": {
       "type": "string",
       "description": "La ruta de esta API que trae la norma entera."
+     }
+    }
+   },
+   "Novedades": {
+    "type": "object",
+    "description": "Lo que apareció en el catálogo desde una fecha.",
+    "properties": {
+     "desde": {
+      "type": "string",
+      "description": "La fecha por la que se preguntó."
+     },
+     "total": {
+      "type": "integer",
+      "description": "Cuántas aparecieron."
+     },
+     "devueltas": {
+      "type": "integer",
+      "description": "Cuántas trae esta respuesta."
+     },
+     "hay_mas": {
+      "type": "boolean",
+      "description": "Si quedaron afuera por el tope de 500."
+     },
+     "completo": {
+      "type": "boolean",
+      "description": "Si el registro alcanza para contestar. En false, la respuesta está incompleta."
+     },
+     "registro_desde": {
+      "type": "string",
+      "description": "El día más viejo del que hay registro."
+     },
+     "nota": {
+      "type": "string",
+      "description": "Qué hacer cuando la respuesta está incompleta."
+     },
+     "normas": {
+      "type": "array",
+      "description": "Las normas nuevas. Las que el catálogo sacó vienen con ya_no_esta.",
+      "items": {
+       "type": "object"
+      }
      }
     }
    }

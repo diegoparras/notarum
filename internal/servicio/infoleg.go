@@ -36,6 +36,8 @@ type EstadoInfoLEG struct {
 	// Relaciones dice cuántas se guardaron de las bases complementarias: qué
 	// modificó a cada norma y qué modifica cada una.
 	Relaciones EstadoRelaciones `json:"relaciones,omitzero"`
+	// Nuevas son las que aparecieron en esta sincronización y no estaban antes.
+	Nuevas int `json:"nuevas,omitempty"`
 }
 
 // InfoLEGDisponible dice si esta instancia puede enriquecer avisos.
@@ -174,6 +176,10 @@ func (s *Servicio) SincronizarInfoLEG(ctx context.Context, dirTrabajo string, av
 	defer lector.Close()
 
 	var guardadas int
+	// Los identificadores de todo lo que trae el catálogo, para saber después
+	// qué apareció que no estaba. Son unos cientos de miles de números: menos
+	// memoria que una sola edición del Boletín.
+	vistas := make([]int, 0, infoleg.NormasEsperadas)
 	leidas, err := infoleg.LeerCatalogo(lector, func(n infoleg.Norma) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -195,6 +201,7 @@ func (s *Servicio) SincronizarInfoLEG(ctx context.Context, dirTrabajo string, av
 			return err
 		}
 		guardadas++
+		vistas = append(vistas, n.ID)
 		if n.TieneTexto {
 			e.ConTexto++
 		}
@@ -209,6 +216,10 @@ func (s *Servicio) SincronizarInfoLEG(ctx context.Context, dirTrabajo string, av
 	if err != nil {
 		return e, err
 	}
+
+	// Qué apareció que no estaba, para que un programa pueda pedir sólo eso
+	// en vez de bajar el catálogo entero todos los días.
+	e.Nuevas = len(s.registrarNovedades("nacional", idsDeNormas(vistas)))
 
 	// Las relaciones, después del catálogo: si algo falla acá, lo principal
 	// ya está guardado.

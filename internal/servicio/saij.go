@@ -33,6 +33,8 @@ type EstadoSAIJ struct {
 	Provincias     int       `json:"provincias"`
 	CatalogoAlDia  time.Time `json:"catalogo_publicado,omitempty"`
 	SincronizadoEn time.Time `json:"sincronizado_en,omitempty"`
+	// Nuevas son las que aparecieron en esta sincronización y no estaban antes.
+	Nuevas int `json:"nuevas,omitempty"`
 }
 
 // SAIJDisponible dice si esta instancia puede consultar normativa provincial.
@@ -212,12 +214,20 @@ func (s *Servicio) SincronizarSAIJ(ctx context.Context, dirTrabajo string) (Esta
 		return e, err
 	}
 
+	// Qué apareció que no estaba, para que un programa pueda pedir sólo eso.
+	ids := make([]string, 0, len(normas))
+	for _, n := range normas {
+		ids = append(ids, n.ID)
+	}
+	nuevas := len(s.registrarNovedades("provincial", ids))
+
 	e = EstadoSAIJ{
 		Sincronizado:   true,
 		Normas:         leidas,
 		Provincias:     len(provincias),
 		CatalogoAlDia:  info.Modificado,
 		SincronizadoEn: time.Now().UTC(),
+		Nuevas:         nuevas,
 	}
 	if crudoEstado, err := json.Marshal(e); err == nil {
 		_ = s.cache.Guardar(claveEstadoSAIJ, crudoEstado, almacen.SinVencimiento)
@@ -234,6 +244,7 @@ func (s *Servicio) SincronizarSAIJ(ctx context.Context, dirTrabajo string) (Esta
 	s.saijMirado = time.Now()
 	s.saijMu.Unlock()
 
-	slog.Info("catálogo provincial sincronizado", "normas", leidas, "provincias", len(provincias))
+	slog.Info("catálogo provincial sincronizado", "normas", leidas,
+		"provincias", len(provincias), "nuevas", nuevas)
 	return e, nil
 }
