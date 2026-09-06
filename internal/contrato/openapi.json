@@ -21,6 +21,10 @@
  ],
  "tags": [
   {
+   "name": "todo",
+   "description": "Buscar en las tres fuentes de una vez, sin tener que saber de antemano en cuál está lo que se busca."
+  },
+  {
    "name": "ediciones",
    "description": "Sumarios por sección y fecha"
   },
@@ -1166,6 +1170,99 @@
      }
     }
    }
+  },
+  "/v1/todo": {
+   "get": {
+    "tags": [
+     "todo"
+    ],
+    "summary": "Buscar en las tres fuentes de una vez",
+    "description": "Busca lo mismo en el Boletín Oficial, en la normativa nacional de InfoLEG y en la provincial de SAIJ, y devuelve todo junto con el origen de cada resultado. Sin esto hay que saber de antemano en cuál de las tres está lo que se busca, que es pedirle a quien pregunta que conozca cómo está organizado el Estado antes de poder buscar. Las fuentes que esta instancia no tenga encendidas aparecen en «sin_mirar» con el motivo: una fuente apagada no es lo mismo que una fuente sin resultados.",
+    "operationId": "buscarEnTodo",
+    "parameters": [
+     {
+      "name": "texto",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Lo que se busca. Es obligatorio.",
+      "example": "expropiación"
+     },
+     {
+      "name": "por_fuente",
+      "in": "query",
+      "schema": {
+       "type": "integer"
+      },
+      "description": "Cuántos resultados traer de cada fuente, de 1 a 50.",
+      "example": 10
+     },
+     {
+      "name": "tipo",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Tipo de norma en las dos de normativa; rubro en el Boletín.",
+      "example": "Ley"
+     },
+     {
+      "name": "provincia",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Sólo aplica a la provincial: nombre, código INDEC o prefijo.",
+      "example": "mendoza"
+     },
+     {
+      "name": "seccion",
+      "in": "query",
+      "schema": {
+       "type": "string",
+       "enum": [
+        "primera",
+        "segunda",
+        "tercera"
+       ]
+      },
+      "description": "Sólo aplica al Boletín.",
+      "example": "primera"
+     },
+     {
+      "name": "vigentes",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Con 1, en la provincial deja fuera lo derogado.",
+      "example": "1"
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Lo encontrado en las tres.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/EnTodo"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Falta el texto a buscar, o por_fuente está fuera de rango.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
   }
  },
  "components": {
@@ -1975,6 +2072,74 @@
       "items": {
        "type": "object"
       }
+     }
+    }
+   },
+   "EnTodo": {
+    "type": "object",
+    "description": "Resultados de las tres fuentes, juntos.",
+    "properties": {
+     "texto": {
+      "type": "string",
+      "description": "Lo que se buscó."
+     },
+     "total": {
+      "type": "integer",
+      "description": "Cuántos resultados trae en total."
+     },
+     "por_fuente": {
+      "type": "object",
+      "description": "Cuántos aportó cada fuente."
+     },
+     "sin_mirar": {
+      "type": "object",
+      "description": "Las fuentes que no se pudieron consultar, con el motivo. Una fuente apagada no es lo mismo que una sin resultados."
+     },
+     "resultados": {
+      "type": "array",
+      "description": "Lo encontrado, con el origen de cada uno.",
+      "items": {
+       "$ref": "#/components/schemas/Hallazgo"
+      }
+     }
+    }
+   },
+   "Hallazgo": {
+    "type": "object",
+    "description": "Algo encontrado, venga de la fuente que venga.",
+    "properties": {
+     "fuente": {
+      "type": "string",
+      "enum": [
+       "boletin",
+       "nacional",
+       "provincial"
+      ],
+      "description": "De dónde salió."
+     },
+     "id": {
+      "type": "string",
+      "description": "Identificador, con la fuente adelante para que no se confundan entre sí."
+     },
+     "titulo": {
+      "type": "string",
+      "description": "Cómo se llama."
+     },
+     "detalle": {
+      "type": "string",
+      "description": "De qué trata."
+     },
+     "fecha": {
+      "type": "string",
+      "description": "La fecha que corresponda a su fuente."
+     },
+     "enlace": {
+      "type": "string",
+      "description": "Dónde verlo en el lector de esta instancia."
+     },
+     "en_api": {
+      "type": "string",
+      "description": "La ruta de esta API que lo trae entero."
      }
     }
    }

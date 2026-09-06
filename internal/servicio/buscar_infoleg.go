@@ -47,7 +47,7 @@ func (s *Servicio) indiceInfoLEG() *infoleg.Indice {
 	}
 	s.infoUnaVez.Do(func() {
 		s.infoIndice = infoleg.NuevoIndice()
-		crudo, hay := s.cache.Leer(claveCatalogoInfoLEG)
+		crudo, hay := almacen.LeerBytes(s.cache, claveCatalogoInfoLEG)
 		if !hay {
 			return
 		}
@@ -140,10 +140,12 @@ func (s *Servicio) guardarCatalogoInfoLEG(ruta string) error {
 	if err != nil {
 		return err
 	}
-	if err := s.cache.Guardar(claveCatalogoInfoLEG, crudo, almacen.SinVencimiento); err != nil {
-		return err
-	}
-	// Y se arma con lo recién bajado, para que la búsqueda ande sin reiniciar.
+	// Primero el índice y después el guardado.
+	//
+	// Al revés, un guardado que falla se llevaba puesta la función entera: el
+	// buscador no se armaba ni siquiera en memoria, y quedaba diciendo que el
+	// catálogo no se bajó aunque acabara de bajarse. Así, lo peor que puede
+	// pasar es que haya que volver a bajarlo al reiniciar.
 	i, err := armarIndiceDesdeZip(crudo)
 	if err != nil {
 		return err
@@ -152,5 +154,8 @@ func (s *Servicio) guardarCatalogoInfoLEG(ruta string) error {
 	s.infoMu.Lock()
 	s.infoIndice = i
 	s.infoMu.Unlock()
-	return nil
+
+	// Con GuardarBytes: es un ZIP, y el almacén envuelve lo que guarda en un
+	// sobre JSON. Pasárselo en crudo falla con un "invalid character 'P'".
+	return almacen.GuardarBytes(s.cache, claveCatalogoInfoLEG, crudo, almacen.SinVencimiento)
 }

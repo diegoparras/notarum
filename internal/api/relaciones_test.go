@@ -84,7 +84,8 @@ func conRelaciones(t *testing.T) *httptest.Server {
 	srv := servicio.Nuevo(boletin.NuevoCliente(boletin.Opciones{}), alm).
 		ConInfoLEG(infoleg.NuevoCliente(infoleg.Opciones{
 			BaseDatos: portal.URL, Intervalo: time.Nanosecond,
-		}))
+		})).
+		ConBuscadorInfoLEG(true)
 	if _, err := srv.SincronizarInfoLEG(t.Context(), t.TempDir(), nil); err != nil {
 		t.Fatal(err)
 	}

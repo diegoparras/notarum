@@ -4,6 +4,8 @@
 package almacen
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"time"
 
 	"github.com/diegoparras/notarum/internal/boletin"
@@ -71,4 +73,43 @@ type ResultadoLocal struct {
 	Limite         int             `json:"limite"`
 	Desplazamiento int             `json:"desplazamiento"`
 	Avisos         []boletin.Aviso `json:"avisos"`
+}
+
+// Guardar y leer bytes que no son JSON.
+//
+// El almacén envuelve lo que guarda en un sobre JSON, así que lo que se le pasa
+// tiene que ser JSON válido. Pasarle un ZIP, o unos bytes al azar, falla con un
+// "invalid character" que no dice qué hacer, y en un camino donde el error se
+// anota y se sigue, la función queda rota sin que nadie se entere. Ya pasó tres
+// veces: con el secreto de sesión, con el catálogo provincial y con el ZIP de
+// InfoLEG, que dejó el buscador de normativa nacional sin funcionar nunca.
+//
+// Estas dos funciones lo dicen en el nombre: si lo que se guarda no es JSON, se
+// usan éstas.
+
+// GuardarBytes guarda datos arbitrarios, codificados para que entren en el
+// sobre JSON del almacén.
+func GuardarBytes(a Almacen, clave string, datos []byte, ttl time.Duration) error {
+	crudo, err := json.Marshal(base64.StdEncoding.EncodeToString(datos))
+	if err != nil {
+		return err
+	}
+	return a.Guardar(clave, crudo, ttl)
+}
+
+// LeerBytes recupera lo guardado con GuardarBytes.
+func LeerBytes(a Almacen, clave string) ([]byte, bool) {
+	crudo, hay := a.Leer(clave)
+	if !hay {
+		return nil, false
+	}
+	var enTexto string
+	if err := json.Unmarshal(crudo, &enTexto); err != nil {
+		return nil, false
+	}
+	datos, err := base64.StdEncoding.DecodeString(enTexto)
+	if err != nil {
+		return nil, false
+	}
+	return datos, true
 }
