@@ -1,7 +1,7 @@
 <h1 align="center">notarum</h1>
 
 <p align="center">
-  <strong>El Boletín Oficial de la República Argentina, legible.</strong><br>
+  <strong>La normativa argentina, legible.</strong><br>
   Un lector, una API y herramientas para modelos — en un solo binario.
 </p>
 
@@ -14,21 +14,30 @@
 
 ---
 
-El Boletín Oficial se publica todos los días hábiles y contiene todo lo que el
-Estado argentino decide: decretos, resoluciones, licitaciones, sociedades,
-sucesiones. Está en la web, pero está hecho para leerlo de a un aviso por vez,
-con un buscador que pagina de a cien y no dice cuántos resultados hay.
+Lo que el Estado argentino decide está publicado y es público, pero repartido
+en tres lados que no se hablan entre sí:
 
-**notarum lo convierte en algo que se puede leer, consultar por programa y
+- **El Boletín Oficial**, todos los días hábiles: decretos, resoluciones,
+  licitaciones, sociedades, sucesiones. La norma *como salió ese día*.
+- **InfoLEG**, con 428 mil normas nacionales y sus modificaciones al día. La
+  norma *como está hoy*, y qué la modificó.
+- **La Base SAIJ**, con 81 mil leyes, decretos y constituciones de las 24
+  provincias desde 1855: lo que el Boletín nacional no publica.
+
+Los tres están en la web, y los tres están hechos para leerlos de a uno por
+vez. El del Boletín pagina de a cien y no dice cuántos resultados hay.
+
+**notarum los convierte en algo que se puede leer, consultar por programa y
 preguntarle a un modelo.** No opina, no clasifica, no puntúa: entrega el dato
 crudo y bien tipado, y eso es todo su valor.
 
 ```bash
 docker run -d -p 8080:8080 -v notarum-datos:/datos \
-  -e NOTARUM_ALMACEN=sqlite ghcr.io/diegoparras/notarum:1.7.2
+  -e NOTARUM_ALMACEN=sqlite ghcr.io/diegoparras/notarum:latest
 ```
 
-Abrí `http://localhost:8080` y ya estás leyendo el Boletín de hoy.
+Abrí `http://localhost:8080` y ya estás leyendo el Boletín de hoy. La
+normativa nacional y la provincial se bajan una vez, desde el panel.
 
 ---
 
@@ -238,7 +247,7 @@ docker run -d --name notarum -p 8080:8080 \
   -v notarum-datos:/datos \
   -e NOTARUM_ALMACEN=sqlite \
   -e "NOTARUM_USER_AGENT=notarum/1.7 (+https://tu-dominio.com)" \
-  ghcr.io/diegoparras/notarum:1.7.2
+  ghcr.io/diegoparras/notarum:latest
 ```
 
 El volumen en `/datos` no es opcional en la práctica: sin él, cada redeploy
@@ -251,7 +260,7 @@ vuelve a bajar todo el Boletín desde cero.
 | Campo | Valor |
 |---|---|
 | Source → Type | `Image` |
-| Image | `ghcr.io/diegoparras/notarum:1.7.2` |
+| Image | `ghcr.io/diegoparras/notarum:latest` |
 | Volume | `notarum-datos` montado en `/datos` |
 | Domain → Port | `8080`, con HTTPS |
 

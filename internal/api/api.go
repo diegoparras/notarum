@@ -497,7 +497,7 @@ func (s *Servidor) verIndice(w http.ResponseWriter, r *http.Request) {
 	hoy := boletin.HoyEnArgentina().API()
 	escribirJSON(w, r, http.StatusOK, map[string]any{
 		"nombre":      "notarum",
-		"descripcion": "API abierta de sólo lectura del Boletín Oficial de la República Argentina.",
+		"descripcion": "API abierta de sólo lectura de la normativa argentina: el Boletín Oficial, la normativa nacional de InfoLEG y la de las 24 provincias.",
 		"version":     s.version,
 		"fuente":      boletin.BaseSitio,
 		"contrato":    "/v1/openapi.json",

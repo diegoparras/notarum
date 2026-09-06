@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{template "titulo" .}} · notarum</title>
-<meta name="description" content="Lector abierto del Boletín Oficial de la República Argentina.">
+<meta name="description" content="Lector abierto de la normativa argentina: el Boletín Oficial, la normativa nacional de InfoLEG y la de las 24 provincias.">
 <link rel="stylesheet" href="/estatico/estilo.css?v={{.Version}}">
 {{/* Lo que cada página necesite en la cabeza. El refresco automático va acá y
      no en el cuerpo: en el cuerpo el navegador lo puede ignorar, que es lo que
@@ -30,7 +30,7 @@
         </g>
       </svg>
       notarum
-      <span class="marca-nota">Boletín Oficial</span>
+      <span class="marca-nota">Normativa argentina</span>
     </a>
     <!-- El patrón de Escriba: en la cabecera, sólo la marca y un botón; todo
          lo demás adentro. Se hace con <details> y no con JavaScript, que en
@@ -143,7 +143,9 @@
 </main>
 
 <footer class="contenedor pie">
-  <span>Datos del <a href="https://www.boletinoficial.gob.ar">Boletín Oficial de la República Argentina</a>.</span>
+  <span>Datos del <a href="https://www.boletinoficial.gob.ar">Boletín Oficial</a>,
+    de <a href="https://www.infoleg.gob.ar">InfoLEG</a> y de la
+    <a href="https://datos.jus.gob.ar">Base SAIJ</a> del Ministerio de Justicia.</span>
   <span><a href="/docs">documentación</a></span>
   <span><a href="/v1/openapi.json">openapi.json</a></span>
   <span><a href="/v1/salud">estado</a></span>

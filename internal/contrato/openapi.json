@@ -3,7 +3,7 @@
  "info": {
   "title": "notarum",
   "version": "1.0.0",
-  "description": "API abierta de sólo lectura del Boletín Oficial de la República Argentina. Entrega el calendario de ediciones, cada edición por sección y fecha con sus avisos, cada aviso con su texto, los anexos en PDF y el catálogo de rubros. No opina, no clasifica, no puntúa: entrega el dato crudo y bien tipado.\n\nSin clave para leer. Límite de pedidos por IP. Los datos son del Boletín Oficial; notarum es sólo una caché legible.",
+  "description": "API abierta de sólo lectura de la normativa argentina. Tres fuentes: el Boletín Oficial de la República Argentina —lo que se publicó cada día, por sección y fecha, con el texto de cada aviso y sus anexos—, la normativa nacional que mantiene InfoLEG —428 mil leyes, decretos y resoluciones con sus modificaciones al día— y la Base SAIJ de normativa provincial —81 mil normas de las 24 provincias, desde 1855—. No opina, no clasifica, no puntúa: entrega el dato crudo y bien tipado.",
   "license": {
    "name": "MIT",
    "url": "https://opensource.org/licenses/MIT"

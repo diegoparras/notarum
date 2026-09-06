@@ -1,4 +1,5 @@
-// notarum sirve el Boletín Oficial de la República Argentina como JSON.
+// notarum sirve la normativa argentina como JSON: el Boletín Oficial, la
+// normativa nacional que mantiene InfoLEG y la de las 24 provincias.
 //
 //	notarum servir
 //	notarum rellenar --seccion primera --desde 2024-01-01 [--hasta 2024-12-31]
@@ -81,7 +82,7 @@ func ejecutar(args []string) error {
 }
 
 func ayuda() {
-	fmt.Print(`notarum ` + version + ` — API abierta del Boletín Oficial de la República Argentina
+	fmt.Print(`notarum ` + version + ` — API abierta de la normativa argentina
 
   notarum servir
       Levanta la API. Configuración por variables de entorno o banderas:
