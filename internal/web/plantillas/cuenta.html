@@ -112,6 +112,27 @@ Creá uno arriba. Nombralo por lo que va a hacer: cuando tengas varios, es lo
     {{if .Webhook}}· avisa a un webhook{{else}}· se ve acá{{end}}
   </div>
   {{if .Error}}<div class="aviso-error">{{.Error}}</div>{{end}}
+
+  {{if .Feed}}
+  <div class="alerta-feed">
+    <span class="marca-chica">feed</span>
+    <code class="dato-mono">{{.Feed}}</code>
+    <form method="post" action="/cuenta/alertas/{{.ID}}/feed">
+      <input type="hidden" name="dar_de_baja" value="1">
+      <button class="boton suave" type="submit">Darlo de baja</button>
+    </form>
+  </div>
+  <p class="pie-nota">
+    Pegala en un lector de feeds o en un nodo RSS de n8n. La clave va en la
+    dirección porque un lector no manda cabeceras: abre esta alerta y nada más,
+    y darla de baja no toca tu cuenta ni tus tokens.
+  </p>
+  {{else}}
+  <form method="post" action="/cuenta/alertas/{{.ID}}/feed">
+    <button class="boton suave" type="submit">Darme un feed de esto</button>
+  </form>
+  {{end}}
+
   {{if .Ultimas}}
   <details class="esquema">
     <summary>Lo último que encontró ({{len .Ultimas}})</summary>

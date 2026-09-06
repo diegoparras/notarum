@@ -12,6 +12,9 @@
 package alertas
 
 import (
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/base64"
 	"errors"
 	"strings"
 	"time"
@@ -103,6 +106,31 @@ type Alerta struct {
 	// Ultimas son las últimas coincidencias, para poder verlas en la cuenta
 	// sin depender de que el webhook haya andado.
 	Ultimas []Coincidencia `json:"ultimas,omitempty"`
+	// ClaveFeed abre el feed de esta alerta, si se pidió uno.
+	//
+	// Es una clave aparte y no el token de la cuenta, y va en la dirección
+	// porque un lector de feeds no manda cabeceras. Eso es una concesión: una
+	// clave en una dirección se filtra por los registros y por el historial
+	// del navegador. Por eso sólo abre esta alerta —no la cuenta, no la API,
+	// no las otras alertas— y se puede dar de baja sin tocar nada más.
+	ClaveFeed string `json:"clave_feed,omitempty"`
+}
+
+// NuevaClaveFeed genera la clave que abre el feed de esta alerta.
+func NuevaClaveFeed() (string, error) {
+	crudo := make([]byte, 24)
+	if _, err := rand.Read(crudo); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(crudo), nil
+}
+
+// AbreElFeed compara la clave sin filtrar por el tiempo que tarda.
+func (a *Alerta) AbreElFeed(clave string) bool {
+	if a.ClaveFeed == "" || clave == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(a.ClaveFeed), []byte(clave)) == 1
 }
 
 // MaximoVistos es cuántos identificadores recuerda una alerta.

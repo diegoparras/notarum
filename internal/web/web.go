@@ -168,6 +168,8 @@ func (s *Sitio) rutas() {
 	s.mux.HandleFunc("POST /cuenta/modelo-ia", s.guardarModeloIA)
 	s.mux.HandleFunc("POST /cuenta/alertas", s.crearAlerta)
 	s.mux.HandleFunc("POST /cuenta/alertas/{id}/borrar", s.borrarAlerta)
+	s.mux.HandleFunc("POST /cuenta/alertas/{id}/feed", s.crearFeedDeAlerta)
+	s.mux.HandleFunc("GET /feed/{id}", s.feedAlerta)
 	s.mux.HandleFunc("POST /admin/politica", s.guardarPolitica)
 	s.mux.HandleFunc("POST /admin/politica/olvidar", s.olvidarPolitica)
 	s.mux.HandleFunc("POST /admin/tareas/{tipo}", s.lanzarTarea)

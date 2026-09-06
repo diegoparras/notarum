@@ -208,7 +208,7 @@ func (s *Sitio) dibujarCuenta(w http.ResponseWriter, r *http.Request, u *cuentas
 	}
 	d.HayAlertas = s.PuedeAlertar()
 	if d.HayAlertas {
-		d.Alertas = s.alertasDe(u.Nombre)
+		d.Alertas = s.alertasDe(u.Nombre, d.Base)
 		d.Fuentes = alertas.Fuentes
 		d.Provincias = s.srv.ProvinciasConNormas()
 		d.Secciones = boletin.SeccionesValidas

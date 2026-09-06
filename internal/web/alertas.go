@@ -97,24 +97,68 @@ func (s *Sitio) borrarAlerta(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/cuenta", http.StatusSeeOther)
 }
 
+// crearFeedDeAlerta genera la clave que abre el feed, o la da de baja.
+//
+// Es una clave aparte y no el token de la cuenta, porque un lector de feeds no
+// manda cabeceras y la clave termina en la dirección. Ahí se filtra: por los
+// registros del servidor, por el historial, por quien mire la pantalla. Por
+// eso ésta abre una sola alerta y nada más, y se puede dar de baja sola.
+func (s *Sitio) crearFeedDeAlerta(w http.ResponseWriter, r *http.Request) {
+	u := s.exigirSesion(w, r)
+	if u == nil {
+		return
+	}
+	if !s.PuedeAlertar() {
+		s.fallo(w, r, http.StatusNotFound, "Esta instancia no tiene alertas", "")
+		return
+	}
+	a, hay := s.alertas.Leer(r.PathValue("id"))
+	if !hay || !strings.EqualFold(a.Dueño, u.Nombre) {
+		s.fallo(w, r, http.StatusNotFound, "Esa alerta no existe", "")
+		return
+	}
+
+	if r.PostFormValue("dar_de_baja") != "" {
+		a.ClaveFeed = ""
+	} else {
+		clave, err := alertas.NuevaClaveFeed()
+		if err != nil {
+			s.dibujarCuenta(w, r, u, "", "No se pudo generar la clave.", http.StatusInternalServerError)
+			return
+		}
+		a.ClaveFeed = clave
+	}
+	if err := s.alertas.Actualizar(a); err != nil {
+		s.dibujarCuenta(w, r, u, "", primeraMayuscula(err.Error())+".", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/cuenta", http.StatusSeeOther)
+}
+
 // datosAlerta es una alerta lista para mostrar.
 type datosAlerta struct {
 	alertas.Alerta
 	FuenteNombre     string
 	CriteriosEnTexto string
+	// Feed es la dirección entera, con su clave, para copiarla.
+	Feed string
 }
 
-func (s *Sitio) alertasDe(usuario string) []datosAlerta {
+func (s *Sitio) alertasDe(usuario, base string) []datosAlerta {
 	if !s.PuedeAlertar() {
 		return nil
 	}
 	var out []datosAlerta
 	for _, a := range s.alertas.De(usuario) {
-		out = append(out, datosAlerta{
+		d := datosAlerta{
 			Alerta:           a,
 			FuenteNombre:     a.Fuente.Nombre(),
 			CriteriosEnTexto: criteriosEnTexto(a.Criterios),
-		})
+		}
+		if a.ClaveFeed != "" {
+			d.Feed = base + "/feed/" + a.ID + "?k=" + a.ClaveFeed
+		}
+		out = append(out, d)
 	}
 	return out
 }

@@ -24,6 +24,11 @@ const (
 	// proveedor de identidad. Se limita como el lector, pero no se cierra
 	// nunca: para entrar haría falta haber entrado.
 	zonaPuerta
+	// zonaFeed son los feeds de alertas. Llevan su propia clave en la
+	// dirección y la comprueba quien los atiende, así que no se cierran; se
+	// limitan como el lector, porque un lector de feeds que se descontrola
+	// pide mucho.
+	zonaFeed
 	zonaLibre // salud y archivos estáticos: no se limitan ni se cierran
 )
 
@@ -40,6 +45,12 @@ func zonaDe(r *http.Request) zona {
 		// en cuanto la primera cuenta hizo que el modo por defecto pasara a
 		// cerrado.
 		return zonaPuerta
+	case strings.HasPrefix(p, "/feed/"):
+		// El feed trae su propia clave en la dirección, y el que la atiende la
+		// comprueba. Si cayera en la zona del lector, una instancia cerrada lo
+		// mandaría a /entrar, y un lector de feeds no sabe entrar a ningún
+		// lado: la función quedaría inservible justo donde más se usa.
+		return zonaFeed
 	case strings.HasPrefix(p, "/mcp"):
 		return zonaMCP
 	case strings.HasPrefix(p, "/v1/"):
@@ -140,6 +151,8 @@ func (g *guardia) permite(u *cuentas.Usuario, z zona) bool {
 	switch z {
 	case zonaPuerta:
 		return true // por acá se entra: no se puede pedir haber entrado
+	case zonaFeed:
+		return true // trae su propia clave, y la mira quien lo atiende
 	case zonaAPI:
 		return p.PermiteAPI(u)
 	case zonaMCP:
@@ -159,7 +172,7 @@ func (g *guardia) cupoDe(r *http.Request, u *cuentas.Usuario, z zona) (string, i
 		// Los intentos de entrada se cuentan por dirección y aparte: es el
 		// único límite pensado para frenar a alguien.
 		return "login:" + ip, p.Login
-	case zonaLector, zonaPuerta:
+	case zonaLector, zonaPuerta, zonaFeed:
 		if u != nil {
 			return "lector:" + u.Nombre, p.Lector
 		}

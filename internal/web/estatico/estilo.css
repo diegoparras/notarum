@@ -436,3 +436,11 @@ h2 { font-size: 17px; font-weight: 600; margin: 32px 0 12px; }
 .alerta-linea { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .alerta-criterios { font-size: 13.5px; color: var(--tinta-suave); margin-top: 4px; }
 .alerta-pie { font-size: 12px; color: var(--tinta-tenue); margin-top: 6px; }
+
+/* La dirección del feed, para copiarla. */
+.alerta-feed {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 8px; padding: 8px 10px;
+  background: var(--crema); border-radius: 10px;
+}
+.alerta-feed code { font-size: 12px; word-break: break-all; flex: 1 1 240px; }
