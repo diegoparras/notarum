@@ -124,7 +124,7 @@ func Nuevo(srv *servicio.Servicio, version string) (*Sitio, error) {
 		// se acuerde de cablearlo, y fallaría en vez de generar.
 		tareas: tareas.Nuevo(),
 	}
-	for _, nombre := range []string{"edicion", "aviso", "buscar", "calendario", "norma", "docs", "entrar", "cuenta", "error", "provincial", "normaprov", "admin"} {
+	for _, nombre := range []string{"edicion", "aviso", "buscar", "calendario", "norma", "docs", "entrar", "cuenta", "error", "provincial", "normaprov", "nacional", "admin"} {
 		t, err := template.New("base").Funcs(funciones).ParseFS(archivosPlantillas,
 			"plantillas/base.html", "plantillas/"+nombre+".html")
 		if err != nil {
@@ -159,6 +159,7 @@ func (s *Sitio) rutas() {
 	s.mux.HandleFunc("POST /admin/politica/olvidar", s.olvidarPolitica)
 	s.mux.HandleFunc("POST /admin/tareas/{tipo}", s.lanzarTarea)
 	s.mux.HandleFunc("POST /admin/tareas/{tipo}/cortar", s.cortarTarea)
+	s.mux.HandleFunc("GET /nacional", s.verNacional)
 	s.mux.HandleFunc("GET /provincial", s.verProvincial)
 	s.mux.HandleFunc("GET /provincial/{id}", s.verNormaProvincial)
 	s.mux.HandleFunc("GET /entrar/lockatus", s.irAlHub)

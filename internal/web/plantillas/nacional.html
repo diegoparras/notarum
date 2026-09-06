@@ -1,0 +1,85 @@
+{{define "titulo"}}Normativa nacional{{end}}
+{{define "cuerpo"}}
+
+<h1>Normativa nacional</h1>
+<p class="bajada">
+  Las leyes, decretos y resoluciones nacionales con sus modificaciones al día.
+  El Boletín publica la norma como salió ese día; acá está como está hoy, y se
+  busca sin saber la fecha. Sale de InfoLEG, del Ministerio de Justicia.
+</p>
+
+{{if not .Encendido}}
+<div class="vacio">
+  <strong>El buscador de normativa nacional está apagado en esta instancia</strong>
+  Se enciende con <code>NOTARUM_BUSCADOR_INFOLEG=1</code>. Es opcional porque el
+  índice de las 428 mil normas ocupa unos 480 MB en memoria, y no tiene sentido
+  imponérselo a quien no lo usa.
+</div>
+{{else if not .Cargado}}
+<div class="vacio">
+  <strong>Esta instancia todavía no bajó el catálogo de InfoLEG</strong>
+  Se baja desde el <a href="/admin">panel</a>, con el botón «Sincronizar
+  InfoLEG». Son unas 428 mil normas y tarda varios minutos. Después se
+  actualiza sola todos los días.
+</div>
+{{else}}
+
+<form class="barra" method="get" action="/nacional">
+  <input type="search" name="texto" value="{{.Texto}}"
+         placeholder="ley 24240, expropiación, un tema…" aria-label="Texto a buscar" autofocus>
+  <select name="tipo" aria-label="Tipo de norma">
+    <option value="">todo tipo</option>
+    {{$t := .Tipo}}
+    {{range .Tipos}}
+      <option value="{{.Tipo}}"{{if eq .Tipo $t}} selected{{end}}>{{.Tipo}} ({{.Normas}})</option>
+    {{end}}
+  </select>
+  <input type="number" name="desde" value="{{if .Desde}}{{.Desde}}{{end}}" placeholder="desde" min="1800" max="2200" aria-label="Año desde" style="width:6.5em">
+  <input type="number" name="hasta" value="{{if .Hasta}}{{.Hasta}}{{end}}" placeholder="hasta" min="1800" max="2200" aria-label="Año hasta" style="width:6.5em">
+  <label class="casilla"><input type="checkbox" name="con_texto" value="1"{{if .ConTexto}} checked{{end}}> sólo con texto</label>
+  <button class="boton" type="submit">Buscar</button>
+</form>
+
+<p class="pie-nota">
+  Buscando el tipo y el número —<code>ley 24240</code>— esa norma va primero.
+  No hace falta poner los acentos ni los puntos: <code>ley 24.240</code> da lo
+  mismo.
+</p>
+
+{{if .Error}}
+  <div class="vacio"><strong>No se pudo buscar</strong>{{.Error}}</div>
+{{else}}
+  <div class="aviso-nota">
+    {{.Total}} norma{{if ne .Total 1}}s{{end}}.
+    {{if .Resultado.Truncado}}Se muestran las primeras {{len .Resultado.Normas}}.{{end}}
+  </div>
+
+  {{range .Resultado.Normas}}
+    <a class="aviso" href="/norma/{{.ID}}">
+      <div class="aviso-organismo">{{.Tipo}}{{if .Numero}} {{.Numero}}{{end}}</div>
+      <div class="aviso-sintesis">{{.Titulo}}</div>
+      <div class="aviso-pie">
+        {{if .Fecha}}<span class="dato-mono">{{.Fecha}}</span>{{end}}
+        <span class="dato-mono">{{.ID}}</span>
+        {{if .TieneTexto}}<span class="marca-chica">con texto</span>
+        {{else}}<span class="marca-chica gris">sólo la ficha</span>{{end}}
+      </div>
+    </a>
+  {{else}}
+    <div class="vacio">
+      <strong>No hay normas con esos criterios</strong>
+      Probá con menos filtros, o con otras palabras. Si buscás una ley concreta,
+      escribí el tipo y el número: <code>decreto 70/2023</code>.
+    </div>
+  {{end}}
+
+  {{if .Paginas}}
+  <nav class="paginas">
+    {{if .Anterior}}<a class="boton suave" href="{{.Anterior}}">← anteriores</a>{{end}}
+    <span class="dato-mono">página {{.Pagina}}</span>
+    {{if .Siguiente}}<a class="boton suave" href="{{.Siguiente}}">siguientes →</a>{{end}}
+  </nav>
+  {{end}}
+{{end}}
+{{end}}
+{{end}}
