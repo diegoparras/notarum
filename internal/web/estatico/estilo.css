@@ -427,3 +427,12 @@ h2 { font-size: 17px; font-weight: 600; margin: 32px 0 12px; }
   display: flex; gap: 10px; flex-wrap: wrap; margin-top: 5px;
   font-size: 12px; color: var(--tinta-tenue);
 }
+
+/* Las alertas: búsquedas guardadas que avisan cuando aparece algo nuevo. */
+.alerta {
+  background: var(--crema-hondo); border-radius: var(--radio);
+  padding: 13px 16px; margin-bottom: 10px;
+}
+.alerta-linea { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.alerta-criterios { font-size: 13.5px; color: var(--tinta-suave); margin-top: 4px; }
+.alerta-pie { font-size: 12px; color: var(--tinta-tenue); margin-top: 6px; }

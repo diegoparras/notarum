@@ -82,6 +82,132 @@ Creá uno arriba. Nombralo por lo que va a hacer: cuando tengas varios, es lo
 único que te va a decir cuál revocar.</div>
 {{end}}
 
+{{if .HayAlertas}}
+<h2>Alertas</h2>
+<p class="docs-parrafo">
+  Una búsqueda guardada que notarum mira después de cada actualización y avisa
+  cuando aparece algo nuevo. Sólo lo nuevo: una alerta que repite todos los
+  días lo mismo se ignora a la semana. Y lo que ya existía cuando la creaste no
+  se avisa, para que estrenar una alerta sobre un tema viejo no te mande de
+  golpe todo lo que hay desde 1993.
+</p>
+
+{{range .Alertas}}
+<div class="alerta">
+  <div class="alerta-linea">
+    <strong>{{.Nombre}}</strong>
+    <span class="marca-chica">{{.FuenteNombre}}</span>
+    <form method="post" action="/cuenta/alertas/{{.ID}}/borrar" style="margin-left:auto">
+      <button class="boton suave" type="submit">Borrarla</button>
+    </form>
+  </div>
+  <div class="alerta-criterios">{{.CriteriosEnTexto}}</div>
+  <div class="alerta-pie">
+    {{if .UltimaCorrida.IsZero}}
+      todavía no corrió
+    {{else}}
+      miró {{haceCuanto .UltimaCorrida}}
+      {{if .Avisados}}· avisó de {{.Avisados}}{{else}}· sin novedades todavía{{end}}
+    {{end}}
+    {{if .Webhook}}· avisa a un webhook{{else}}· se ve acá{{end}}
+  </div>
+  {{if .Error}}<div class="aviso-error">{{.Error}}</div>{{end}}
+  {{if .Ultimas}}
+  <details class="esquema">
+    <summary>Lo último que encontró ({{len .Ultimas}})</summary>
+    <div class="relaciones">
+      {{range .Ultimas}}
+      <a class="relacion" href="{{.Enlace}}">
+        <span class="relacion-norma">{{.Titulo}}</span>
+        {{if .Detalle}}<span class="relacion-titulo">{{.Detalle}}</span>{{end}}
+        {{if .Fecha}}<span class="relacion-pie"><span class="dato-mono">{{.Fecha}}</span></span>{{end}}
+      </a>
+      {{end}}
+    </div>
+  </details>
+  {{end}}
+</div>
+{{else}}
+<div class="vacio">
+  <strong>Todavía no tenés ninguna alerta</strong>
+  Creá una acá abajo: elegís dónde mirar y qué esperar, y notarum se encarga.
+</div>
+{{end}}
+
+<details class="esquema">
+  <summary>Crear una alerta</summary>
+  <form method="post" action="/cuenta/alertas" class="armar">
+    <table class="docs-tabla">
+      <tbody>
+        <tr>
+          <td><label for="a_nombre">Nombre</label></td>
+          <td><input type="text" id="a_nombre" name="nombre" required maxlength="80"
+                     placeholder="Resoluciones del ENACOM"></td>
+          <td class="ruta-detalle">Para reconocerla después.</td>
+        </tr>
+        <tr>
+          <td><label for="a_fuente">Dónde mirar</label></td>
+          <td>
+            <select id="a_fuente" name="fuente">
+              {{range .Fuentes}}<option value="{{.}}">{{.Nombre}}</option>{{end}}
+            </select>
+          </td>
+          <td class="ruta-detalle">El Boletín necesita historia llenada; las otras dos, el catálogo bajado.</td>
+        </tr>
+        <tr>
+          <td><label for="a_texto">Texto</label></td>
+          <td><input type="text" id="a_texto" name="texto" maxlength="200" placeholder="enacom"></td>
+          <td class="ruta-detalle">Las palabras que tienen que aparecer.</td>
+        </tr>
+        <tr>
+          <td><label for="a_tipo">Tipo o rubro</label></td>
+          <td><input type="text" id="a_tipo" name="tipo" placeholder="Resolución"></td>
+          <td class="ruta-detalle">Opcional. En el Boletín es el rubro; en las otras, el tipo de norma.</td>
+        </tr>
+        <tr>
+          <td><label for="a_provincia">Provincia</label></td>
+          <td>
+            <select id="a_provincia" name="provincia">
+              <option value="">todas</option>
+              {{range .Provincias}}<option value="{{.ID}}">{{.Nombre}}</option>{{end}}
+            </select>
+          </td>
+          <td class="ruta-detalle">Sólo para la normativa provincial.</td>
+        </tr>
+        <tr>
+          <td><label for="a_seccion">Sección</label></td>
+          <td>
+            <select id="a_seccion" name="seccion">
+              <option value="">todas</option>
+              {{range .Secciones}}<option value="{{.}}">{{.}}</option>{{end}}
+            </select>
+          </td>
+          <td class="ruta-detalle">Sólo para el Boletín.</td>
+        </tr>
+        <tr>
+          <td><label for="a_webhook">Avisar a</label></td>
+          <td><input type="text" id="a_webhook" name="webhook" placeholder="https://…/webhook/notarum"></td>
+          <td class="ruta-detalle">
+            Opcional: una dirección que reciba un POST con lo nuevo, como un nodo
+            Webhook de n8n. Sin esto, lo encontrado se ve acá.
+          </td>
+        </tr>
+        <tr>
+          <td><label for="a_vigentes">Sólo vigentes</label></td>
+          <td><input type="checkbox" id="a_vigentes" name="vigentes" value="1"></td>
+          <td class="ruta-detalle">Deja fuera lo derogado. Sólo para la provincial.</td>
+        </tr>
+      </tbody>
+    </table>
+    <button class="boton" type="submit">Crear la alerta</button>
+  </form>
+  <p class="pie-nota">
+    Al crearla se prueba en el acto y te dice con cuánto coincide hoy, para que
+    no descubras a la semana que no coincidía con nada.
+  </p>
+</details>
+{{end}}
+
 {{if .HayAsistente}}
 <h2>El asistente de consultas</h2>
 <p class="docs-parrafo">

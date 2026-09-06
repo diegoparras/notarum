@@ -21,6 +21,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/diegoparras/notarum/internal/alertas"
 	"github.com/diegoparras/notarum/internal/almacen"
 	"github.com/diegoparras/notarum/internal/armador"
 	"github.com/diegoparras/notarum/internal/asistente"
@@ -64,6 +65,9 @@ type Sitio struct {
 	marca almacen.Marca
 	// asistente arma consultas a partir de un pedido en castellano.
 	asistente *asistente.Cliente
+	// alertas son las búsquedas guardadas que avisan cuando aparece algo.
+	alertas  *alertas.Registro
+	corredor *alertas.Corredor
 }
 
 // ConCuentas habilita el login y la gestión de tokens.
@@ -87,6 +91,13 @@ func (s *Sitio) vigente() cuentas.Politica {
 // ConTareas le da al lector con qué correr los trabajos largos del panel.
 func (s *Sitio) ConTareas(e *tareas.Ejecutor) *Sitio {
 	s.tareas = e
+	return s
+}
+
+// ConAlertas habilita las búsquedas guardadas que avisan de lo nuevo.
+func (s *Sitio) ConAlertas(reg *alertas.Registro, c *alertas.Corredor) *Sitio {
+	s.alertas = reg
+	s.corredor = c
 	return s
 }
 
@@ -155,6 +166,8 @@ func (s *Sitio) rutas() {
 	s.mux.HandleFunc("POST /cuenta/clave-ia", s.guardarClaveIA)
 	s.mux.HandleFunc("POST /cuenta/clave-ia/borrar", s.borrarClaveIA)
 	s.mux.HandleFunc("POST /cuenta/modelo-ia", s.guardarModeloIA)
+	s.mux.HandleFunc("POST /cuenta/alertas", s.crearAlerta)
+	s.mux.HandleFunc("POST /cuenta/alertas/{id}/borrar", s.borrarAlerta)
 	s.mux.HandleFunc("POST /admin/politica", s.guardarPolitica)
 	s.mux.HandleFunc("POST /admin/politica/olvidar", s.olvidarPolitica)
 	s.mux.HandleFunc("POST /admin/tareas/{tipo}", s.lanzarTarea)

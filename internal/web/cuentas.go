@@ -7,9 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/diegoparras/notarum/internal/alertas"
 	"github.com/diegoparras/notarum/internal/asistente"
 	"github.com/diegoparras/notarum/internal/boletin"
 	"github.com/diegoparras/notarum/internal/cuentas"
+	"github.com/diegoparras/notarum/internal/servicio"
 )
 
 // nombreCookie es la cookie de sesión del lector.
@@ -61,6 +63,13 @@ type datosCuenta struct {
 	ModeloPorDefecto string
 	// ErrorModelos es por qué no se pudo traer la lista, si no se pudo.
 	ErrorModelos string
+
+	// Las alertas: búsquedas guardadas que avisan cuando aparece algo nuevo.
+	HayAlertas bool
+	Alertas    []datosAlerta
+	Fuentes    []alertas.Fuente
+	Provincias []servicio.ProvinciaConNormas
+	Secciones  []boletin.Seccion
 }
 
 // yo devuelve quién está mirando, o nil si nadie entró.
@@ -196,6 +205,13 @@ func (s *Sitio) dibujarCuenta(w http.ResponseWriter, r *http.Request, u *cuentas
 				}
 			}
 		}
+	}
+	d.HayAlertas = s.PuedeAlertar()
+	if d.HayAlertas {
+		d.Alertas = s.alertasDe(u.Nombre)
+		d.Fuentes = alertas.Fuentes
+		d.Provincias = s.srv.ProvinciasConNormas()
+		d.Secciones = boletin.SeccionesValidas
 	}
 	d.Angosto = true
 	for _, t := range s.registro.Tokens(u.Nombre) {

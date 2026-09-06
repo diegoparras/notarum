@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/diegoparras/notarum/internal/alertas"
 	"github.com/diegoparras/notarum/internal/almacen"
 	"github.com/diegoparras/notarum/internal/asistente"
 	"github.com/diegoparras/notarum/internal/boletin"
@@ -48,6 +49,10 @@ type Config struct {
 	Asistente *asistente.Cliente
 	// Marca dice si lo guardado sobrevivió al despliegue anterior.
 	Marca almacen.Marca
+	// Alertas guarda las búsquedas que avisan cuando aparece algo nuevo, y
+	// Corredor es lo que las evalúa.
+	Alertas  *alertas.Registro
+	Corredor *alertas.Corredor
 }
 
 // Servidor atiende las rutas de /v1.
@@ -107,6 +112,9 @@ func Nuevo(cfg Config) *Servidor {
 			sitio = sitio.ConAsistente(cfg.Asistente)
 		}
 		sitio = sitio.ConMarca(cfg.Marca)
+		if cfg.Alertas != nil {
+			sitio = sitio.ConAlertas(cfg.Alertas, cfg.Corredor)
+		}
 		s.web = sitio
 		s.conWeb = true
 	}

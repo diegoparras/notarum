@@ -29,6 +29,7 @@ const (
 	tareaInfoLEG    = "infoleg"
 	tareaProvincial = "provincial"
 	tareaRellenar   = "rellenar"
+	tareaAlertas    = "alertas"
 )
 
 type datosAdmin struct {
@@ -117,7 +118,7 @@ func (s *Sitio) dibujarAdmin(w http.ResponseWriter, r *http.Request, u *cuentas.
 		d.PoliticaGuardada = s.registro.HayPoliticaGuardada()
 	}
 	if s.tareas != nil {
-		for _, t := range []string{tareaInfoLEG, tareaProvincial, tareaRellenar} {
+		for _, t := range []string{tareaInfoLEG, tareaProvincial, tareaRellenar, tareaAlertas} {
 			d.Tareas[t] = s.tareas.Estado(t)
 		}
 		d.Corriendo = s.tareas.AlgoCorriendo()
@@ -156,6 +157,13 @@ func (s *Sitio) lanzarTarea(w http.ResponseWriter, r *http.Request) {
 		trabajo = s.trabajoInfoLEG()
 	case tareaProvincial:
 		trabajo = s.trabajoProvincial()
+	case tareaAlertas:
+		if s.corredor == nil {
+			s.dibujarAdmin(w, r, u, "", "Esta instancia no tiene alertas encendidas.",
+				http.StatusNotFound)
+			return
+		}
+		trabajo = s.trabajoAlertas()
 	case tareaRellenar:
 		var err error
 		trabajo, err = s.trabajoRellenar(r)
@@ -408,5 +416,22 @@ func cuantoVa(d time.Duration) string {
 		return fmt.Sprintf("%d minutos", int(d.Minutes()))
 	default:
 		return fmt.Sprintf("%d horas", int(d.Hours()))
+	}
+}
+
+// trabajoAlertas corre la pasada de alertas a mano, desde el panel. Es el
+// mismo trabajo que corre solo todos los días después de las actualizaciones.
+func (s *Sitio) trabajoAlertas() tareas.Trabajo {
+	return func(ctx context.Context, avisar func(string)) (string, error) {
+		r, err := s.corredor.Correr(ctx, avisar)
+		if err != nil {
+			return "", err
+		}
+		texto := fmt.Sprintf("%d alertas miradas, %d con novedades (%d en total)",
+			r.Corridas, r.Avisadas, r.Novedades)
+		if r.Fallaron > 0 {
+			texto += fmt.Sprintf("; %d fallaron", r.Fallaron)
+		}
+		return texto, nil
 	}
 }

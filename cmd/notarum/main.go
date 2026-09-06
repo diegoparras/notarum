@@ -23,6 +23,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/diegoparras/notarum/internal/alertas"
 	"github.com/diegoparras/notarum/internal/almacen"
 	"github.com/diegoparras/notarum/internal/api"
 	"github.com/diegoparras/notarum/internal/asistente"
@@ -413,6 +414,10 @@ func servir(args []string) error {
 	if err != nil {
 		return err
 	}
+	// Las alertas: búsquedas guardadas que avisan cuando aparece algo nuevo.
+	regAlertas := alertas.NuevoRegistro(srv.Almacen())
+	corredor := alertas.NuevoCorredor(regAlertas, srv, entorno("NOTARUM_DIRECCION", ""))
+
 	if !encendido("NOTARUM_SIN_ACTUALIZACION_AUTOMATICA", false) {
 		programador.Agregar(tareas.Programado{
 			Tipo:  "infoleg",
@@ -421,6 +426,12 @@ func servir(args []string) error {
 		programador.Agregar(tareas.Programado{
 			Tipo:  "provincial",
 			Hacer: trabajoProvincial(srv),
+		})
+		// Después de las dos: una alerta que corre antes de la actualización
+		// mira los datos de ayer, y lo de hoy lo avisaría recién mañana.
+		programador.Agregar(tareas.Programado{
+			Tipo:  "alertas",
+			Hacer: trabajoAlertas(corredor, ejecutor),
 		})
 		programador.Arrancar()
 		defer programador.Frenar()
@@ -431,6 +442,7 @@ func servir(args []string) error {
 		TokenMCP: *tokenMCP, SinMCP: *sinMCP, SinWeb: *sinWeb,
 		Registro: reg, Politica: politica, Hub: hub,
 		Tareas: ejecutor, Programador: programador, Marca: marca,
+		Alertas: regAlertas, Corredor: corredor,
 		// El asistente se enciende solo: cada persona pone su clave de
 		// OpenRouter desde su cuenta, así que no hay nada que configurar acá.
 		Asistente: asistente.NuevoCliente(asistente.Opciones{}),
@@ -924,4 +936,57 @@ func trabajoProvincial(srv *servicio.Servicio) tareas.Trabajo {
 		}
 		return fmt.Sprintf("%d normas de %d jurisdicciones", e.Normas, e.Provincias), nil
 	}
+}
+
+// trabajoAlertas corre la pasada de alertas, después de las actualizaciones.
+//
+// Espera a que terminen: el programador las lanza a las tres a la vez, y una
+// alerta que mira antes de que baje el catálogo ve los datos de ayer. Lo de
+// hoy lo avisaría recién mañana, que para una alerta diaria es no avisar.
+func trabajoAlertas(c *alertas.Corredor, e *tareas.Ejecutor) tareas.Trabajo {
+	return func(ctx context.Context, avisar func(string)) (string, error) {
+		if err := esperarALasFuentes(ctx, e, avisar); err != nil {
+			return "", err
+		}
+		r, err := c.Correr(ctx, avisar)
+		if err != nil {
+			return "", err
+		}
+		texto := fmt.Sprintf("%d alertas miradas, %d con novedades (%d en total)",
+			r.Corridas, r.Avisadas, r.Novedades)
+		if r.Fallaron > 0 {
+			texto += fmt.Sprintf("; %d fallaron, el motivo queda en cada una", r.Fallaron)
+		}
+		return texto, nil
+	}
+}
+
+// esperarALasFuentes espera a que terminen las actualizaciones de catálogos.
+func esperarALasFuentes(ctx context.Context, e *tareas.Ejecutor, avisar func(string)) error {
+	// Un techo por las dudas: si una actualización se cuelga, las alertas
+	// corren igual con lo que haya en vez de no correr nunca.
+	hasta := time.Now().Add(2 * time.Hour)
+	aviso := false
+	for time.Now().Before(hasta) {
+		corriendo := ""
+		for _, tipo := range []string{"infoleg", "provincial"} {
+			if e.Estado(tipo).EstaCorriendo() {
+				corriendo = tipo
+				break
+			}
+		}
+		if corriendo == "" {
+			return nil
+		}
+		if !aviso && avisar != nil {
+			avisar("esperando a que termine la actualización de " + corriendo)
+			aviso = true
+		}
+		select {
+		case <-time.After(5 * time.Second):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
 }

@@ -122,6 +122,20 @@
 </p>
 {{end}}
 
+<h2>Alertas</h2>
+<p class="docs-parrafo">
+  Las búsquedas guardadas que avisan cuando aparece algo nuevo. Corren solas
+  después de cada actualización; acá se pueden mirar en el momento. Cada quien
+  crea las suyas desde <a href="/cuenta">su cuenta</a>.
+</p>
+{{$t := index .Tareas "alertas"}}
+{{template "tarea" dict "T" $t "Nombre" "la pasada de alertas"}}
+{{if not $t.EstaCorriendo}}
+<form method="post" action="/admin/tareas/alertas">
+  <button class="boton" type="submit">Mirar las alertas ahora</button>
+</form>
+{{end}}
+
 <h2>Actualización automática</h2>
 {{if .Automatica}}
 <p class="docs-parrafo">
