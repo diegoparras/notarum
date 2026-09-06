@@ -215,18 +215,29 @@ func (s *Servidor) hNacionalRelaciones(_ context.Context, crudo json.RawMessage)
 	}
 
 	salida := struct {
-		ID            int                `json:"id"`
-		ModificadaPor []infoleg.Relacion `json:"modificada_por,omitempty"`
-		ModificaA     []infoleg.Relacion `json:"modifica_a,omitempty"`
-		Nota          string             `json:"nota,omitempty"`
+		ID            int                 `json:"id"`
+		ModificadaPor *infoleg.Relaciones `json:"modificada_por,omitempty"`
+		ModificaA     *infoleg.Relaciones `json:"modifica_a,omitempty"`
+		Nota          string              `json:"nota,omitempty"`
 	}{ID: a.ID}
+	var cuantas int
 	if a.Sentido != "modifica_a" {
-		salida.ModificadaPor = s.srv.ModificadaPor(a.ID)
+		r := s.srv.ModificadaPor(a.ID)
+		salida.ModificadaPor = &r
+		cuantas += r.Total
+		if r.Recortada() {
+			salida.Nota = "hay más de las que caben; se devuelven las más nuevas"
+		}
 	}
 	if a.Sentido != "modificada_por" {
-		salida.ModificaA = s.srv.ModificaA(a.ID)
+		r := s.srv.ModificaA(a.ID)
+		salida.ModificaA = &r
+		cuantas += r.Total
+		if r.Recortada() && salida.Nota == "" {
+			salida.Nota = "hay más de las que caben; se devuelven las más nuevas"
+		}
 	}
-	if len(salida.ModificadaPor) == 0 && len(salida.ModificaA) == 0 {
+	if cuantas == 0 {
 		// Que no haya relaciones y que no se hayan bajado las bases
 		// complementarias se ven igual desde acá, y llevan a cosas distintas.
 		salida.Nota = "sin relaciones guardadas; puede que esta norma no tenga ninguna, " +

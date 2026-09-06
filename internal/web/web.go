@@ -747,8 +747,8 @@ type datosNorma struct {
 	// Las normas del otro lado: cuáles modificaron a ésta y cuáles modificó
 	// ella. La ficha decía "modificada 7 veces" y no cuáles, que es el dato
 	// que hace falta justo cuando uno está mirando la norma.
-	ModificadaPor []infoleg.Relacion
-	ModificaA     []infoleg.Relacion
+	ModificadaPor infoleg.Relaciones
+	ModificaA     infoleg.Relaciones
 }
 
 // norma muestra el texto que InfoLEG mantiene actualizado, que es lo que el

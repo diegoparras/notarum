@@ -983,7 +983,7 @@
      "nacional"
     ],
     "summary": "Qué normas modificaron a ésta",
-    "description": "El catálogo dice cuántas normas modificaron a una, pero no cuáles: saberlo sin poder verlas obliga a ir a buscarlas a otro lado igual. Acá está la lista, con el tipo, el número, el organismo y la fecha de cada una. Sale de la base complementaria de normas modificadas de InfoLEG, que se baja con la misma sincronización.",
+    "description": "El catálogo dice cuántas normas modificaron a una, pero no cuáles: saberlo sin poder verlas obliga a ir a buscarlas a otro lado igual. Acá está la lista, con el tipo, el número, el organismo y la fecha de cada una. Sale de la base complementaria de normas modificadas de InfoLEG, que se baja con la misma sincronización. Se devuelven hasta 200, de la más nueva a la más vieja, con el total de verdad aparte: el reparto es extremo y hay normas que acumulan decenas de miles de modificatorias.",
     "operationId": "verModificadaPor",
     "parameters": [
      {
@@ -1036,7 +1036,7 @@
      "nacional"
     ],
     "summary": "Qué normas modificó ésta",
-    "description": "El otro sentido: a qué normas modificó ésta. Sirve para ver el alcance de un decreto de necesidad y urgencia, por ejemplo, que puede tocar decenas de leyes de una vez.",
+    "description": "El otro sentido: a qué normas modificó ésta. Sirve para ver el alcance de un decreto de necesidad y urgencia, por ejemplo, que puede tocar decenas de leyes de una vez. Se devuelven hasta 200, de la más nueva a la más vieja, con el total de verdad aparte: el reparto es extremo y hay normas que acumulan decenas de miles de modificatorias.",
     "operationId": "verModificaA",
     "parameters": [
      {
@@ -1966,7 +1966,7 @@
      },
      "total": {
       "type": "integer",
-      "description": "Cuántas normas hay del otro lado."
+      "description": "Cuántas hay en total, aunque se devuelvan menos."
      },
      "origen": {
       "type": "string",
@@ -1985,6 +1985,18 @@
       "items": {
        "$ref": "#/components/schemas/NormaRelacionada"
       }
+     },
+     "devueltas": {
+      "type": "integer",
+      "description": "Cuántas trae esta respuesta. Se devuelven hasta 200, las más nuevas."
+     },
+     "recortada": {
+      "type": "boolean",
+      "description": "Si quedaron afuera. Hay normas con decenas de miles: la ley de convenios colectivos tiene más de cuarenta mil."
+     },
+     "nota": {
+      "type": "string",
+      "description": "Qué se devolvió cuando la lista está recortada."
      }
     }
    },

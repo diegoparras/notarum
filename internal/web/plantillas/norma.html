@@ -26,8 +26,8 @@
 
   <div class="cuerpo">{{.Cuerpo}}</div>
 
-  {{template "relaciones" dict "Titulo" "Qué la modificó" "Rel" .ModificadaPor "Vacio" "Ninguna norma la modificó, según InfoLEG."}}
-  {{template "relaciones" dict "Titulo" "A qué normas modificó" "Rel" .ModificaA "Vacio" ""}}
+  {{template "relaciones" dict "Titulo" "Qué la modificó" "Rel" .ModificadaPor}}
+  {{template "relaciones" dict "Titulo" "A qué normas modificó" "Rel" .ModificaA}}
 
   <div class="navegar">
     {{if .Volver}}<a href="{{.Volver}}">← volver al aviso</a>{{else}}<span></span>{{end}}
@@ -38,10 +38,17 @@
 {{end}}
 
 {{define "relaciones"}}
-{{if .Rel}}
-<h2 class="docs-subtitulo">{{.Titulo}}</h2>
+{{if .Rel.Normas}}
+<h2 class="docs-subtitulo">{{.Titulo}} ({{.Rel.Total}})</h2>
+{{if .Rel.Recortada}}
+<p class="pie-nota">
+  Son {{.Rel.Total}}. Se muestran las {{len .Rel.Normas}} más nuevas: hay normas
+  —la ley de convenios colectivos, sin ir más lejos— que acumulan decenas de
+  miles, y listarlas todas no ayudaría a nadie.
+</p>
+{{end}}
 <div class="relaciones">
-  {{range .Rel}}
+  {{range .Rel.Normas}}
   <a class="relacion" href="/norma/{{.ID}}">
     <span class="relacion-norma">{{.Descripcion}}</span>
     {{if .Titulo}}<span class="relacion-titulo">{{.Titulo}}</span>{{end}}

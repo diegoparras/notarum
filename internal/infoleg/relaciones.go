@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -63,6 +64,31 @@ func (s Sentido) columnaDeLaOtra() string {
 	}
 	return "id_norma_modificada"
 }
+
+// MaximoPorNorma es cuántas relaciones se guardan de cada norma.
+//
+// Hay un tope porque el reparto es extremo, medido contra los datos reales: de
+// 103.560 normas modificadas, el promedio es 3,7 modificatorias, pero la ley
+// 14250 —Convenios Colectivos de Trabajo— tiene 42.427, porque cada convenio
+// homologado figura como una modificación suya. Sin tope, esa sola norma sería
+// una entrada de quince megas en el almacén, una respuesta de API con cuarenta
+// mil elementos y una página con cuarenta mil enlaces.
+//
+// Se guardan las más nuevas, que son las que alguien está mirando cuando
+// pregunta qué le pasó a una norma, y se anota el total de verdad.
+const MaximoPorNorma = 200
+
+// Relaciones son las normas del otro lado, con cuántas hay en total.
+type Relaciones struct {
+	// Total es cuántas hay de verdad, aunque se guarden menos.
+	Total int `json:"total"`
+	// Normas son las que se guardaron, de la más nueva a la más vieja.
+	Normas []Relacion `json:"normas"`
+}
+
+// Recortada dice si quedaron afuera. Quien pregunta tiene que poder saber que
+// está viendo una parte, en vez de creer que eso es todo.
+func (r Relaciones) Recortada() bool { return r.Total > len(r.Normas) }
 
 // LeerRelaciones arma, para cada norma, la lista de las del otro lado.
 //
@@ -131,6 +157,19 @@ func LeerRelaciones(r io.Reader, sentido Sentido) (map[int][]Relacion, error) {
 		})
 	}
 	return relaciones, nil
+}
+
+// Recortar ordena por fecha, de la más nueva a la más vieja, y deja hasta el
+// tope. Devuelve el total de verdad.
+func Recortar(rs []Relacion) Relaciones {
+	// Estable: dos con la misma fecha quedan en el orden en que venían, que es
+	// el del archivo, en vez de en uno que cambia en cada corrida.
+	sort.SliceStable(rs, func(i, j int) bool { return rs[i].Fecha > rs[j].Fecha })
+	out := Relaciones{Total: len(rs), Normas: rs}
+	if len(rs) > MaximoPorNorma {
+		out.Normas = rs[:MaximoPorNorma]
+	}
+	return out
 }
 
 // Descripcion es cómo se nombra una norma relacionada.

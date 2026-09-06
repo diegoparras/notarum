@@ -40,23 +40,23 @@ type EstadoRelaciones struct {
 }
 
 // ModificadaPor son las normas que modificaron a ésta.
-func (s *Servicio) ModificadaPor(id int) []infoleg.Relacion {
+func (s *Servicio) ModificadaPor(id int) infoleg.Relaciones {
 	return s.relacionesGuardadas(claveModificadaPor(id))
 }
 
 // ModificaA son las normas que ésta modificó.
-func (s *Servicio) ModificaA(id int) []infoleg.Relacion {
+func (s *Servicio) ModificaA(id int) infoleg.Relaciones {
 	return s.relacionesGuardadas(claveModificaA(id))
 }
 
-func (s *Servicio) relacionesGuardadas(clave string) []infoleg.Relacion {
+func (s *Servicio) relacionesGuardadas(clave string) infoleg.Relaciones {
 	crudo, hay := s.cache.Leer(clave)
 	if !hay {
-		return nil
+		return infoleg.Relaciones{}
 	}
-	var rs []infoleg.Relacion
+	var rs infoleg.Relaciones
 	if err := json.Unmarshal(crudo, &rs); err != nil {
-		return nil
+		return infoleg.Relaciones{}
 	}
 	return rs
 }
@@ -122,7 +122,9 @@ func (s *Servicio) guardarRelaciones(ctx context.Context, url string, sentido in
 		if ctx.Err() != nil {
 			return normas, relaciones, ctx.Err()
 		}
-		crudo, err := json.Marshal(rs)
+		// Con tope: el reparto es extremo y una sola norma puede tener
+		// decenas de miles. Se guardan las más nuevas y el total de verdad.
+		crudo, err := json.Marshal(infoleg.Recortar(rs))
 		if err != nil {
 			continue
 		}

@@ -91,3 +91,53 @@ func TestSinLasColumnasEsperadasSeAvisa(t *testing.T) {
 		t.Error("se aceptó un archivo sin las columnas de identificador")
 	}
 }
+
+// El reparto es extremo, medido contra los datos publicados: el promedio son
+// 3,7 modificatorias por norma, pero la ley 14250 —convenios colectivos— tiene
+// 42.427, porque cada convenio homologado figura como una modificación suya.
+// Sin tope, esa sola norma sería quince megas en una entrada del almacén y una
+// página con cuarenta mil enlaces.
+func TestSeGuardanLasMasNuevasYSeCuentanTodas(t *testing.T) {
+	var muchas []Relacion
+	for i := 0; i < MaximoPorNorma+50; i++ {
+		muchas = append(muchas, Relacion{
+			ID: i, Fecha: "2020-01-" + dosDigitos(1+i%28),
+		})
+	}
+	r := Recortar(muchas)
+	if r.Total != MaximoPorNorma+50 {
+		t.Errorf("el total quedó en %d y hay %d", r.Total, len(muchas))
+	}
+	if len(r.Normas) != MaximoPorNorma {
+		t.Errorf("se guardaron %d", len(r.Normas))
+	}
+	if !r.Recortada() {
+		t.Error("no avisa que quedaron afuera")
+	}
+	// De la más nueva a la más vieja: cuando alguien pregunta qué le pasó a
+	// una ley, lo último es lo que está buscando.
+	for i := 1; i < len(r.Normas); i++ {
+		if r.Normas[i-1].Fecha < r.Normas[i].Fecha {
+			t.Fatalf("quedaron desordenadas en %d: %s antes que %s",
+				i, r.Normas[i-1].Fecha, r.Normas[i].Fecha)
+		}
+	}
+}
+
+// Y lo que entra sin recortar no dice que se recortó.
+func TestLoQueEntraNoSeMarcaComoRecortado(t *testing.T) {
+	r := Recortar([]Relacion{{ID: 1, Fecha: "2020-01-01"}, {ID: 2, Fecha: "2021-01-01"}})
+	if r.Recortada() || r.Total != 2 || len(r.Normas) != 2 {
+		t.Errorf("quedó %+v", r)
+	}
+	if r.Normas[0].ID != 2 {
+		t.Error("no quedó primero el más nuevo")
+	}
+}
+
+func dosDigitos(n int) string {
+	if n < 10 {
+		return "0" + string(rune('0'+n))
+	}
+	return string(rune('0'+n/10)) + string(rune('0'+n%10))
+}

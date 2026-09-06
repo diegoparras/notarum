@@ -155,7 +155,7 @@ func (s *Servidor) verModificaA(w http.ResponseWriter, r *http.Request) {
 	s.verRelaciones(w, r, "modifica_a", s.srv.ModificaA)
 }
 
-func (s *Servidor) verRelaciones(w http.ResponseWriter, r *http.Request, campo string, buscar func(int) []infoleg.Relacion) {
+func (s *Servidor) verRelaciones(w http.ResponseWriter, r *http.Request, campo string, buscar func(int) infoleg.Relaciones) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil || id <= 0 {
 		escribirError(w, r, http.StatusBadRequest, OrigenPedido,
@@ -175,10 +175,19 @@ func (s *Servidor) verRelaciones(w http.ResponseWriter, r *http.Request, campo s
 
 	rs := buscar(id)
 	salida := map[string]any{
-		"id":     id,
-		"total":  len(rs),
-		campo:    vistasRelacion(rs),
-		"origen": "InfoLEG, bases complementarias de normas modificadas y modificatorias",
+		"id":        id,
+		"total":     rs.Total,
+		"devueltas": len(rs.Normas),
+		campo:       vistasRelacion(rs.Normas),
+		"origen":    "InfoLEG, bases complementarias de normas modificadas y modificatorias",
+	}
+	if rs.Recortada() {
+		// Quien pregunta tiene que poder saber que está viendo una parte, en
+		// vez de creer que eso es todo. Hay normas que acumulan decenas de
+		// miles: la ley de convenios colectivos tiene más de cuarenta mil.
+		salida["recortada"] = true
+		salida["nota"] = "se devuelven las más nuevas; hay " +
+			strconv.Itoa(rs.Total) + " en total"
 	}
 	escribirJSON(w, r, http.StatusOK, salida, cacheProvincial)
 }

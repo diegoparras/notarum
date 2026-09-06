@@ -119,13 +119,19 @@ func TestQueNormasModificaronAUna(t *testing.T) {
 	if r.Total != 2 || len(r.ModificadaPor) != 2 {
 		t.Fatalf("la 24240 quedó con %d modificatorias: %s", r.Total, cuerpo)
 	}
+	// De la más nueva a la más vieja: cuando alguien pregunta qué le pasó a
+	// una ley, lo último es lo que está buscando. Y hay normas con decenas de
+	// miles, donde eso es la diferencia entre servir y no servir.
+	if r.ModificadaPor[0].Numero != "27250" || r.ModificadaPor[1].Numero != "26361" {
+		t.Errorf("el orden quedó %s, %s", r.ModificadaPor[0].Numero, r.ModificadaPor[1].Numero)
+	}
 	// Con los datos de cada una al lado: sin eso habría que pedir dos normas
 	// más para poder mostrar una lista.
 	uno := r.ModificadaPor[0]
-	if uno.Tipo != "Ley" || uno.Numero != "26361" || uno.Organismo == "" {
+	if uno.Tipo != "Ley" || uno.Organismo == "" {
 		t.Errorf("la primera quedó como %+v", uno)
 	}
-	if uno.EnNotarum != "/v1/nacional/26361" || !strings.Contains(uno.Ficha, "26361") {
+	if uno.EnNotarum != "/v1/nacional/27250" || !strings.Contains(uno.Ficha, "27250") {
 		t.Errorf("los enlaces quedaron %q y %q", uno.EnNotarum, uno.Ficha)
 	}
 }
