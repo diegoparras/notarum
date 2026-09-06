@@ -79,6 +79,10 @@ API y de la misma lista de herramientas que recibe el modelo. Si mañana se
 agrega una ruta o una herramienta, aparece sola — y hay tests que fallan si
 alguna queda sin documentar.
 
+Arriba de todo dice **qué hay en cada fuente**, que es lo que hace falta para
+saber a cuál preguntarle. Y cada ruta trae un formulario: se ponen los valores
+y salen la dirección, la línea de `curl` y el nodo de n8n, hechos.
+
 ### La búsqueda
 
 ![Búsqueda de "energia" mostrando resultados del índice local](docs/img/buscar.png)
@@ -153,6 +157,11 @@ curl https://tu-instancia/v1/ediciones/primera/2026-09-01
 | `GET /v1/nacional?texto=&tipo=&desde=&hasta=&con_texto=` | las 428 mil normas nacionales de InfoLEG |
 | `GET /v1/nacional/tipos` | los tipos de norma nacional |
 | `GET /v1/nacional/{id}` | una norma nacional, con su ficha y su texto |
+| `GET /v1/nacional/{id}/modificada-por` | qué normas modificaron a ésta |
+| `GET /v1/nacional/{id}/modifica-a` | a qué normas modificó ésta |
+| `GET /v1/nacional/novedades?desde=` | qué apareció en el catálogo desde una fecha |
+| `GET /v1/provincial/novedades?desde=` | lo mismo, para la provincial |
+| `GET /v1/todo?texto=` | la misma búsqueda en las tres fuentes, marcada por origen |
 | `GET /v1/salud` | estado del servicio, del sitio y de la caché |
 | `GET /v1/openapi.json` | el contrato, validado por un test |
 
@@ -170,11 +179,13 @@ Cada error dice de quién es la culpa, para que sepas a quién mirar:
 
 ### 3. El MCP, en `/mcp` y por entrada estándar
 
-Para que un modelo consulte el Boletín como una herramienta más. Doce:
+Para que un modelo consulte las tres fuentes como una herramienta más:
 `edicion`, `aviso`, `buscar`, `calendario`, `rubros` y `estado` para el
-Boletín; `nacional_buscar`, `nacional_norma` y `nacional_tipos` para la
-normativa nacional de InfoLEG; y `provincial_buscar`, `provincial_norma` y
-`provincial_tipos` para las leyes de las provincias.
+Boletín; `nacional_buscar`, `nacional_norma`, `nacional_relaciones` y
+`nacional_tipos` para la normativa nacional; `provincial_buscar`,
+`provincial_norma` y `provincial_tipos` para las provincias; y dos que cruzan
+todo: `buscar_todo`, que pregunta en las tres a la vez, y `novedades`, que
+contesta qué apareció desde una fecha.
 
 ```json
 {
@@ -191,7 +202,8 @@ Están pensadas para un modelo y no para una persona, y se nota en las
 decisiones: una edición se recorta a 40 avisos **y lo dice**, en vez de llenar
 la ventana de contexto en silencio; un feriado se explica en palabras en vez de
 devolver un error; y el aviso entrega el texto plano sin el HTML, que sólo
-gasta tokens.
+gasta tokens. Y cada una explica qué falta en vez de devolver una lista vacía:
+un modelo que recibe una lista vacía concluye que no hay nada y sigue de largo.
 
 ---
 
@@ -279,6 +291,24 @@ Deploy, y entrá a la raíz. La guía completa, con las dos formas de resolver e
 registry y el detalle de cada paso, está en
 [docs/easypanel.md](docs/easypanel.md).
 
+### Cambiar de motor sin volver a bajar todo
+
+Pasar de SQLite a Postgres no cuesta volver a bajar los catálogos:
+
+```bash
+notarum migrar --origen sqlite --db /datos/notarum.db
+```
+
+Se corre con la configuración del motor nuevo puesta y el viejo como origen. Lo
+vencido no se arrastra, y el índice de búsqueda se rearma desde las ediciones
+copiadas en vez de traducirse: traducir un índice entre dos motores es la clase
+de cosa que sale mal en silencio.
+
+Las escrituras masivas van por lotes. Sincronizar InfoLEG son 428 mil
+escrituras y las relaciones suman unas 200 mil más: de a una, con SQLite es una
+transacción y su espera al disco por norma, y con Postgres un viaje por la red
+cada vez. Medido contra el catálogo real, con lotes son unos seis minutos.
+
 ### Configuración
 
 | Variable | Por defecto | Qué hace |
@@ -296,6 +326,17 @@ registry y el detalle de cada paso, está en
 | `NOTARUM_MCP_TOKEN` | vacío | si se define, `/mcp` exige `Bearer` |
 | `NOTARUM_SIN_MCP` | vacío | apaga `/mcp` |
 | `NOTARUM_SIN_WEB` | vacío | apaga el lector y deja sólo la API |
+| `NOTARUM_BUSCADOR_INFOLEG` | vacío | enciende la búsqueda nacional; cuesta unos 480 MB |
+| `NOTARUM_ACTUALIZAR_A_LAS` | `05:00` | cuándo se actualizan los catálogos |
+| `NOTARUM_BOLETIN_A_LAS` | `04:00` | cuándo baja la semana del Boletín, los sábados |
+| `NOTARUM_ZONA` | `America/Argentina/Buenos_Aires` | dónde se cuentan esas horas |
+| `NOTARUM_SIN_ACTUALIZACION_AUTOMATICA` | vacío | apaga las actualizaciones solas |
+| `NOTARUM_MEMORIA_MAX` | lo del contenedor | un techo como `1GB` |
+| `NOTARUM_WEBHOOK_PERMITE_PRIVADAS` | vacío | deja que las alertas avisen a direcciones internas |
+
+Las variables de sí o no entienden `1/0`, `si/no`, `true/false` y `on/off`.
+Cualquier valor no vacío contando como sí hacía que `NOTARUM_SIN_MCP=0` apagara
+el MCP: lo contrario exacto de lo que quiso escribir quien lo escribió.
 
 ### Quién entra, y cuánto puede pedir
 
@@ -350,9 +391,21 @@ clave, se genera una y se imprime en el log al arrancar —una sola vez—. Y si
 alguna vez te quedás afuera, ponés otra en el entorno y reiniciás: se aplica
 sola.
 
-Los trabajos de poner en marcha: Son trabajos de minutos, así que corren en segundo
-plano y la pantalla muestra cómo van; se puede cerrar la página y volver
-después.
+El panel dice además **cuántas ediciones hay de cada sección**, con la primera
+y la última guardadas. La cuenta total de entradas no distinguía: una instancia
+con diez años de la primera y nada de la tercera se veía igual que una
+completa.
+
+Los trabajos son de minutos —o de horas, con el texto de cada aviso— así que
+corren en segundo plano y la pantalla muestra cómo van; se puede cerrar la
+página y volver después.
+
+**Cada cosa se actualiza sola a su horario.** Los catálogos son minutos y van
+todos los días a las cinco. Bajar el texto de una semana entera del Boletín son
+horas, así que va los sábados a las cuatro, con la máquina tranquila: las tres
+secciones, de lunes a viernes de la última semana completa. Un feriado sin
+edición se cuenta aparte de los días que fallaron de verdad, y una sección que
+falla no se lleva a las otras dos.
 
 Es de quien administra: hace falta una cuenta con rol `admin`. Los mismos
 trabajos siguen estando por consola (`notarum rellenar`, `notarum infoleg`,
@@ -391,6 +444,22 @@ guardarla, se guarda cifrada con AES-GCM y nunca se muestra de vuelta —sólo
 los primeros y los últimos caracteres, para reconocer cuál está cargada—. Se
 puede sacar cuando se quiera.
 
+**El modelo se elige entre los que ofrece esa clave**, con lo que cobra cada
+uno por millón de tokens al lado. La lista se le pide a OpenRouter y no está
+escrita acá: un nombre de modelo en una constante envejece solo, y ya pasó —el
+que estaba puesto no existía en el catálogo, así que ninguna generación
+funcionaba—. Hay un test que lo comprueba contra el catálogo real todos los
+días.
+
+También se manda sólo lo que cada modelo acepta: 82 de los 426 del catálogo
+rechazan `temperature`, toda la familia GPT-5 entre ellos, y mandárselo igual
+rompía la generación antes de empezar.
+
+La generación **no espera al proveedor**: contesta en el acto y sigue por su
+cuenta. Un pedido HTTP colgado de un tercero termina en la página de error del
+proxy, que no explica nada; así, un error que notarum puede explicar lo muestra
+notarum.
+
 El modelo no ejecuta nada: escribe algo para copiar y pegar, y se ve antes de
 correrlo.
 
@@ -419,6 +488,90 @@ en vez de prometer una copia que casi siempre estaría vacía.
 El catálogo se sirve desde memoria: 77 MB y 340 ms de carga, medidos con la
 base entera. Los paga sólo quien lo sincroniza — una instancia que no use la
 parte provincial no carga nada. Se apaga del todo con `NOTARUM_SIN_SAIJ`.
+
+### Qué modificó a qué
+
+El catálogo dice «modificada por 7» y no dice cuáles. Es un dato que no lleva a
+ningún lado: saber que una ley cambió sin saber qué la cambió obliga a ir a
+buscarlo a otro lado igual.
+
+El detalle está en dos bases complementarias del mismo dataset, y se bajan con
+la misma sincronización.
+
+```bash
+curl https://tu-instancia/v1/nacional/24240/modificada-por
+```
+
+Cuál de las dos normas describen las columnas de esas bases no está
+documentado, y los nombres de los archivos engañan. Se midió: en la base de
+«normas modificadas», 82 de 90 identificadores repetidos traen datos distintos,
+así que las columnas describen a la modificatoria; en la de «modificatorias»,
+192 de 192. Cada archivo da la otra punta de la relación.
+
+El reparto es extremo: el promedio son 3,7 modificatorias por norma, pero la
+ley 14250 —convenios colectivos— tiene **42.427**, porque cada convenio
+homologado figura como una. Las listas se acotan a las 200 más nuevas y siempre
+se muestra el total de verdad.
+
+### Alertas, y feeds
+
+Una búsqueda guardada que corre después de cada actualización y avisa **sólo lo
+nuevo**. Se crea desde `/cuenta`: dónde mirar, qué esperar, y a dónde avisar
+—un webhook de n8n, un feed Atom, o nada y se ve en la cuenta—.
+
+Dos decisiones definen si sirve o no:
+
+- **Sólo lo nuevo.** Una alerta que repite todos los días lo mismo se ignora a
+  la semana. Cada una recuerda qué ya avisó, y lo que deja de coincidir se
+  olvida: si vuelve a aparecer, volver a avisarlo es lo correcto.
+- **La primera pasada no avisa nada.** Estrenar una alerta sobre un tema viejo
+  mandaría de golpe todo lo que existe desde 1993, que es la forma más rápida
+  de que alguien la borre. Al crearla se prueba en el acto y dice con cuánto
+  coincide hoy.
+
+La dirección del webhook la pone quien crea la alerta y notarum es el que sale
+a buscarla, lo que lo convierte en un mensajero de pedidos ajenos. Se rechazan
+las direcciones internas —loopback, redes privadas, link-local y el rango de
+metadatos de las nubes—, se resuelve el nombre antes de decidir, y no se siguen
+redirecciones.
+
+El feed lleva su clave en la dirección, porque un lector de feeds no manda
+cabeceras. Es una concesión, así que no es el token de la cuenta: abre esa
+alerta y nada más, y se da de baja sola.
+
+### Qué apareció desde una fecha
+
+Un programa que consulta todos los días no quiere el catálogo entero: quiere lo
+que cambió.
+
+```bash
+curl 'https://tu-instancia/v1/nacional/novedades?desde=2026-09-01'
+```
+
+«Nuevo» quiere decir **que notarum no lo había visto**, no que la norma sea
+reciente. Los portales agregan normas viejas todo el tiempo, y una ley de 1998
+que aparece hoy es una novedad para quien sigue el catálogo; filtrar por la
+fecha de la norma se las perdería sin avisar.
+
+La respuesta dice además si el registro alcanza para contestar lo que se
+preguntó. Se guardan 120 días: preguntar por antes de eso no se puede
+responder, y contestar «no pasó nada» sería un agujero que no se nota nunca.
+
+### La consulta, armada
+
+Cada ruta de `/docs` trae un formulario con sus campos de verdad. Se ponen los
+valores y salen las tres formas hechas: la dirección, la línea de `curl` y un
+**nodo HTTP Request de n8n** listo para pegar en el lienzo.
+
+Lo arma notarum con su propio contrato, no un modelo: sale siempre válido, no
+cuesta nada y no necesita la clave de ningún proveedor. Un test arma las 22
+rutas y comprueba la forma que n8n espera —el tipo del nodo, la versión, el id
+como UUID y los parámetros de consulta en su lista en vez de pegados a la URL—.
+
+El asistente sigue estando para lo que no se puede plantillar: un pedido en
+castellano que combina varias rutas. Cada persona pone su clave de OpenRouter
+desde su cuenta y elige el modelo entre los que esa clave ofrece, con lo que
+cobra cada uno al lado.
 
 ### Federar con Lockatus
 
