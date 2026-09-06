@@ -86,13 +86,51 @@ a:hover { text-decoration: underline; }
 
 .barra { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 22px; }
 
-input[type="date"], input[type="search"], input[type="text"], select {
+/* Los campos, todos con la misma cara.
+   La regla de antes enumeraba tipos —date, search, text— y el que no estaba en
+   la lista se quedaba con el estilo del navegador: las cuotas del panel, la
+   clave de la entrada, los años de la búsqueda. Quedaban dos estilos distintos
+   en la misma pantalla sin ningún motivo visible.
+   Ahora se nombran por exclusión: se estilan todos menos los que tienen forma
+   propia. Un tipo de campo nuevo entra solo, que es lo que hace que esto no se
+   vuelva a desalinear.
+   La exclusión va adentro de :where() para que no sume especificidad. Escrita
+   con :not() encadenados, esta regla pesaba más que .clave-caja input y le
+   ganaba: el campo de la clave se quedaba sin el espacio para el ojito y el
+   texto le pasaba por abajo. Con :where() la regla vale lo que un selector de
+   elemento, que es lo que corresponde a una base. */
+input:where(:not([type="checkbox"], [type="radio"], [type="submit"], [type="button"], [type="file"], [type="range"], [type="color"])),
+select,
+textarea {
   font-family: var(--sans); font-size: 14px; color: var(--tinta);
   background: var(--crema); border: 1px solid var(--linea);
   border-radius: 10px; padding: 8px 12px; min-height: 38px;
+  max-width: 100%;
 }
-input:focus, select:focus { outline: 2px solid var(--acento); outline-offset: -1px; }
+textarea { min-height: 62px; resize: vertical; line-height: 1.55; }
+
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--acento); outline-offset: -1px;
+}
+input::placeholder, textarea::placeholder { color: var(--tinta-tenue); }
+input:disabled, select:disabled, textarea:disabled {
+  background: var(--crema-hondo); color: var(--tinta-tenue); cursor: not-allowed;
+}
+
 input[type="search"] { flex: 1 1 240px; }
+/* Los años y las cuotas son de pocos dígitos: a lo ancho de la caja quedan
+   perdidos, y con el ancho justo se lee de qué tamaño es el número. */
+input[type="number"] { width: 7.5em; }
+
+/* Las casillas, con el color de la marca y del tamaño del texto que las
+   acompaña. Sin esto quedan con el celeste del sistema, que no es de acá. */
+input[type="checkbox"], input[type="radio"] {
+  accent-color: var(--acento);
+  width: 16px; height: 16px; margin: 0;
+  vertical-align: -2px; cursor: pointer;
+}
+.casilla { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; font-size: 14px; }
+label { cursor: pointer; }
 
 .boton {
   font-family: var(--sans); font-size: 14px; font-weight: 500;
@@ -194,10 +232,7 @@ h2 { font-size: 17px; font-weight: 600; margin: 32px 0 12px; }
 
 /* El asistente de consultas: una caja para escribir y el resultado abajo. */
 .asistente { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 16px; flex-wrap: wrap; }
-.asistente textarea { flex: 1 1 340px; min-height: 62px; resize: vertical; font: inherit;
-  padding: 11px 13px; border-radius: 11px; border: 1px solid var(--linea);
-  background: var(--crema); color: var(--tinta); }
-.asistente textarea:focus { outline: 2px solid var(--acento); outline-offset: -1px; }
+.asistente textarea { flex: 1 1 340px; }
 
 /* La configuración del panel: una grilla de campos cortos, porque son números
    de una o dos cifras y ponerlos uno abajo del otro haría una lista larguísima. */
@@ -384,15 +419,15 @@ h2 { font-size: 17px; font-weight: 600; margin: 32px 0 12px; }
   color: var(--tinta-tenue); margin: 16px 0 6px; font-weight: 600;
 }
 .armar { margin: 4px 0 6px; }
-.armar input[type="text"], .armar select {
-  width: 100%; box-sizing: border-box;
-  font-family: var(--mono); font-size: 13px;
-  padding: 6px 9px; border: 1px solid var(--borde);
-  border-radius: 9px; background: var(--crema); color: var(--tinta);
-}
-.armar input[type="text"]:focus, .armar select:focus {
-  outline: none; border-color: var(--acento);
-  box-shadow: 0 0 0 3px var(--acento-tenue);
+/* Los campos del armador heredan todo y sólo cambian lo suyo: van a lo ancho
+   de su celda y en tipografía monoespaciada, porque lo que se escribe ahí son
+   valores que después aparecen en una URL.
+   Antes esto redefinía el borde con var(--borde), que no existe: un var()
+   inválido invalida la declaración entera, así que estos campos quedaban
+   directamente sin borde. */
+.armar input, .armar select {
+  width: 100%; font-family: var(--mono); font-size: 13px;
+  padding: 6px 9px; min-height: 34px;
 }
 .armar .docs-tabla td { vertical-align: top; }
 /* La columna del valor, con lugar para escribir; la de la explicación, angosta
