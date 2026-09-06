@@ -65,6 +65,10 @@ type Sitio struct {
 	marca almacen.Marca
 	// asistente arma consultas a partir de un pedido en castellano.
 	asistente *asistente.Cliente
+	// semanal es la bajada de la semana del Boletín, la misma que corre sola
+	// el sábado. Se recibe armada porque vive en el arranque, donde están las
+	// secciones y la fecha.
+	semanal tareas.Trabajo
 	// alertas son las búsquedas guardadas que avisan cuando aparece algo.
 	alertas  *alertas.Registro
 	corredor *alertas.Corredor
@@ -98,6 +102,12 @@ func (s *Sitio) ConTareas(e *tareas.Ejecutor) *Sitio {
 func (s *Sitio) ConAlertas(reg *alertas.Registro, c *alertas.Corredor) *Sitio {
 	s.alertas = reg
 	s.corredor = c
+	return s
+}
+
+// ConBajadaSemanal le da al panel con qué bajar la semana del Boletín a mano.
+func (s *Sitio) ConBajadaSemanal(t tareas.Trabajo) *Sitio {
+	s.semanal = t
 	return s
 }
 
@@ -190,6 +200,7 @@ var funciones = template.FuncMap{
 	"haceCuanto": haceCuanto,
 	"enCuanto":   enCuanto,
 	"cuantoVa":   cuantoVa,
+	"conPuntos":  conPuntos,
 	"curl":       curlDe,
 	"n8n":        n8nDe,
 	"fechaCorta": fechaCorta,

@@ -511,3 +511,59 @@ func TestElPanelDiceDesdeCuandoGuarda(t *testing.T) {
 		t.Error("avisa que arrancó vacío cuando no lo hizo")
 	}
 }
+
+// ------------------------------------------------ la cobertura del Boletín
+
+// El panel dice cuántas ediciones hay de cada sección. Sin eso, una instancia
+// con diez años de la primera y nada de la tercera se ve igual que una
+// completa: la cuenta total de entradas no distingue.
+func TestElPanelDiceQueHayDeCadaSeccion(t *testing.T) {
+	srv, _ := sitioConPanel(t)
+	_, cuerpo := pedirCon(t, entrarComo(t, srv, "jefa"), srv.URL+"/admin")
+
+	for _, esperado := range []string{
+		"Qué hay guardado", "primera", "segunda", "tercera",
+		"decretos, resoluciones y disposiciones",
+	} {
+		if !strings.Contains(cuerpo, esperado) {
+			t.Errorf("el panel no muestra %q", esperado)
+		}
+	}
+	// Y avisa que la cuarta no está, para que no se busque lo que no hay.
+	if !strings.Contains(cuerpo, "cuarta sección") {
+		t.Error("no aclara que la cuarta sección no está")
+	}
+}
+
+// Cada trabajo automático con su horario: no todos corren a la misma hora, y
+// mostrar una sola sería mentir sobre dos de los tres.
+func TestElPanelMuestraElHorarioDeCadaTrabajo(t *testing.T) {
+	srv, _ := armarPanel(t, func(s *Sitio, ej *tareas.Ejecutor) {
+		p, err := tareas.NuevoProgramador(ej, "05:00", tareas.ZonaArgentina)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := p.Agregar(tareas.Programado{
+			Tipo: tareaInfoLEG, Que: "actualizar InfoLEG", Hacer: nada,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err := p.Agregar(tareas.Programado{
+			Tipo: tareaBoletin, Que: "bajar la semana del Boletín", Hacer: nada,
+			Hora: "04:00", Dias: []time.Weekday{time.Saturday},
+		}); err != nil {
+			t.Fatal(err)
+		}
+		s.ConProgramador(p)
+	})
+	_, cuerpo := pedirCon(t, entrarComo(t, srv, "jefa"), srv.URL+"/admin")
+
+	for _, esperado := range []string{
+		"actualizar InfoLEG", "todos los días a las 05:00",
+		"bajar la semana del Boletín", "sábado a las 04:00",
+	} {
+		if !strings.Contains(cuerpo, esperado) {
+			t.Errorf("el panel no muestra %q", esperado)
+		}
+	}
+}

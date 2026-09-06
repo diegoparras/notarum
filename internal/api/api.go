@@ -53,6 +53,9 @@ type Config struct {
 	// Corredor es lo que las evalúa.
 	Alertas  *alertas.Registro
 	Corredor *alertas.Corredor
+	// BajadaSemanal es el trabajo que baja la semana del Boletín, el mismo que
+	// corre solo el sábado, para poder lanzarlo desde el panel.
+	BajadaSemanal tareas.Trabajo
 }
 
 // Servidor atiende las rutas de /v1.
@@ -114,6 +117,9 @@ func Nuevo(cfg Config) *Servidor {
 		sitio = sitio.ConMarca(cfg.Marca)
 		if cfg.Alertas != nil {
 			sitio = sitio.ConAlertas(cfg.Alertas, cfg.Corredor)
+		}
+		if cfg.BajadaSemanal != nil {
+			sitio = sitio.ConBajadaSemanal(cfg.BajadaSemanal)
 		}
 		s.web = sitio
 		s.conWeb = true

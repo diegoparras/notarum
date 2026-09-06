@@ -428,20 +428,42 @@ func servir(args []string) error {
 	corredor := alertas.NuevoCorredor(regAlertas, srv, entorno("NOTARUM_DIRECCION", ""))
 
 	if !encendido("NOTARUM_SIN_ACTUALIZACION_AUTOMATICA", false) {
-		programador.Agregar(tareas.Programado{
+		if err := programador.Agregar(tareas.Programado{
 			Tipo:  "infoleg",
+			Que:   "actualizar InfoLEG",
 			Hacer: trabajoInfoLEG(srv),
-		})
-		programador.Agregar(tareas.Programado{
+		}); err != nil {
+			return err
+		}
+		if err := programador.Agregar(tareas.Programado{
 			Tipo:  "provincial",
+			Que:   "actualizar la normativa provincial",
 			Hacer: trabajoProvincial(srv),
-		})
+		}); err != nil {
+			return err
+		}
 		// Después de las dos: una alerta que corre antes de la actualización
 		// mira los datos de ayer, y lo de hoy lo avisaría recién mañana.
-		programador.Agregar(tareas.Programado{
+		if err := programador.Agregar(tareas.Programado{
 			Tipo:  "alertas",
+			Que:   "mirar las alertas",
 			Hacer: trabajoAlertas(corredor, ejecutor),
-		})
+		}); err != nil {
+			return err
+		}
+		// El Boletín, una vez por semana y de madrugada. Bajar el texto de
+		// cinco días de tres secciones son horas: hacerlo todos los días
+		// tendría a la instancia ocupada permanentemente, y hacerlo en
+		// horario de uso la haría inservible mientras tanto.
+		if err := programador.Agregar(tareas.Programado{
+			Tipo:  "boletin",
+			Que:   "bajar la semana del Boletín",
+			Hora:  entorno("NOTARUM_BOLETIN_A_LAS", "04:00"),
+			Dias:  []time.Weekday{time.Saturday},
+			Hacer: trabajoSemanaDelBoletin(srv),
+		}); err != nil {
+			return err
+		}
 		programador.Arrancar()
 		defer programador.Frenar()
 	}
@@ -452,6 +474,7 @@ func servir(args []string) error {
 		Registro: reg, Politica: politica, Hub: hub,
 		Tareas: ejecutor, Programador: programador, Marca: marca,
 		Alertas: regAlertas, Corredor: corredor,
+		BajadaSemanal: trabajoSemanaDelBoletin(srv),
 		// El asistente se enciende solo: cada persona pone su clave de
 		// OpenRouter desde su cuenta, así que no hay nada que configurar acá.
 		Asistente: asistente.NuevoCliente(asistente.Opciones{}),
@@ -1083,4 +1106,79 @@ func migrar(args []string) error {
 		"tardo", time.Since(inicio).Round(time.Second),
 		"ahora", "reiniciá el servicio para que use el motor nuevo")
 	return nil
+}
+
+// trabajoSemanaDelBoletin baja el texto completo de la semana que terminó.
+//
+// De lunes a viernes: el Boletín no publica los fines de semana. Y de los cinco
+// puede faltar alguno por feriado, que no es una falla —es un día sin edición—
+// y se cuenta aparte de los que fallaron de verdad. Confundirlos haría que una
+// semana con un feriado se viera como una semana rota.
+func trabajoSemanaDelBoletin(srv *servicio.Servicio) tareas.Trabajo {
+	return func(ctx context.Context, avisar func(string)) (string, error) {
+		desde, hasta := semanaAnterior(boletin.HoyEnArgentina())
+		slog.Info("bajando la semana del Boletín",
+			"desde", desde.API(), "hasta", hasta.API())
+
+		var total servicio.Relleno
+		var fallaron []string
+		for _, sec := range boletin.SeccionesValidas {
+			if ctx.Err() != nil {
+				return "", ctx.Err()
+			}
+			avisar("bajando la sección " + string(sec) + " del " + desde.API() + " al " + hasta.API())
+			r, err := srv.RellenarConAvisos(ctx, sec, desde, hasta, func(a servicio.Avance) {
+				avisar(a.Texto())
+			})
+			// Lo que alcanzó a bajar antes del error queda: se suma igual.
+			total.Dias += r.Dias
+			total.Bajadas += r.Bajadas
+			total.YaEstaban += r.YaEstaban
+			total.SinEdicion += r.SinEdicion
+			total.Fallidas += r.Fallidas
+			total.Avisos += r.Avisos
+			total.TextosBajados += r.TextosBajados
+			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					return "", err
+				}
+				// Una sección que falla no se lleva a las otras: son tres
+				// bajadas distintas y perder las tres por una es peor.
+				fallaron = append(fallaron, string(sec)+" ("+err.Error()+")")
+				slog.Warn("falló una sección de la semana", "seccion", sec, "err", err)
+			}
+		}
+
+		texto := fmt.Sprintf("del %s al %s: %d ediciones, %d avisos con texto",
+			desde.API(), hasta.API(), total.Bajadas+total.YaEstaban, total.TextosBajados)
+		if total.SinEdicion > 0 {
+			texto += fmt.Sprintf("; %d días sin edición (feriados)", total.SinEdicion)
+		}
+		if total.Fallidas > 0 {
+			texto += fmt.Sprintf("; %d días fallaron", total.Fallidas)
+		}
+		if len(fallaron) > 0 {
+			return texto, errors.New("no se pudo terminar: " + strings.Join(fallaron, "; "))
+		}
+		return texto, nil
+	}
+}
+
+// semanaAnterior devuelve el lunes y el viernes de la semana que terminó.
+//
+// Se cuenta hacia atrás desde el día en que corre, así que sirve igual si el
+// sábado se corre a mano un martes: siempre es la última semana completa.
+func semanaAnterior(hoy boletin.Fecha) (lunes, viernes boletin.Fecha) {
+	// Se busca el viernes anterior a hoy y de ahí se cuentan cuatro días para
+	// atrás. Contar desde el lunes de esta semana fallaba justo el sábado, que
+	// es cuando corre: el sábado el lunes de "esta" semana es el de la semana
+	// que acaba de terminar, y restarle siete la salteaba entera.
+	//
+	// Si hoy es viernes, se toma el de la semana pasada: la edición de hoy
+	// puede no estar todavía a las cuatro de la mañana.
+	d := hoy.AddDate(0, 0, -1)
+	for d.Weekday() != time.Friday {
+		d = d.AddDate(0, 0, -1)
+	}
+	return boletin.Fecha{Time: d.AddDate(0, 0, -4)}, boletin.Fecha{Time: d}
 }

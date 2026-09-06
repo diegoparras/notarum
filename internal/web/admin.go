@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -30,6 +31,7 @@ const (
 	tareaProvincial = "provincial"
 	tareaRellenar   = "rellenar"
 	tareaAlertas    = "alertas"
+	tareaBoletin    = "boletin"
 )
 
 type datosAdmin struct {
@@ -53,6 +55,11 @@ type datosAdmin struct {
 
 	// Automatica es la actualización de todos los días, si está encendida.
 	Automatica *datosAutomatica
+
+	// Cobertura dice cuántas ediciones hay de cada sección. Sin esto, el panel
+	// dice cuántas entradas tiene la base y no de qué: una instancia con diez
+	// años de la primera y nada de la tercera se ve igual que una completa.
+	Cobertura []servicio.CoberturaDeSeccion
 
 	// Marca dice desde cuándo guarda este almacén. Si arrancó vacío, hace
 	// falta decirlo: lo que se cargue se va a perder en el próximo despliegue.
@@ -110,6 +117,7 @@ func (s *Sitio) dibujarAdmin(w http.ResponseWriter, r *http.Request, u *cuentas.
 		Aviso:       aviso,
 		Error:       errMsg,
 		Tareas:      map[string]tareas.Tarea{},
+		Cobertura:   s.srv.Cobertura(),
 		Marca:       s.marca,
 		Politica:    s.vigente(),
 		Modos:       []cuentas.Modo{cuentas.ModoAbierto, cuentas.ModoMixto, cuentas.ModoCerrado},
@@ -118,18 +126,17 @@ func (s *Sitio) dibujarAdmin(w http.ResponseWriter, r *http.Request, u *cuentas.
 		d.PoliticaGuardada = s.registro.HayPoliticaGuardada()
 	}
 	if s.tareas != nil {
-		for _, t := range []string{tareaInfoLEG, tareaProvincial, tareaRellenar, tareaAlertas} {
+		for _, t := range []string{tareaInfoLEG, tareaProvincial, tareaRellenar, tareaAlertas, tareaBoletin} {
 			d.Tareas[t] = s.tareas.Estado(t)
 		}
 		d.Corriendo = s.tareas.AlgoCorriendo()
 	}
 	if s.programador != nil {
 		d.Automatica = &datosAutomatica{
-			Hora:    s.programador.HoraTexto(),
-			Zona:    s.programador.Zona(),
-			Proxima: s.programador.Proxima(),
-			Ultima:  s.programador.Ultima(),
-			Tareas:  s.programador.Tareas(),
+			Zona:     s.programador.Zona(),
+			Proxima:  s.programador.Proxima(),
+			Ultima:   s.programador.Ultima(),
+			Trabajos: s.programador.Trabajos(),
 		}
 	}
 	s.mostrar(w, r, "admin", d, codigo)
@@ -157,6 +164,8 @@ func (s *Sitio) lanzarTarea(w http.ResponseWriter, r *http.Request) {
 		trabajo = s.trabajoInfoLEG()
 	case tareaProvincial:
 		trabajo = s.trabajoProvincial()
+	case tareaBoletin:
+		trabajo = s.trabajoSemanaDelBoletin()
 	case tareaAlertas:
 		if s.corredor == nil {
 			s.dibujarAdmin(w, r, u, "", "Esta instancia no tiene alertas encendidas.",
@@ -378,11 +387,10 @@ func (s *Sitio) olvidarPolitica(w http.ResponseWriter, r *http.Request) {
 // actualizan solos de madrugada, y quien opera tiene que poder verlo sin
 // entrar al contenedor a leer el log.
 type datosAutomatica struct {
-	Hora    string
-	Zona    string
-	Proxima time.Time
-	Ultima  time.Time
-	Tareas  []string
+	Zona     string
+	Proxima  time.Time
+	Ultima   time.Time
+	Trabajos []tareas.Programado
 }
 
 // enCuanto dice cuánto falta para algo que todavía no pasó.
@@ -433,5 +441,15 @@ func (s *Sitio) trabajoAlertas() tareas.Trabajo {
 			texto += fmt.Sprintf("; %d fallaron", r.Fallaron)
 		}
 		return texto, nil
+	}
+}
+
+// trabajoSemanaDelBoletin baja a mano la misma semana que baja sola el sábado.
+func (s *Sitio) trabajoSemanaDelBoletin() tareas.Trabajo {
+	return func(ctx context.Context, avisar func(string)) (string, error) {
+		if s.semanal == nil {
+			return "", errors.New("esta instancia no tiene la bajada semanal configurada")
+		}
+		return s.semanal(ctx, avisar)
 	}
 }
