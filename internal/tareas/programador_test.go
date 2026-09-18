@@ -285,22 +285,32 @@ func TestCadaTrabajoCorreASuHora(t *testing.T) {
 		}
 	}
 
-	// A la hora del diario, el semanal no corre —salvo que ese día sea sábado
-	// y ya le tocara, que no es el caso a las cinco.
+	// A la hora del diario, el semanal corre sólo si ya le tocaba. Un viernes
+	// después de las cinco, el próximo diario es el sábado a las 05:00 y el
+	// semanal el sábado a las 04:00, que ya pasó: ahí sí corre, y está bien.
+	// El test decía que nunca, y fallaba los viernes.
 	trabajos := p.Trabajos()
-	var citaDelDiario time.Time
+	var citaDelDiario, citaDelSemanal time.Time
 	for _, tr := range trabajos {
-		if tr.Tipo == "infoleg" {
+		switch tr.Tipo {
+		case "infoleg":
 			citaDelDiario = tr.Proxima()
+		case "boletin":
+			citaDelSemanal = tr.Proxima()
 		}
 	}
+	leTocaba := !citaDelSemanal.After(citaDelDiario)
 	p.correr(citaDelDiario)
 	esperarA(t, e, "infoleg")
 
 	if _, corrio := corrieron.Load("infoleg"); !corrio {
 		t.Error("el diario no corrió a su hora")
 	}
-	if _, corrio := corrieron.Load("boletin"); corrio {
-		t.Error("el semanal corrió a la hora del diario")
+	if leTocaba {
+		esperarA(t, e, "boletin")
+	}
+	if _, corrio := corrieron.Load("boletin"); corrio != leTocaba {
+		t.Errorf("el semanal corrió: %v; le tocaba: %v (diario %s, semanal %s)",
+			corrio, leTocaba, citaDelDiario, citaDelSemanal)
 	}
 }
