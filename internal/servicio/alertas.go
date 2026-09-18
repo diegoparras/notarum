@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/diegoparras/notarum/internal/alertas"
 	"github.com/diegoparras/notarum/internal/almacen"
@@ -31,6 +32,9 @@ func (s *Servicio) BuscarParaAlerta(ctx context.Context, f alertas.Fuente, c ale
 	hallazgos, err := s.BuscarEnFuente(ctx, string(f), Criterios{
 		Texto: c.Texto, Tipo: c.Tipo, Provincia: c.Provincia,
 		Seccion: c.Seccion, SoloVigentes: c.SoloVigentes,
+		// Sólo lo reciente puede ser una novedad: buscar desde 2015 en cada
+		// pasada de cada alerta no agrega nada.
+		UltimosDias: diasQueMiraUnaAlerta,
 	}, cuantasMiraUnaAlerta)
 	if err != nil {
 		return nil, err
@@ -52,6 +56,27 @@ type Criterios struct {
 	Provincia    string
 	Seccion      string
 	SoloVigentes bool
+	// DesdeAnio y HastaAnio acotan por año en las tres: el de sanción en la
+	// normativa, el de publicación en el Boletín. Cero los deja abiertos.
+	DesdeAnio, HastaAnio int
+	// UltimosDias acota el Boletín a lo reciente. Lo usan las alertas, que
+	// sólo pueden encontrar novedades ahí; una búsqueda común lo deja en cero
+	// y mira toda la historia indexada.
+	//
+	// Antes esa ventana estaba escrita adentro de la búsqueda del Boletín, y
+	// la usaban también /v1/todo y buscar_todo del MCP: pedirle al Boletín
+	// algo de hace un mes daba cero resultados, sin avisar por qué.
+	UltimosDias int
+	// Desplazamiento es desde qué resultado traer, para paginar.
+	Desplazamiento int
+}
+
+// PaginaDeFuente es una página de resultados de una fuente, con cuántos hay
+// en total: sin el total, "10 resultados" no dice si son todos o los
+// primeros diez de tres mil.
+type PaginaDeFuente struct {
+	Hallazgos []Hallazgo
+	Total     int
 }
 
 // Hallazgo es algo encontrado, venga de donde venga. Es lo que permite juntar
@@ -69,8 +94,17 @@ type Hallazgo struct {
 
 // BuscarEnFuente busca en una sola de las tres.
 func (s *Servicio) BuscarEnFuente(ctx context.Context, fuente string, c Criterios, limite int) ([]Hallazgo, error) {
+	p, err := s.BuscarPagina(ctx, fuente, c, limite)
+	return p.Hallazgos, err
+}
+
+// BuscarPagina busca en una fuente y dice además cuántos hay en total.
+func (s *Servicio) BuscarPagina(ctx context.Context, fuente string, c Criterios, limite int) (PaginaDeFuente, error) {
 	if limite <= 0 {
 		limite = cuantasMiraUnaAlerta
+	}
+	if c.Desplazamiento < 0 {
+		c.Desplazamiento = 0
 	}
 	switch alertas.Fuente(fuente) {
 	case alertas.FuenteNacional:
@@ -80,21 +114,22 @@ func (s *Servicio) BuscarEnFuente(ctx context.Context, fuente string, c Criterio
 	case alertas.FuenteBoletin:
 		return s.buscarBoletinPara(ctx, c, limite)
 	}
-	return nil, errors.New("no se sabe dónde mirar: " + fuente)
+	return PaginaDeFuente{}, errors.New("no se sabe dónde mirar: " + fuente)
 }
 
-func (s *Servicio) buscarNacionalPara(c Criterios, limite int) ([]Hallazgo, error) {
+func (s *Servicio) buscarNacionalPara(c Criterios, limite int) (PaginaDeFuente, error) {
 	if !s.BuscadorInfoLEGActivo() {
-		return nil, errors.New("el buscador de normativa nacional está apagado en esta instancia")
+		return PaginaDeFuente{}, errors.New("el buscador de normativa nacional está apagado en esta instancia")
 	}
 	if !s.CatalogoNacionalCargado() {
-		return nil, errors.New("el catálogo de InfoLEG todavía no se bajó")
+		return PaginaDeFuente{}, errors.New("el catálogo de InfoLEG todavía no se bajó")
 	}
 	res := s.BuscarNacional(infoleg.Consulta{
-		Texto: c.Texto, Tipo: c.Tipo, Limite: limite,
+		Texto: c.Texto, Tipo: c.Tipo, Desde: c.DesdeAnio, Hasta: c.HastaAnio,
+		Limite: limite, Desplazamiento: c.Desplazamiento,
 	})
 	if res == nil {
-		return nil, nil
+		return PaginaDeFuente{}, nil
 	}
 	out := make([]Hallazgo, 0, len(res.Normas))
 	for _, n := range res.Normas {
@@ -109,27 +144,28 @@ func (s *Servicio) buscarNacionalPara(c Criterios, limite int) ([]Hallazgo, erro
 			EnAPI:   "/v1/nacional/" + strconv.Itoa(id),
 		})
 	}
-	return out, nil
+	return PaginaDeFuente{Hallazgos: out, Total: res.Total}, nil
 }
 
-func (s *Servicio) buscarProvincialPara(c Criterios, limite int) ([]Hallazgo, error) {
+func (s *Servicio) buscarProvincialPara(c Criterios, limite int) (PaginaDeFuente, error) {
 	if !s.CatalogoProvincialCargado() {
-		return nil, errors.New("la normativa provincial todavía no se bajó")
+		return PaginaDeFuente{}, errors.New("la normativa provincial todavía no se bajó")
 	}
 	provincia := c.Provincia
 	if provincia != "" {
 		p, hay := saij.BuscarProvincia(provincia)
 		if !hay {
-			return nil, errors.New("no se reconoce la provincia " + provincia)
+			return PaginaDeFuente{}, errors.New("no se reconoce la provincia " + provincia)
 		}
 		provincia = p.ID
 	}
 	res := s.BuscarProvincial(saij.Consulta{
 		Texto: c.Texto, Tipo: c.Tipo, Provincia: provincia,
-		SoloVigentes: c.SoloVigentes, Limite: limite,
+		Desde: c.DesdeAnio, Hasta: c.HastaAnio,
+		SoloVigentes: c.SoloVigentes, Limite: limite, Desplazamiento: c.Desplazamiento,
 	})
 	if res == nil {
-		return nil, nil
+		return PaginaDeFuente{}, nil
 	}
 	out := make([]Hallazgo, 0, len(res.Normas))
 	for _, n := range res.Normas {
@@ -143,33 +179,32 @@ func (s *Servicio) buscarProvincialPara(c Criterios, limite int) ([]Hallazgo, er
 			EnAPI:   "/v1/provincial/" + n.ID,
 		})
 	}
-	return out, nil
+	return PaginaDeFuente{Hallazgos: out, Total: res.Total}, nil
 }
 
-func (s *Servicio) buscarBoletinPara(ctx context.Context, c Criterios, limite int) ([]Hallazgo, error) {
+func (s *Servicio) buscarBoletinPara(ctx context.Context, c Criterios, limite int) (PaginaDeFuente, error) {
 	if s.indice == nil {
-		return nil, errors.New("esta instancia no tiene índice local: " +
-			"las alertas del Boletín necesitan el motor sqlite o postgres")
+		return PaginaDeFuente{}, errors.New("esta instancia no tiene índice local: " +
+			"buscar en el Boletín necesita el motor sqlite o postgres")
 	}
 	var seccion boletin.Seccion
 	if c.Seccion != "" {
 		sec, err := boletin.ParseSeccion(c.Seccion)
 		if err != nil {
-			return nil, err
+			return PaginaDeFuente{}, err
 		}
 		seccion = sec
 	}
-	// Los últimos días, que es donde puede haber una novedad. El índice tiene
-	// lo que se haya llenado; buscar desde 2015 en cada pasada no agrega nada.
-	hasta := boletin.HoyEnArgentina()
-	desde := boletin.Fecha{Time: hasta.AddDate(0, 0, -diasQueMiraUnaAlerta)}
+	desde, hasta := rangoDelBoletin(c)
 
+	// BuscarEnIndice pagina por número de página; el desplazamiento se
+	// traduce a la página que lo contiene.
 	res, err := s.BuscarEnIndice(ctx, almacen.ConsultaLocal{
 		Texto: c.Texto, Seccion: seccion, Rubro: c.Tipo,
 		Desde: desde, Hasta: hasta, Limite: limite,
-	}, 1)
+	}, c.Desplazamiento/limite+1)
 	if err != nil {
-		return nil, err
+		return PaginaDeFuente{}, err
 	}
 	out := make([]Hallazgo, 0, len(res.Avisos))
 	for _, a := range res.Avisos {
@@ -183,7 +218,24 @@ func (s *Servicio) buscarBoletinPara(ctx context.Context, c Criterios, limite in
 			EnAPI:   "/v1/avisos/" + string(a.Seccion) + "/" + a.ID + "/" + a.Fecha.API(),
 		})
 	}
-	return out, nil
+	return PaginaDeFuente{Hallazgos: out, Total: res.Total}, nil
+}
+
+// rangoDelBoletin traduce los criterios a fechas. La ventana de las alertas
+// manda; si no, los años, que en el Boletín van del primero de enero al 31
+// de diciembre. Sin nada, las fechas quedan vacías y se mira todo.
+func rangoDelBoletin(c Criterios) (desde, hasta boletin.Fecha) {
+	if c.UltimosDias > 0 {
+		hasta = boletin.HoyEnArgentina()
+		return boletin.Fecha{Time: hasta.AddDate(0, 0, -c.UltimosDias)}, hasta
+	}
+	if c.DesdeAnio > 0 {
+		desde = boletin.Fecha{Time: time.Date(c.DesdeAnio, 1, 1, 0, 0, 0, 0, time.UTC)}
+	}
+	if c.HastaAnio > 0 {
+		hasta = boletin.Fecha{Time: time.Date(c.HastaAnio, 12, 31, 0, 0, 0, 0, time.UTC)}
+	}
+	return desde, hasta
 }
 
 // diasQueMiraUnaAlerta es cuánto para atrás mira una alerta del Boletín. Más
@@ -204,6 +256,9 @@ type EnTodo struct {
 	Total  int            `json:"total"`
 	Por    map[string]int `json:"por_fuente"`
 	Normas []Hallazgo     `json:"resultados"`
+	// Totales son cuántos coinciden en cada fuente, no cuántos se
+	// devolvieron: "10" no dice si son todos o los primeros diez de tres mil.
+	Totales map[string]int `json:"totales"`
 	// SinMirar dice qué fuente no se pudo consultar y por qué. Una fuente
 	// apagada no puede pasar por "no hay nada": son cosas distintas.
 	SinMirar map[string]string `json:"sin_mirar,omitempty"`
@@ -214,12 +269,12 @@ func (s *Servicio) BuscarEnTodo(ctx context.Context, c Criterios, porFuente int)
 	if porFuente <= 0 {
 		porFuente = 10
 	}
-	out := EnTodo{Texto: c.Texto, Por: map[string]int{}}
+	out := EnTodo{Texto: c.Texto, Por: map[string]int{}, Totales: map[string]int{}}
 
 	// En serie y no en paralelo: con el motor SQLite hay una sola conexión, y
 	// tres consultas a la vez se hacen cola igual pero con más piezas móviles.
 	for _, fuente := range []string{"boletin", "nacional", "provincial"} {
-		hallazgos, err := s.BuscarEnFuente(ctx, fuente, c, porFuente)
+		p, err := s.BuscarPagina(ctx, fuente, c, porFuente)
 		if err != nil {
 			if out.SinMirar == nil {
 				out.SinMirar = map[string]string{}
@@ -227,9 +282,10 @@ func (s *Servicio) BuscarEnTodo(ctx context.Context, c Criterios, porFuente int)
 			out.SinMirar[fuente] = err.Error()
 			continue
 		}
-		out.Por[fuente] = len(hallazgos)
-		out.Normas = append(out.Normas, hallazgos...)
-		out.Total += len(hallazgos)
+		out.Por[fuente] = len(p.Hallazgos)
+		out.Totales[fuente] = p.Total
+		out.Normas = append(out.Normas, p.Hallazgos...)
+		out.Total += len(p.Hallazgos)
 	}
 	return out
 }

@@ -2101,7 +2101,11 @@
      },
      "por_fuente": {
       "type": "object",
-      "description": "Cuántos aportó cada fuente."
+      "description": "Cuántos aportó cada fuente a esta respuesta."
+     },
+     "totales": {
+      "type": "object",
+      "description": "Cuántos coinciden en cada fuente, no sólo cuántos se devolvieron: 10 resultados pueden ser todos o los primeros diez de tres mil. En el Boletín se busca en toda la historia indexada."
      },
      "sin_mirar": {
       "type": "object",

@@ -19,6 +19,7 @@ func TestBuscarEnLasTresFuentes(t *testing.T) {
 		Texto      string            `json:"texto"`
 		Total      int               `json:"total"`
 		PorFuente  map[string]int    `json:"por_fuente"`
+		Totales    map[string]int    `json:"totales"`
 		SinMirar   map[string]string `json:"sin_mirar"`
 		Resultados []struct {
 			Fuente string `json:"fuente"`
@@ -41,6 +42,11 @@ func TestBuscarEnLasTresFuentes(t *testing.T) {
 		if _, hay := r.SinMirar[fuente]; !hay {
 			t.Errorf("la fuente %s no aparece ni con resultados ni en sin_mirar", fuente)
 		}
+	}
+	// Cuántos coinciden de verdad, no sólo cuántos vinieron.
+	if r.Totales["nacional"] < r.PorFuente["nacional"] {
+		t.Errorf("el total de la nacional (%d) es menos que lo devuelto (%d)",
+			r.Totales["nacional"], r.PorFuente["nacional"])
 	}
 	if r.SinMirar["nacional"] != "" {
 		t.Errorf("la nacional está sincronizada y quedó sin mirar: %q", r.SinMirar["nacional"])
