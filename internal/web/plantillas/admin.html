@@ -269,6 +269,41 @@ de acá abajo.</div>
   {{end}}
 {{end}}
 
+<h2>Vencimientos de ARCA</h2>
+<p class="docs-parrafo">
+  La agenda impositiva: qué obligación vence cada día, para qué terminación de
+  CUIT y bajo qué norma. Cada bajada se compara con la anterior para registrar
+  qué fechas movió ARCA. Son unos megabytes y tarda medio minuto.
+</p>
+
+{{if not .VencimientosHay}}
+  <div class="vacio"><strong>La agenda de vencimientos está apagada en esta instancia</strong>
+  Se enciende sacando <code>NOTARUM_SIN_VENCIMIENTOS</code> de la configuración.</div>
+{{else}}
+  {{$t := index .Tareas "vencimientos"}}
+  {{template "tarea" dict "T" $t "Nombre" "la bajada de la agenda"}}
+
+  {{if .Vencimientos.Sincronizado}}
+  <div class="datos">
+    <div><span class="dato-nombre">vencimientos vigentes</span><span class="dato-mono">{{.Vencimientos.Vigentes}}</span></div>
+    <div><span class="dato-nombre">período pedido</span><span class="dato-mono">{{.Vencimientos.Desde}} a {{.Vencimientos.Hasta}}</span></div>
+    {{/* En la primera bajada todo es nuevo y nada es un cambio: decir "2409
+         altas" haría creer que ARCA movió la agenda entera. */}}
+    <div><span class="dato-nombre">cambios en la última</span><span class="dato-mono">{{if .Vencimientos.Resumen.CargaInicial}}primera bajada, nada con qué comparar{{else}}{{.Vencimientos.Resumen.Prorrogas}} prórrogas, {{.Vencimientos.Resumen.Adelantos}} adelantos, {{.Vencimientos.Resumen.Altas}} altas, {{.Vencimientos.Resumen.Bajas}} bajas{{end}}</span></div>
+    <div><span class="dato-nombre">bajada</span>{{haceCuanto .Vencimientos.SincronizadoEn}}</div>
+  </div>
+  {{range .Vencimientos.Avisos}}<p class="docs-parrafo">{{.}}</p>{{end}}
+  {{end}}
+
+  {{if not $t.EstaCorriendo}}
+  <form method="post" action="/admin/tareas/vencimientos">
+    <button class="boton" type="submit">
+      {{if .Vencimientos.Sincronizado}}Volver a bajar{{else}}Bajar la agenda de vencimientos{{end}}
+    </button>
+  </form>
+  {{end}}
+{{end}}
+
 {{end}}
 
 {{define "tarea"}}

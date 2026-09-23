@@ -32,6 +32,9 @@ const (
 	tareaRellenar   = "rellenar"
 	tareaAlertas    = "alertas"
 	tareaBoletin    = "boletin"
+	// Tiene que llamarse igual que la tarea programada de main.go: si no, el
+	// panel mostraría una tarea y la actualización diaria correría otra.
+	tareaVencimientos = "vencimientos"
 )
 
 type datosAdmin struct {
@@ -47,6 +50,9 @@ type datosAdmin struct {
 	SAIJ       servicio.EstadoSAIJ
 	SAIJHay    bool
 	InfoLEGHay bool
+
+	Vencimientos    servicio.EstadoVencimientos
+	VencimientosHay bool
 
 	Tareas map[string]tareas.Tarea
 	// Corriendo enciende el refresco de la página: mientras algo trabaja, la
@@ -103,30 +109,32 @@ func (s *Sitio) verAdmin(w http.ResponseWriter, r *http.Request) {
 func (s *Sitio) dibujarAdmin(w http.ResponseWriter, r *http.Request, u *cuentas.Usuario, aviso, errMsg string, codigo int) {
 	m := s.srv.Almacen().Metricas()
 	d := datosAdmin{
-		comun:       s.baseCon(r, "", ""),
-		Yo:          u,
-		Almacen:     m.Motor,
-		Entradas:    m.Entradas,
-		Avisos:      m.Avisos,
-		TieneIndice: s.srv.TieneIndice(),
-		InfoLEG:     s.srv.EstadoInfoLEG(),
-		SAIJ:        s.srv.EstadoSAIJ(),
-		SAIJHay:     s.srv.SAIJDisponible(),
-		InfoLEGHay:  s.srv.InfoLEGDisponible(),
-		Secciones:   boletin.SeccionesValidas,
-		Aviso:       aviso,
-		Error:       errMsg,
-		Tareas:      map[string]tareas.Tarea{},
-		Cobertura:   s.srv.Cobertura(),
-		Marca:       s.marca,
-		Politica:    s.vigente(),
-		Modos:       []cuentas.Modo{cuentas.ModoAbierto, cuentas.ModoMixto, cuentas.ModoCerrado},
+		comun:           s.baseCon(r, "", ""),
+		Yo:              u,
+		Almacen:         m.Motor,
+		Entradas:        m.Entradas,
+		Avisos:          m.Avisos,
+		TieneIndice:     s.srv.TieneIndice(),
+		InfoLEG:         s.srv.EstadoInfoLEG(),
+		SAIJ:            s.srv.EstadoSAIJ(),
+		SAIJHay:         s.srv.SAIJDisponible(),
+		InfoLEGHay:      s.srv.InfoLEGDisponible(),
+		Vencimientos:    s.srv.EstadoVencimientos(),
+		VencimientosHay: s.srv.VencimientosDisponible(),
+		Secciones:       boletin.SeccionesValidas,
+		Aviso:           aviso,
+		Error:           errMsg,
+		Tareas:          map[string]tareas.Tarea{},
+		Cobertura:       s.srv.Cobertura(),
+		Marca:           s.marca,
+		Politica:        s.vigente(),
+		Modos:           []cuentas.Modo{cuentas.ModoAbierto, cuentas.ModoMixto, cuentas.ModoCerrado},
 	}
 	if s.registro != nil {
 		d.PoliticaGuardada = s.registro.HayPoliticaGuardada()
 	}
 	if s.tareas != nil {
-		for _, t := range []string{tareaInfoLEG, tareaProvincial, tareaRellenar, tareaAlertas, tareaBoletin} {
+		for _, t := range []string{tareaInfoLEG, tareaProvincial, tareaVencimientos, tareaRellenar, tareaAlertas, tareaBoletin} {
 			d.Tareas[t] = s.tareas.Estado(t)
 		}
 		d.Corriendo = s.tareas.AlgoCorriendo()
@@ -164,6 +172,13 @@ func (s *Sitio) lanzarTarea(w http.ResponseWriter, r *http.Request) {
 		trabajo = s.trabajoInfoLEG()
 	case tareaProvincial:
 		trabajo = s.trabajoProvincial()
+	case tareaVencimientos:
+		if !s.srv.VencimientosDisponible() {
+			s.dibujarAdmin(w, r, u, "", "La agenda de vencimientos está apagada en esta instancia.",
+				http.StatusNotFound)
+			return
+		}
+		trabajo = s.trabajoVencimientos()
 	case tareaBoletin:
 		trabajo = s.trabajoSemanaDelBoletin()
 	case tareaAlertas:
@@ -230,6 +245,22 @@ func (s *Sitio) trabajoProvincial() tareas.Trabajo {
 			return "", err
 		}
 		return fmt.Sprintf("%s normas de %d jurisdicciones", conPuntos(e.Normas), e.Provincias), nil
+	}
+}
+
+func (s *Sitio) trabajoVencimientos() tareas.Trabajo {
+	return func(ctx context.Context, avisar func(string)) (string, error) {
+		avisar("bajando la agenda de ARCA")
+		e, err := s.srv.SincronizarVencimientos(ctx)
+		if err != nil {
+			return "", err
+		}
+		r := e.Resumen
+		if r.CargaInicial {
+			return fmt.Sprintf("%s vencimientos, primera bajada", conPuntos(e.Filas)), nil
+		}
+		return fmt.Sprintf("%s vencimientos; %d altas, %d prórrogas, %d adelantos, %d bajas",
+			conPuntos(e.Filas), r.Altas, r.Prorrogas, r.Adelantos, r.Bajas), nil
 	}
 }
 

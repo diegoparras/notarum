@@ -20,6 +20,7 @@ import (
 	"github.com/diegoparras/notarum/internal/boletin"
 	"github.com/diegoparras/notarum/internal/infoleg"
 	"github.com/diegoparras/notarum/internal/saij"
+	"github.com/diegoparras/notarum/internal/vencimientos"
 )
 
 // TTLHoy es cuánto vale la edición del día en curso antes de volver a mirar.
@@ -67,6 +68,16 @@ type Servicio struct {
 	// un contenedor— no se notaba hasta reiniciar el servicio.
 	saijCargado time.Time
 	saijMirado  time.Time
+
+	// venc lee la agenda de vencimientos de ARCA. Opcional, como las otras
+	// fuentes. La agenda se levanta la primera vez que alguien la consulta y
+	// se vuelve a leer cuando otra bajada la reemplaza.
+	venc        *vencimientos.Cliente
+	vencMu      sync.RWMutex
+	vencIndice  *vencimientos.Indice
+	vencCambios []vencimientos.Cambio
+	vencCargado time.Time
+	vencMirado  time.Time
 }
 
 // ConSAIJ habilita la consulta de normativa provincial.

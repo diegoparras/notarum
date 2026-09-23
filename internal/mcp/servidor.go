@@ -160,6 +160,14 @@ func (s *Servidor) llamar(ctx context.Context, params json.RawMessage) *Resultad
 		return s.hNovedades(ctx, p.Argumentos)
 	case "nacional_tipos":
 		return s.hNacionalTipos(ctx)
+	case "vencimientos_proximos":
+		return s.hVencimientosProximos(ctx, p.Argumentos)
+	case "vencimientos_buscar":
+		return s.hVencimientosBuscar(ctx, p.Argumentos)
+	case "vencimientos_cambios":
+		return s.hVencimientosCambios(ctx, p.Argumentos)
+	case "vencimientos_impuestos":
+		return s.hVencimientosImpuestos(ctx)
 	default:
 		return errorDeHerramienta("no existe la herramienta " + p.Nombre)
 	}

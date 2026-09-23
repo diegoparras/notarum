@@ -3,7 +3,7 @@
  "info": {
   "title": "notarum",
   "version": "1.0.0",
-  "description": "API abierta de sólo lectura de la normativa argentina. Tres fuentes: el Boletín Oficial de la República Argentina —lo que se publicó cada día, por sección y fecha, con el texto de cada aviso y sus anexos—, la normativa nacional que mantiene InfoLEG —428 mil leyes, decretos y resoluciones con sus modificaciones al día— y la Base SAIJ de normativa provincial —81 mil normas de las 24 provincias, desde 1855—. No opina, no clasifica, no puntúa: entrega el dato crudo y bien tipado.",
+  "description": "API abierta de sólo lectura de la normativa argentina. Tres fuentes de normas: el Boletín Oficial de la República Argentina —lo que se publicó cada día, por sección y fecha, con el texto de cada aviso y sus anexos—, la normativa nacional que mantiene InfoLEG —428 mil leyes, decretos y resoluciones con sus modificaciones al día— y la Base SAIJ de normativa provincial —81 mil normas de las 24 provincias, desde 1855—. Y la agenda de vencimientos impositivos de ARCA, con lo que ARCA movió en ella. No opina, no clasifica, no puntúa: entrega el dato crudo y bien tipado.",
   "license": {
    "name": "MIT",
    "url": "https://opensource.org/licenses/MIT"
@@ -47,6 +47,10 @@
   {
    "name": "nacional",
    "description": "Normativa nacional de InfoLEG: 428 mil leyes, decretos, resoluciones y disposiciones. Es la forma de encontrar una norma sin saber en qué edición del Boletín salió."
+  },
+  {
+   "name": "vencimientos",
+   "description": "La agenda de vencimientos impositivos de ARCA (ex-AFIP): qué obligación vence cada día, para qué terminación de CUIT y bajo qué norma. Se baja todos los días y se compara con la bajada anterior, así que además dice qué fechas movió ARCA, que es algo que ARCA no publica."
   }
  ],
  "paths": {
@@ -1263,6 +1267,453 @@
      }
     }
    }
+  },
+  "/v1/vencimientos": {
+   "get": {
+    "tags": [
+     "vencimientos"
+    ],
+    "summary": "Buscar en la agenda de vencimientos",
+    "description": "Busca por período, impuesto, terminación de CUIT o texto. Sin filtros devuelve lo vigente con fecha, de lo más cercano a lo más lejano. Las obligaciones de plazo relativo —las que vencen \"dentro de los 10 días hábiles de…\"— no tienen fecha de almanaque y no salen en una búsqueda por fechas: se piden con sin_fecha=1.",
+    "operationId": "buscarVencimientos",
+    "parameters": [
+     {
+      "name": "desde",
+      "in": "query",
+      "schema": {
+       "type": "string",
+       "format": "date"
+      },
+      "description": "Fecha de vencimiento más temprana, AAAA-MM-DD."
+     },
+     {
+      "name": "hasta",
+      "in": "query",
+      "schema": {
+       "type": "string",
+       "format": "date"
+      },
+      "description": "Fecha de vencimiento más tardía, AAAA-MM-DD."
+     },
+     {
+      "name": "impuesto",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Nombre del impuesto, como figura en /v1/vencimientos/impuestos. No distingue mayúsculas ni acentos."
+     },
+     {
+      "name": "cuit",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "CUIT entero, con o sin guiones, o sólo su último dígito. Trae lo que le vence a esa terminación más lo que vence para todas."
+     },
+     {
+      "name": "texto",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Palabras a buscar en impuesto, régimen, obligación, período y sujeto. No hace falta poner los acentos; todas tienen que estar."
+     },
+     {
+      "name": "sin_fecha",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Con 1 trae sólo las obligaciones de plazo relativo."
+     },
+     {
+      "name": "retirados",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Con 1 suma lo que ARCA dejó de publicar."
+     },
+     {
+      "name": "pagina",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "default": 1
+      }
+     },
+     {
+      "name": "limite",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 500,
+       "default": 50
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "La agenda que cumple, con de cuándo es.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ResultadoVencimientos"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Una fecha o un CUIT mal escritos.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Esta instancia no sigue la agenda de vencimientos.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "503": {
+      "description": "Esta instancia todavía no bajó la agenda de vencimientos.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v1/vencimientos/hoy": {
+   "get": {
+    "tags": [
+     "vencimientos"
+    ],
+    "summary": "Lo que vence un día",
+    "description": "Sin fecha, hoy en la Argentina: entre las 21 y la medianoche UTC ya es mañana, y ahí contestar lo de mañana escondería lo que todavía se puede pagar hoy.",
+    "operationId": "vencimientosDelDia",
+    "parameters": [
+     {
+      "name": "fecha",
+      "in": "query",
+      "schema": {
+       "type": "string",
+       "format": "date"
+      },
+      "description": "AAAA-MM-DD. Por defecto, hoy."
+     },
+     {
+      "name": "impuesto",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Nombre del impuesto, como figura en /v1/vencimientos/impuestos. No distingue mayúsculas ni acentos."
+     },
+     {
+      "name": "cuit",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "CUIT entero, con o sin guiones, o sólo su último dígito. Trae lo que le vence a esa terminación más lo que vence para todas."
+     },
+     {
+      "name": "pagina",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "default": 1
+      }
+     },
+     {
+      "name": "limite",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 500,
+       "default": 50
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Lo que vence ese día.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ResultadoVencimientos"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Una fecha o un CUIT mal escritos.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Esta instancia no sigue la agenda de vencimientos.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "503": {
+      "description": "Esta instancia todavía no bajó la agenda de vencimientos.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v1/vencimientos/proximos": {
+   "get": {
+    "tags": [
+     "vencimientos"
+    ],
+    "summary": "Lo que vence en los próximos días",
+    "description": "De hoy a los próximos días, hoy incluido. Es la consulta de \"¿qué me vence esta semana?\".",
+    "operationId": "vencimientosProximos",
+    "parameters": [
+     {
+      "name": "dias",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 366,
+       "default": 7
+      },
+      "description": "Cuántos días mirar, contando hoy."
+     },
+     {
+      "name": "impuesto",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "Nombre del impuesto, como figura en /v1/vencimientos/impuestos. No distingue mayúsculas ni acentos."
+     },
+     {
+      "name": "cuit",
+      "in": "query",
+      "schema": {
+       "type": "string"
+      },
+      "description": "CUIT entero, con o sin guiones, o sólo su último dígito. Trae lo que le vence a esa terminación más lo que vence para todas."
+     },
+     {
+      "name": "pagina",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "default": 1
+      }
+     },
+     {
+      "name": "limite",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 500,
+       "default": 50
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Lo que vence en esos días.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ResultadoVencimientos"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Una cantidad de días o un CUIT mal escritos.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Esta instancia no sigue la agenda de vencimientos.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "503": {
+      "description": "Esta instancia todavía no bajó la agenda de vencimientos.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v1/vencimientos/cambios": {
+   "get": {
+    "tags": [
+     "vencimientos"
+    ],
+    "summary": "Qué movió ARCA",
+    "description": "Prórrogas, adelantos, altas y bajas que ARCA hizo en la agenda, de lo más nuevo a lo más viejo. ARCA no publica cuándo cambió algo: cada cambio dice entre qué dos bajadas se detectó, y eso es todo lo que se sabe.",
+    "operationId": "cambiosDeVencimientos",
+    "parameters": [
+     {
+      "name": "desde",
+      "in": "query",
+      "schema": {
+       "type": "string",
+       "format": "date"
+      },
+      "description": "Sólo lo detectado desde esta fecha, AAAA-MM-DD."
+     },
+     {
+      "name": "limite",
+      "in": "query",
+      "schema": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 500,
+       "default": 500
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Los cambios.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CambiosDeVencimientos"
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "Una fecha mal escrita.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Esta instancia no sigue la agenda de vencimientos.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "503": {
+      "description": "Esta instancia todavía no bajó la agenda de vencimientos.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/v1/vencimientos/impuestos": {
+   "get": {
+    "tags": [
+     "vencimientos"
+    ],
+    "summary": "Los impuestos de la agenda",
+    "description": "El catálogo de impuestos del formulario de ARCA, con cuántos vencimientos vigentes tiene cada uno. Sirve para filtrar por un nombre exacto.",
+    "operationId": "impuestosDeVencimientos",
+    "responses": {
+     "200": {
+      "description": "Los impuestos.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "type": "array",
+         "items": {
+          "$ref": "#/components/schemas/ImpuestoDeVencimientos"
+         }
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "Esta instancia no sigue la agenda de vencimientos.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     },
+     "503": {
+      "description": "Esta instancia todavía no bajó la agenda de vencimientos.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Error"
+        }
+       }
+      }
+     }
+    }
+   }
   }
  },
  "components": {
@@ -2156,6 +2607,259 @@
      "en_api": {
       "type": "string",
       "description": "La ruta de esta API que lo trae entero."
+     }
+    }
+   },
+   "AgendaDeVencimientos": {
+    "type": "object",
+    "description": "De cuándo es la agenda que contesta y qué período se le pidió a ARCA. Afuera de ese período no se preguntó nada.",
+    "required": [
+     "bajada_en",
+     "desde",
+     "hasta"
+    ],
+    "properties": {
+     "bajada_en": {
+      "type": "string",
+      "format": "date-time"
+     },
+     "desde": {
+      "type": "string",
+      "format": "date"
+     },
+     "hasta": {
+      "type": "string",
+      "format": "date"
+     }
+    }
+   },
+   "NormaDeVencimiento": {
+    "type": "object",
+    "required": [
+     "texto"
+    ],
+    "properties": {
+     "texto": {
+      "type": "string",
+      "example": "R.G. N° 4036, art.5°"
+     },
+     "url": {
+      "type": "string"
+     }
+    }
+   },
+   "Vencimiento": {
+    "type": "object",
+    "required": [
+     "clave",
+     "impuesto",
+     "obligacion",
+     "terminacion_cuit",
+     "fecha_desde",
+     "visto_primero",
+     "visto_ultimo"
+    ],
+    "properties": {
+     "clave": {
+      "type": "string",
+      "description": "Identidad estable del vencimiento. No incluye la fecha: si ARCA la mueve, la clave sigue igual."
+     },
+     "impuesto": {
+      "type": "string",
+      "example": "IMPUESTO AL VALOR AGREGADO"
+     },
+     "regimen": {
+      "type": "string"
+     },
+     "sujeto": {
+      "type": "string"
+     },
+     "tipo_regimen": {
+      "type": "string"
+     },
+     "obligacion": {
+      "type": "string",
+      "example": "Presentación de la declaración jurada y pago del saldo resultante, correspondiente a:"
+     },
+     "periodo": {
+      "type": "string",
+      "example": "Agosto/2026"
+     },
+     "terminacion_cuit": {
+      "type": "string",
+      "description": "El grupo al que le toca esta fecha: todos, 0-1-2-3, 8-9. Vacío en las de plazo relativo.",
+      "example": "0-1-2-3"
+     },
+     "fecha": {
+      "type": "string",
+      "format": "date",
+      "description": "Vacía en las de plazo relativo."
+     },
+     "sin_fecha_fija": {
+      "type": "boolean"
+     },
+     "formularios": {
+      "type": "string"
+     },
+     "aplicativos": {
+      "type": "string"
+     },
+     "normas": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/NormaDeVencimiento"
+      }
+     },
+     "fecha_desde": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Desde cuándo ARCA publica esta fecha para esta obligación."
+     },
+     "visto_primero": {
+      "type": "string",
+      "format": "date-time"
+     },
+     "visto_ultimo": {
+      "type": "string",
+      "format": "date-time"
+     },
+     "retirado_en": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Cuándo ARCA la dejó de publicar."
+     }
+    }
+   },
+   "ResultadoVencimientos": {
+    "type": "object",
+    "required": [
+     "agenda",
+     "total",
+     "pagina",
+     "hay_mas",
+     "vencimientos"
+    ],
+    "properties": {
+     "agenda": {
+      "$ref": "#/components/schemas/AgendaDeVencimientos"
+     },
+     "total": {
+      "type": "integer"
+     },
+     "pagina": {
+      "type": "integer"
+     },
+     "hay_mas": {
+      "type": "boolean"
+     },
+     "vencimientos": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Vencimiento"
+      }
+     }
+    }
+   },
+   "CambioDeVencimiento": {
+    "type": "object",
+    "required": [
+     "clave",
+     "tipo",
+     "detectado_en",
+     "impuesto",
+     "obligacion",
+     "terminacion_cuit"
+    ],
+    "properties": {
+     "clave": {
+      "type": "string"
+     },
+     "tipo": {
+      "type": "string",
+      "enum": [
+       "alta",
+       "prorroga",
+       "adelanto",
+       "baja",
+       "reaparicion"
+      ]
+     },
+     "fecha_anterior": {
+      "type": "string",
+      "format": "date"
+     },
+     "fecha_nueva": {
+      "type": "string",
+      "format": "date"
+     },
+     "dias": {
+      "type": "integer",
+      "description": "Cuánto se corrió la fecha; negativo si se adelantó."
+     },
+     "visto_anterior": {
+      "type": "string",
+      "format": "date-time",
+      "description": "La bajada anterior, en la que la fecha todavía era la vieja."
+     },
+     "detectado_en": {
+      "type": "string",
+      "format": "date-time"
+     },
+     "impuesto": {
+      "type": "string"
+     },
+     "regimen": {
+      "type": "string"
+     },
+     "obligacion": {
+      "type": "string"
+     },
+     "periodo": {
+      "type": "string"
+     },
+     "terminacion_cuit": {
+      "type": "string"
+     }
+    }
+   },
+   "CambiosDeVencimientos": {
+    "type": "object",
+    "required": [
+     "agenda",
+     "cantidad",
+     "cambios"
+    ],
+    "properties": {
+     "agenda": {
+      "$ref": "#/components/schemas/AgendaDeVencimientos"
+     },
+     "cantidad": {
+      "type": "integer"
+     },
+     "cambios": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/CambioDeVencimiento"
+      }
+     }
+    }
+   },
+   "ImpuestoDeVencimientos": {
+    "type": "object",
+    "required": [
+     "nombre",
+     "vencimientos"
+    ],
+    "properties": {
+     "codigo": {
+      "type": "string",
+      "description": "El código de ARCA. Falta si el impuesto aparece en la agenda y no en el desplegable del formulario."
+     },
+     "nombre": {
+      "type": "string"
+     },
+     "vencimientos": {
+      "type": "integer"
      }
     }
    }

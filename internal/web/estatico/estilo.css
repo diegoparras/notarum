@@ -179,6 +179,10 @@ h2 { font-size: 17px; font-weight: 600; margin: 32px 0 12px; }
 .aviso-norma { font-size: 13px; color: var(--acento); margin-bottom: 2px; }
 .aviso-sintesis { font-size: 13px; color: var(--tinta-suave); }
 .aviso-pie { display: flex; gap: 12px; align-items: center; margin-top: 7px; flex-wrap: wrap; }
+/* Un vencimiento no lleva a otra página: la tarjeta no reacciona al pasar,
+   para no prometer un clic que no hace nada. */
+.aviso.fijo:hover { border-color: transparent; }
+.aviso-normas { display: flex; gap: 3px 12px; flex-wrap: wrap; margin-top: 5px; font-size: 12px; }
 
 .marca-chica {
   font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.03em;

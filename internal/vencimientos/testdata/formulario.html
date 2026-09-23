@@ -1,0 +1,245 @@
+<html>
+<head>
+<title>ARCA - Agencia de Recaudaci&oacute;n y Control Aduanero</title>
+<script language=javascript src="html/scripts/date-picker-con-leyenda.js"></script>
+<script language=javascript src="html/scripts/ExchangeLists.js"></script>
+<link href="html/css/av.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+<table border="0" cellpadding="0" cellspacing="0" class="tabla-principal">
+  <tbody>
+	<tr>
+		<td>
+	        <table class="av-cabecera" cellspacing="0" >
+	<tbody>
+    	<tr valign="bottom">
+        	<td width="186" height="47px">&nbsp;
+				<a href="http://www.arca.gob.ar/">
+                   <img src="html/css/blue/img/arca_chico_blanco.gif" border="0" width="150"
+                   height="44" align="center">
+                </a> 
+            </td>
+			<td width="578" height="47px">
+		    </td>
+         </tr>
+    </tbody>     
+</table>
+</td>
+	</tr>
+	<tr>
+		<td>
+		</td>
+	</tr>
+    <tr>
+	  <form name="consultaVencimientoForm" method="post" action="/av/viewVencimientos.do;jsessionid=jM+ILaXfL1pmER8-SZtlBycp.undefined"><td class="av-contenido" >
+		<h3><font color="red">Lista de Errores</font></h3><ul><li>Debe seleccionar al menos un impuesto.</li></ul><hr><table width="100%" border="0" cellspacing="0" cellpadding="0">
+            <tr> 
+                <td width="630" background="html/css/blue/img/Tit_fondo5.jpg" class="tit">Agenda de Vencimientos - A&#241;o 2004 y siguientes</td>
+                <td width="96">  
+                    <input name="Submit" type="button" class="av-botonera-out-largo" value="Consultas"
+							onMouseOver="this.className='av-botonera-over-largo'" 
+							onMouseOut="this.className='av-botonera-out-largo'" 
+                            onClick="window.location ='http://www.afip.gob.ar/genericos/asesor_impositivo/consultas_main.asp'"/>
+                </td>
+		    </tr>
+        </table>
+		<br>
+		<table  class="tabla-form" >
+          <tr>
+            <td class="td-tabla-form-titulo"> Fecha de vencimiento </td>
+            <td colspan="2"  class="td-formulario-ubicacion-izq-texto-ven"><br>
+              <table width="100%"  border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td  class="texto-fecha-consulta-1">Desde</td>
+                  <td  width="2%">&nbsp;</td>
+                  <td class="td-calendario">&nbsp;</td>
+                  <td  class="texto-fecha-consulta-1">Hasta</span></td>
+                  <td colspan="2" >&nbsp;</td>
+                </tr>
+                <tr>
+                  <td class="texto-fecha-consulta">
+                  	<input type="text" name="fechaVDesde" maxlength="10" size="10" value="01/09/2026" class="fecha"></td>
+				  <td class="calendario-imagen">
+                  	<img src="html/css/blue/img/app.png" width="19" height="18" onclick="show_calendar('consultaVencimientoForm.fechaVDesde')">
+				  </td>
+                  <td  class="td-calendario-1" >(dd/mm/aaaa)</td>                  
+                  <td class="texto-fecha-consulta">
+                  	<input type="text" name="fechaVHasta" maxlength="10" size="10" value="30/09/2026" class="fecha"></td>
+				  <td class="calendario-imagen">
+                  	<img src="html/css/blue/img/app.png" width="19" height="18" onclick="show_calendar('consultaVencimientoForm.fechaVHasta')">
+				  </td>
+                  <td  class="td-calendario-2" >(dd/mm/aaaa)</td>                  
+                </tr>
+              </table></td>
+          </tr>
+          <tr>
+            <td class="td-tabla-form-titulo"> Terminaci&oacute;n de CUIT</td>
+            <td colspan="2"  class="td-formulario-ubicacion-izq-texto">
+		    	<select name="terminacionCuit" class="cuit"><option value="Todos">Todos</option><option value="0">0</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="9">9</option></select></td>
+          </tr>
+          <tr>
+            <td height="93" class="td-tabla-form-titulo"> Impuesto/s </td>
+            <td colspan="2"  class="td-formulario-ubicacion-izq-texto"><form  name="myForm">
+                <table cellspacing="0" cellpadding="0"  class="tabla-form-sin-borde" >
+				  <tr> 	
+		            <td  class="texto-fecha-consulta-1">a Seleccionar</td>
+					<td class="texto-fecha-consulta-1">	
+					</td>
+		            <td  class="texto-fecha-consulta-1">Seleccionado/s</td>
+				  </tr>	
+                  <tr>
+                    <td class="td-combo-seleccion"  valign="right" >
+                       <select name="impuestosASeleccionar" multiple="multiple" size="6" ondblclick="move(consultaVencimientoForm.impuestosASeleccionar, consultaVencimientoForm.impuestosSeleccionados)" class="combo-seleccion">
+                          <option value="53" title="-">-</option>
+                          <option value="45" title="APORTE SOLIDARIO Y EXTRAORDINARIO">APORTE SOLIDARIO Y EXTRAORDINARIO</option>
+                          <option value="37" title="DERECHOS DE EXPORTACIÓN">DERECHOS DE EXPORTACIÓN</option>
+                          <option value="29" title="FONDO HIDRICO DE INFRAESTRUCTURA">FONDO HIDRICO DE INFRAESTRUCTURA</option>
+                          <option value="13" title="FONDO PARA EDUCACION Y PROMOCION COOPERATIVA">FONDO PARA EDUCACION Y PROMOCION COOPERATIVA</option>
+                          <option value="8" title="IMPUESTO A LA GANANCIA MINIMA PRESUNTA">IMPUESTO A LA GANANCIA MINIMA PRESUNTA</option>
+                          <option value="22" title="IMPUESTO A LA TRANSFERENCIA DE INMUEBLES DE PERSONAS FISICAS Y SUCESIONES INDIVISAS">IMPUESTO A LA TRANSFERENCIA DE INMUEBLES DE PERSONAS FISICAS Y SUCESIONES INDIVISAS</option>
+                          <option value="3" title="IMPUESTO A LAS APUESTAS DE CARRERA">IMPUESTO A LAS APUESTAS DE CARRERA</option>
+                          <option value="10" title="IMPUESTO A LAS ENTRADAS A ESPECTACULOS CINEMATOGRAFICOS">IMPUESTO A LAS ENTRADAS A ESPECTACULOS CINEMATOGRAFICOS</option>
+                          <option value="16" title="IMPUESTO A LAS GANANCIAS">IMPUESTO A LAS GANANCIAS</option>
+                          <option value="31" title="IMPUESTO A LOS SERVICIOS DE COMUNICACION AUDIOVISUAL">IMPUESTO A LOS SERVICIOS DE COMUNICACION AUDIOVISUAL</option>
+                          <option value="23" title="IMPUESTO A LOS SERVICIOS DE RADIODIFUSION">IMPUESTO A LOS SERVICIOS DE RADIODIFUSION</option>
+                          <option value="6" title="IMPUESTO A LOS VIDEOGRAMAS GRABADOS">IMPUESTO A LOS VIDEOGRAMAS GRABADOS</option>
+                          <option value="9" title="IMPUESTO ADICIONAL DE EMERGENCIA A LOS CIGARRILLOS">IMPUESTO ADICIONAL DE EMERGENCIA A LOS CIGARRILLOS</option>
+                          <option value="1" title="IMPUESTO AL VALOR AGREGADO">IMPUESTO AL VALOR AGREGADO</option>
+                          <option value="33" title="IMPUESTO ESPECÍFICO SOBRE LA REALIZACIÓN DE APUESTAS">IMPUESTO ESPECÍFICO SOBRE LA REALIZACIÓN DE APUESTAS</option>
+                          <option value="35" title="IMPUESTO EXTRAORDINARIO A LAS OPERACIONES FINANCIERAS ESPECULATIVAS "DOLAR FUTURO"">IMPUESTO EXTRAORDINARIO A LAS OPERACIONES FINANCIERAS ESPECULATIVAS "DOLAR FUTURO"</option>
+                          <option value="47" title="IMPUESTO INDIRECTO A LAS APUESTAS ONLINE">IMPUESTO INDIRECTO A LAS APUESTAS ONLINE</option>
+                          <option value="39" title="IMPUESTO PARA UNA ARGENTINA INCLUSIVA Y SOLIDARIA (PAIS)">IMPUESTO PARA UNA ARGENTINA INCLUSIVA Y SOLIDARIA (PAIS)</option>
+                          <option value="27" title="IMPUESTO SOBRE EL GAS OIL Y EL GAS LICUADO">IMPUESTO SOBRE EL GAS OIL Y EL GAS LICUADO</option>
+                          <option value="4" title="IMPUESTO SOBRE LOS BIENES PERSONALES">IMPUESTO SOBRE LOS BIENES PERSONALES</option>
+                          <option value="7" title="IMPUESTO SOBRE LOS CREDITOS Y DEBITOS EN CUENTAS BANCARIAS Y OTRAS OPERATORIAS">IMPUESTO SOBRE LOS CREDITOS Y DEBITOS EN CUENTAS BANCARIAS Y OTRAS OPERATORIAS</option>
+                          <option value="19" title="IMPUESTOS INTERNOS -CIGARRILLOS-">IMPUESTOS INTERNOS -CIGARRILLOS-</option>
+                          <option value="18" title="IMPUESTOS INTERNOS -EXCEPTO CIGARRILLOS-">IMPUESTOS INTERNOS -EXCEPTO CIGARRILLOS-</option>
+                          <option value="5" title="IMPUESTOS SOBRE LOS COMBUSTIBLES LÍQUIDOS Y AL DIÓXIDO DE CARBONO">IMPUESTOS SOBRE LOS COMBUSTIBLES LÍQUIDOS Y AL DIÓXIDO DE CARBONO</option>
+                          <option value="20" title="PROCEDIMIENTO">PROCEDIMIENTO</option>
+                          <option value="21" title="RECARGO SOBRE EL GAS NATURAL">RECARGO SOBRE EL GAS NATURAL</option>
+                          <option value="14" title="REGIMEN SIMPLIFICADO PARA PEQUEÑOS CONTRIBUYENTES - MONOTRIBUTO">REGIMEN SIMPLIFICADO PARA PEQUEÑOS CONTRIBUYENTES - MONOTRIBUTO</option>
+                          <option value="12" title="REGIMENES DE FACILIDADES DE PAGO DE LA SEGURIDAD SOCIAL">REGIMENES DE FACILIDADES DE PAGO DE LA SEGURIDAD SOCIAL</option>
+                          <option value="11" title="REGIMENES DE FACILIDADES DE PAGO IMPOSITIVOS">REGIMENES DE FACILIDADES DE PAGO IMPOSITIVOS</option>
+                          <option value="2" title="REGIMENES NACIONALES DE LA SEGURIDAD SOCIAL Y OBRAS SOCIALES">REGIMENES NACIONALES DE LA SEGURIDAD SOCIAL Y OBRAS SOCIALES</option>
+                          <option value="51" title="RÉGIMEN DE INCENTIVO PARA GRANDES INVERSIONES (RIGI) ">RÉGIMEN DE INCENTIVO PARA GRANDES INVERSIONES (RIGI) </option>
+                          <option value="49" title="RÉGIMEN DE REGULARIZACIÓN DE ACTIVOS  - LEY N° 27.743">RÉGIMEN DE REGULARIZACIÓN DE ACTIVOS  - LEY N° 27.743</option>
+                          <option value="17" title="TASA DE INFRAESTRUCTURA HIDRICA">TASA DE INFRAESTRUCTURA HIDRICA</option>
+                          <option value="24" title="TASA SOBRE EL GASOIL">TASA SOBRE EL GASOIL</option>
+                          <option value="999" title="TODOS">TODOS</option>
+                          </select>
+					</td>
+                    <td align="center" valign="middle" class="td-desde-hasta"><table  class="tabla-botones-seleccion" " border="0" cellpadding="0" cellspacing="0" align="center" >
+                        <tr>
+                          <td><input type="button"  class="boton-sel-out" onClick="move(consultaVencimientoForm.impuestosASeleccionar, consultaVencimientoForm.impuestosSeleccionados)" value=">>" onMouseOver="this.className='boton-sel-over'" 
+							onMouseOut="this.className='boton-sel-out'"/></td>
+                        </tr>
+                        <tr>
+                          <td>&nbsp;</td>
+                        </tr>
+                        <tr>
+                          <td><input type="button"   class="boton-sel-out" onClick="move(consultaVencimientoForm.impuestosSeleccionados, consultaVencimientoForm.impuestosASeleccionar)" value="<<" onMouseOver="this.className='boton-sel-over'" 
+							onMouseOut="this.className='boton-sel-out'"/></td>
+                        </tr>
+                      </table></td>
+                    <td align="right"  class="td-combo-seleccion" >
+                       	<select name="impuestosSeleccionados" multiple="multiple" size="6" ondblclick="move(consultaVencimientoForm.impuestosSeleccionados, consultaVencimientoForm.impuestosASeleccionar)" class="combo-seleccion"></select></td>
+                  </tr>
+              <TR>
+                <TD align=right colSpan=3 height="10">
+                </TD></TR>
+              <TR>
+                <TD align=right colSpan=3>
+                  <TABLE class=tabla-form-sin-borde cellSpacing=0 cellPadding=0>
+                  	<TBODY>
+                    	<TR>
+	                      <TD></TD>
+    	                  <TD></TD>
+        	              <TD align="right" class="td-boton-buscar">
+        	              	<INPUT class=boton-sel-out-adj onmouseover="this.className='boton-sel-over-adj'" onclick=selectAllOptions(document.consultaVencimientoForm.impuestosSeleccionados);document.consultaVencimientoForm.submit(); onmouseout="this.className='boton-sel-out-adj'" type=button value=Buscar name=Submit>
+        	              </TD>
+        	             </TR>
+        	        </TBODY>
+        	      </TABLE>
+        	    </TD>
+        	  </TR>
+                </table>
+              </form></td>
+          </tr>
+        </table>
+        <br>
+		  <table class="tabla-botonera"  cellpadding="0" cellspacing="0" vertical-align= "top"  >
+          <tr>
+            <td width="22%" ><table class="subtabla-botones1" align="left">
+                <tr>
+                  <td ><input name="Submit" type="button" class="av-botonera-out-largo" value="Agenda del D&iacute;a"
+							onMouseOver="this.className='av-botonera-over-largo'" 
+							onMouseOut="this.className='av-botonera-out-largo'" 
+							onClick="window.location ='viewVencimientosHoy.do'"/></td>
+                  <td  class="td-tabla-botones-pipe">|</td>
+                  <td ><input name="Submit" type="button" class="av-botonera-out-largo" value="Agenda Sint&Eacute;tica"
+							onMouseOver="this.className='av-botonera-over-largo'" 
+							onMouseOut="this.className='av-botonera-out-largo'" 
+							onClick="window.location ='seleccionVencimientosSintetica.do'"/></td>
+                  <td  class="td-tabla-botones-pipe">|</td>
+                  <td ><input name="Submit" type="button" class="av-botonera-out-largo" value="Agenda Suplemento"
+							onMouseOver="this.className='av-botonera-over-largo'" 
+							onMouseOut="this.className='av-botonera-out-largo'" 
+							onClick="window.location ='seleccionVencimientosSuplemento.do'"/></td>
+                  <td  class="td-tabla-botones-pipe">|</td>
+                  <td ><input name="Submit" type="button" class="av-botonera-out-largo" value="Agendas Anteriores"
+						onMouseOver="this.className='av-botonera-over-largo'" 
+						onMouseOut="this.className='av-botonera-out-largo'" 
+                        onClick="window.location ='http://biblioteca.afip.gob.ar/agenda/Agenda_Inicio.htm'"/></td>
+                  <td  class="td-tabla-botones-pipe">|</td>
+                  <td ><input name="Submit" type="button" class="av-botonera-out-largo" value="Agenda Anual"
+						onMouseOver="this.className='av-botonera-over-largo'" 
+						onMouseOut="this.className='av-botonera-out-largo'" 
+                        onClick="window.location ='seleccionVencimientoAnual.do'"/></td>
+                </tr>
+              </table></td>
+              <td width="78%" >
+                <table class="subtabla-botones2" align="right">
+                   <tr>
+	                  <td class="td-tabla-botones-pipe">|</td>
+	                  <td ><input name="Submit" type="button" class="botonera-out" value="Salir"
+							onMouseOver="this.className='botonera-over'" 
+							onMouseOut="this.className='botonera-out'" 
+							onClick="window.location ='http://www.afip.gob.ar'"/></td>
+    	           </tr>
+                </table>
+              </td>
+          </tr>
+        </table>
+	    </td>
+		</form>
+<script type="text/javascript" language="JavaScript">
+  <!--
+  var focusControl = document.forms["consultaVencimientoForm"].elements["fechaVDesde"];
+
+  if (focusControl.type != "hidden" && !focusControl.disabled) {
+     focusControl.focus();
+  }
+  // -->
+</script>
+</tr>
+	<tr>
+		<td>
+	        <html>
+<head>
+<link href="html/css/afip_v9a1.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+<table cellspacing="0" background="html/css/img/fondo_footer.jpg" class="av-pie">
+	<tbody>
+    	<tr>
+        	<td width="8" background="html/css/img/fondo_footer.jpg">&nbsp;</td>
+        </tr>
+    </tbody>
+</table>
+</body>
+</html></td>
+	</tr>
+  </tbody>
+</table>
+</body>
+</html>

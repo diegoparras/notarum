@@ -96,5 +96,6 @@ func Herramientas() []Herramienta {
 	}
 	hs = append(hs, herramientasProvinciales()...)
 	hs = append(hs, herramientasNacionales()...)
+	hs = append(hs, herramientasDeVencimientos()...)
 	return append(hs, herramientasDeBusqueda()...)
 }
