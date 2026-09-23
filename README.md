@@ -24,6 +24,10 @@ en tres lados que no se hablan entre sí:
 - **La Base SAIJ**, con 81 mil leyes, decretos y constituciones de las 24
   provincias desde 1855: lo que el Boletín nacional no publica.
 
+Y al lado, **la agenda de vencimientos de ARCA**: qué obligación impositiva
+vence cada día y para qué terminación de CUIT — con lo que ARCA movió en ella,
+que ARCA no publica.
+
 Los tres están en la web, y los tres están hechos para leerlos de a uno por
 vez. El del Boletín pagina de a cien y no dice cuántos resultados hay.
 
@@ -37,7 +41,8 @@ docker run -d -p 8080:8080 -v notarum-datos:/datos \
 ```
 
 Abrí `http://localhost:8080` y ya estás leyendo el Boletín de hoy. La
-normativa nacional y la provincial se bajan una vez, desde el panel.
+normativa nacional y la provincial se bajan una vez, desde el panel; la agenda
+de vencimientos de ARCA, también.
 
 ---
 
@@ -162,6 +167,11 @@ curl https://tu-instancia/v1/ediciones/primera/2026-09-01
 | `GET /v1/nacional/novedades?desde=` | qué apareció en el catálogo desde una fecha |
 | `GET /v1/provincial/novedades?desde=` | lo mismo, para la provincial |
 | `GET /v1/todo?texto=` | la misma búsqueda en las tres fuentes, marcada por origen |
+| `GET /v1/vencimientos?desde=&hasta=&impuesto=&cuit=&texto=&sin_fecha=` | la agenda de vencimientos de ARCA |
+| `GET /v1/vencimientos/hoy?fecha=&cuit=` | lo que vence un día; sin fecha, hoy en la Argentina |
+| `GET /v1/vencimientos/proximos?dias=&cuit=` | lo que vence de hoy a los próximos días |
+| `GET /v1/vencimientos/cambios?desde=` | las prórrogas, adelantos, altas y bajas que hizo ARCA |
+| `GET /v1/vencimientos/impuestos` | los impuestos de la agenda y cuántos vencimientos tiene cada uno |
 | `GET /v1/salud` | estado del servicio, del sitio y de la caché |
 | `GET /v1/openapi.json` | el contrato, validado por un test |
 
@@ -183,7 +193,9 @@ Para que un modelo consulte las tres fuentes como una herramienta más:
 `edicion`, `aviso`, `buscar`, `calendario`, `rubros` y `estado` para el
 Boletín; `nacional_buscar`, `nacional_norma`, `nacional_relaciones` y
 `nacional_tipos` para la normativa nacional; `provincial_buscar`,
-`provincial_norma` y `provincial_tipos` para las provincias; y dos que cruzan
+`provincial_norma` y `provincial_tipos` para las provincias;
+`vencimientos_proximos`, `vencimientos_buscar`, `vencimientos_cambios` y
+`vencimientos_impuestos` para la agenda de ARCA; y dos que cruzan
 todo: `buscar_todo`, que pregunta en las tres a la vez, y `novedades`, que
 contesta qué apareció desde una fecha.
 
@@ -327,6 +339,7 @@ cada vez. Medido contra el catálogo real, con lotes son unos seis minutos.
 | `NOTARUM_SIN_MCP` | vacío | apaga `/mcp` |
 | `NOTARUM_SIN_WEB` | vacío | apaga el lector y deja sólo la API |
 | `NOTARUM_BUSCADOR_INFOLEG` | vacío | enciende la búsqueda nacional; cuesta unos 480 MB |
+| `NOTARUM_SIN_VENCIMIENTOS` | vacío | apaga la agenda de vencimientos de ARCA |
 | `NOTARUM_ACTUALIZAR_A_LAS` | `05:00` | cuándo se actualizan los catálogos |
 | `NOTARUM_BOLETIN_A_LAS` | `04:00` | cuándo baja la semana del Boletín, los sábados |
 | `NOTARUM_ZONA` | `America/Argentina/Buenos_Aires` | dónde se cuentan esas horas |
@@ -488,6 +501,51 @@ en vez de prometer una copia que casi siempre estaría vacía.
 El catálogo se sirve desde memoria: 77 MB y 340 ms de carga, medidos con la
 base entera. Los paga sólo quien lo sincroniza — una instancia que no use la
 parte provincial no carga nada. Se apaga del todo con `NOTARUM_SIN_SAIJ`.
+
+### La agenda de vencimientos de ARCA
+
+Qué obligación impositiva vence cada día, para qué terminación de CUIT y bajo
+qué norma, tal como la publica ARCA en `seti.afip.gob.ar/av/viewVencimientos.do`.
+Se baja sola todos los días, con los demás catálogos:
+
+```bash
+notarum vencimientos
+```
+
+…o el botón en `/admin`. Queda en `/vencimientos` en el lector, en
+`/v1/vencimientos` en la API y como `vencimientos_proximos` y compañía en el
+MCP. Se busca por período, impuesto, texto o **CUIT entero**: nadie recuerda
+su terminación, recuerda su CUIT. Un CUIT mal escrito es un error y no un
+filtro que se ignora, porque ignorarlo mostraría la agenda de todos.
+
+**Lo que agrega y ARCA no publica es qué cambió.** La página dice qué rige hoy,
+no que el vencimiento del 18 pasó a ser el 22. Cada bajada se compara con la
+anterior y queda registrado: prórrogas, adelantos, altas y bajas, en
+`/v1/vencimientos/cambios`. Para eso la identidad de un vencimiento es la
+obligación —impuesto, régimen, sujeto, tipo, obligación, período y
+terminación— y la fecha es su valor: si fuera parte de la identidad, una
+prórroga se vería como un vencimiento nuevo y otro que desapareció.
+
+Lo que se averiguó de la página, que no tiene API ni documentación:
+
+- **Una consulta trae un año entero** —4,3 MB, 30 segundos— y no hace falta
+  sesión.
+- **ARCA sólo tiene cargado hasta fin del año en curso**, y más allá contesta
+  «se ingresó un rango de fecha que no está cargado». notarum pide hasta fin
+  del año que viene y, si ARCA no lo tiene, se repliega: el año siguiente
+  entra solo el día que ARCA lo cargue.
+- **«Información actualizada al…» no dice cuándo cambió la agenda**: es la hora
+  a la que se armó la página. Por eso lo que cambió se averigua comparando, y
+  de cada cambio se sabe entre qué dos bajadas pasó, nada más.
+- **Una bajada cortada no reemplaza a una buena.** Una respuesta cortada a la
+  mitad se lee perfecto, y aceptarla daría de baja todo lo que no alcanzó a
+  traer. Por debajo de 200 filas, o de la mitad de la bajada anterior, se
+  descarta y queda la que había.
+- Una baja sólo cuenta adentro del período que se consultó: que algo de otro
+  año no aparezca no dice nada de él.
+
+La agenda y sus cambios se guardan juntos en el almacén, así que funciona igual
+con los tres motores. Se apaga con `NOTARUM_SIN_VENCIMIENTOS`.
 
 ### Qué modificó a qué
 

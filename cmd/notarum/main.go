@@ -37,6 +37,7 @@ import (
 	"github.com/diegoparras/notarum/internal/saij"
 	"github.com/diegoparras/notarum/internal/servicio"
 	"github.com/diegoparras/notarum/internal/tareas"
+	"github.com/diegoparras/notarum/internal/vencimientos"
 )
 
 // version se puede fijar en el build: -ldflags "-X main.version=1.2.3".
@@ -65,6 +66,8 @@ func ejecutar(args []string) error {
 		return sincronizarInfoLEG(args)
 	case "provincial", "saij":
 		return sincronizarSAIJ(args)
+	case "vencimientos", "agenda":
+		return sincronizarVencimientos(args)
 	case "usuarios", "usuario":
 		return administrarUsuarios(args)
 	case "migrar":
@@ -161,6 +164,12 @@ func ayuda() {
       constituciones de las 24 provincias, desde 1855. Es lo que el Boletín
       nacional no trae. Se puede volver a correr: si el portal no publicó
       nada nuevo, no baja nada.
+
+  notarum vencimientos
+      Baja la Agenda de Vencimientos de ARCA —qué obligación impositiva vence
+      cada día, para qué terminación de CUIT y bajo qué norma— y la compara
+      con la que había, para registrar qué fechas movió ARCA. El servicio la
+      baja solo todos los días. Se apaga con NOTARUM_SIN_VENCIMIENTOS.
 
   notarum migrar --origen sqlite --db /datos/notarum.db
       Pasa lo guardado a donde apunte la configuración actual. Sirve para
@@ -282,6 +291,11 @@ func armarServicio(cfg configComun) (*servicio.Servicio, func(), error) {
 	// sincronice: el índice se arma la primera vez que alguien lo consulta.
 	if !encendido("NOTARUM_SIN_SAIJ", false) {
 		srv = srv.ConSAIJ(saij.NuevoCliente(saij.Opciones{UserAgent: cfg.userAgent}))
+	}
+	// La agenda de vencimientos de ARCA, lo mismo: no cuesta nada hasta que se
+	// baja, y son unos megabytes.
+	if !encendido("NOTARUM_SIN_VENCIMIENTOS", false) {
+		srv = srv.ConVencimientos(vencimientos.NuevoCliente(vencimientos.Opciones{UserAgent: cfg.userAgent}))
 	}
 	// El buscador de normativa nacional se pide: son unos 350 MB en memoria,
 	// medidos con el catálogo real, y no se le imponen a quien no lo usa.
@@ -442,6 +456,15 @@ func servir(args []string) error {
 			Hacer: trabajoProvincial(srv),
 		}); err != nil {
 			return err
+		}
+		if srv.VencimientosDisponible() {
+			if err := programador.Agregar(tareas.Programado{
+				Tipo:  "vencimientos",
+				Que:   "actualizar la agenda de vencimientos de ARCA",
+				Hacer: trabajoVencimientos(srv),
+			}); err != nil {
+				return err
+			}
 		}
 		// Después de las dos: una alerta que corre antes de la actualización
 		// mira los datos de ayer, y lo de hoy lo avisaría recién mañana.
@@ -945,6 +968,54 @@ func sincronizarSAIJ(args []string) error {
 	return nil
 }
 
+// sincronizarVencimientos baja la agenda de vencimientos de ARCA y la guarda.
+func sincronizarVencimientos(args []string) error {
+	fs := flag.NewFlagSet("vencimientos", flag.ContinueOnError)
+	dirCache := fs.String("cache", entorno("NOTARUM_CACHE", "/datos/cache"), "directorio de caché (motor disco)")
+	motor := fs.String("almacen", entorno("NOTARUM_ALMACEN", "disco"), "dónde guardar: disco, sqlite o postgres")
+	rutaDB := fs.String("db", entorno("NOTARUM_DB", "/datos/notarum.db"), "archivo de la base (motor sqlite)")
+	userAgent := fs.String("user-agent", entorno("NOTARUM_USER_AGENT", uaPorDefecto()), "User-Agent hacia los sitios")
+	formatoLog := fs.String("log", entorno("NOTARUM_LOG", "text"), "formato de log: text o json")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	armarLog(*formatoLog)
+
+	srv, cerrar, err := armarServicio(configComun{
+		motor: *motor, dirCache: *dirCache, rutaDB: *rutaDB,
+		userAgent: *userAgent, intervalo: 500 * time.Millisecond,
+	})
+	if err != nil {
+		return err
+	}
+	defer cerrar()
+	if !srv.VencimientosDisponible() {
+		return errors.New("la agenda de vencimientos está apagada con NOTARUM_SIN_VENCIMIENTOS")
+	}
+
+	ctx, cancelar := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancelar()
+
+	inicio := time.Now()
+	e, err := srv.SincronizarVencimientos(ctx)
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			slog.Info("cortado por pedido del usuario; lo que había queda como estaba")
+			return nil
+		}
+		return err
+	}
+	for _, a := range e.Avisos {
+		slog.Warn(a)
+	}
+	slog.Info("listo", "filas", e.Filas, "vigentes", e.Vigentes,
+		"desde", e.Desde, "hasta", e.Hasta,
+		"altas", e.Resumen.Altas, "prorrogas", e.Resumen.Prorrogas,
+		"adelantos", e.Resumen.Adelantos, "bajas", e.Resumen.Bajas,
+		"tardo", time.Since(inicio).Round(time.Second).String())
+	return nil
+}
+
 // Los trabajos que corren solos y desde el panel son los mismos: se arman acá
 // una vez y los usan los dos, para que no puedan diverger.
 func trabajoInfoLEG(srv *servicio.Servicio) tareas.Trabajo {
@@ -968,6 +1039,22 @@ func trabajoProvincial(srv *servicio.Servicio) tareas.Trabajo {
 			return "", err
 		}
 		return fmt.Sprintf("%d normas de %d jurisdicciones", e.Normas, e.Provincias), nil
+	}
+}
+
+func trabajoVencimientos(srv *servicio.Servicio) tareas.Trabajo {
+	return func(ctx context.Context, avisar func(string)) (string, error) {
+		avisar("bajando la agenda de ARCA")
+		e, err := srv.SincronizarVencimientos(ctx)
+		if err != nil {
+			return "", err
+		}
+		r := e.Resumen
+		if r.CargaInicial {
+			return fmt.Sprintf("%d vencimientos, primera bajada", e.Filas), nil
+		}
+		return fmt.Sprintf("%d vencimientos; %d altas, %d prórrogas, %d adelantos, %d bajas",
+			e.Filas, r.Altas, r.Prorrogas, r.Adelantos, r.Bajas), nil
 	}
 }
 

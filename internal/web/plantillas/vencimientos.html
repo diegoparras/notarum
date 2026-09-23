@@ -1,0 +1,111 @@
+{{define "titulo"}}Vencimientos de ARCA{{end}}
+{{define "cuerpo"}}
+
+<h1>Vencimientos de ARCA</h1>
+<p class="bajada">
+  La agenda impositiva: qué obligación vence cada día, para qué terminación de
+  CUIT y bajo qué norma. Se baja todos los días de ARCA y se compara con la
+  anterior, así que abajo dice además qué fechas movió ARCA, algo que ARCA no
+  publica.
+</p>
+
+{{if not .Disponible}}
+<div class="vacio">
+  <strong>Esta instancia no sigue la agenda de vencimientos</strong>
+  Quien la opera la apagó con <code>NOTARUM_SIN_VENCIMIENTOS</code>.
+</div>
+{{else if not .Cargado}}
+<div class="vacio">
+  <strong>Esta instancia todavía no bajó la agenda</strong>
+  Se baja sola todos los días. Quien la opera puede bajarla ya desde el panel,
+  o con <code>notarum vencimientos</code>.
+</div>
+{{else}}
+
+<form class="barra" method="get" action="/vencimientos">
+  <input type="search" name="texto" value="{{.Texto}}"
+         placeholder="retenciones, monotributo, bienes personales…" aria-label="Texto a buscar" autofocus>
+  <input type="text" name="cuit" value="{{.CUIT}}" placeholder="CUIT o terminación"
+         aria-label="CUIT o su último dígito" style="width:11em">
+  <select name="impuesto" aria-label="Impuesto">
+    <option value="">todos los impuestos</option>
+    {{$imp := .Impuesto}}
+    {{range .Impuestos}}{{if .Vencimientos}}
+      <option value="{{.Nombre}}"{{if eq .Nombre $imp}} selected{{end}}>{{.Nombre}} ({{.Vencimientos}})</option>
+    {{end}}{{end}}
+  </select>
+  <input type="date" name="desde" value="{{if not .PorDefecto}}{{.Desde}}{{end}}" aria-label="Desde">
+  <input type="date" name="hasta" value="{{if not .PorDefecto}}{{.Hasta}}{{end}}" aria-label="Hasta">
+  <label class="casilla"><input type="checkbox" name="sin_fecha" value="1"{{if .SinFecha}} checked{{end}}> sólo sin fecha fija</label>
+  <button class="boton" type="submit">Buscar</button>
+</form>
+
+{{if .Error}}
+  <div class="vacio"><strong>No se pudo buscar</strong>{{.Error}}</div>
+{{else}}
+  <div class="aviso-nota">
+    {{.Total}} vencimiento{{if ne .Total 1}}s{{end}}
+    {{if .SinFecha}}sin fecha fija{{else if .PorDefecto}}en los próximos 30 días{{else}}entre {{.Desde}} y {{.Hasta}}{{end}}{{if .Terminacion}}, para los CUIT terminados en {{.Terminacion}} (incluye lo que vence para todos){{end}}.
+    Agenda bajada de ARCA {{haceCuanto .Estado.SincronizadoEn}}; se le pidió del {{.Estado.Desde}} al {{.Estado.Hasta}}, y afuera de eso no se preguntó nada.
+  </div>
+
+  {{range .Filas}}
+    <div class="aviso fijo">
+      <div class="aviso-organismo">
+        <span class="dato-mono">{{.FechaTexto}}</span> · {{.Faltan}}
+        {{if eq .Urgencia "hoy"}}<span class="marca-chica">hoy</span>{{end}}
+        {{if eq .Urgencia "vencido"}}<span class="marca-chica gris">vencido</span>{{end}}
+      </div>
+      <div class="aviso-norma">{{.Impuesto}}</div>
+      <div class="aviso-sintesis">{{.Obligacion}} {{.Periodo}}</div>
+      {{if .Regimen}}<div class="aviso-sintesis">{{.Regimen}}</div>{{end}}
+      <div class="aviso-pie">
+        {{if .TerminacionCUIT}}<span class="dato-mono">terminación {{.TerminacionCUIT}}</span>{{end}}
+        {{if .Formularios}}<span class="dato-mono">{{.Formularios}}</span>{{end}}
+      </div>
+      {{if .Normas}}
+      <div class="aviso-normas">
+        {{range .Normas}}{{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener">{{.Texto}}</a>{{else}}<span>{{.Texto}}</span>{{end}}{{end}}
+      </div>
+      {{end}}
+    </div>
+  {{else}}
+    <div class="vacio">
+      <strong>No vence nada con esos criterios</strong>
+      Probá con otro período o con menos filtros. Las obligaciones de plazo
+      relativo —las que vencen «dentro de los 10 días hábiles de…»— no tienen
+      fecha: se ven marcando «sólo sin fecha fija».
+    </div>
+  {{end}}
+
+  {{if or .Anterior .Siguiente}}
+  <nav class="paginas">
+    {{if .Anterior}}<a class="boton suave" href="{{.Anterior}}">← anteriores</a>{{end}}
+    <span class="dato-mono">página {{.Pagina}}</span>
+    {{if .Siguiente}}<a class="boton suave" href="{{.Siguiente}}">siguientes →</a>{{end}}
+  </nav>
+  {{end}}
+{{end}}
+
+<h2>Qué movió ARCA</h2>
+<p class="bajada">
+  ARCA no publica cuándo cambia una fecha. Esto sale de comparar cada bajada
+  con la anterior, así que cada cambio se sabe entre qué dos bajadas pasó, y
+  nada más.
+</p>
+{{range .Cambios}}
+  <div class="aviso fijo">
+    <div class="aviso-organismo"><span class="marca-chica{{if or (eq .Tipo "baja") (eq .Tipo "alta")}} gris{{end}}">{{.Tipo}}</span> visto {{haceCuanto .DetectadoEn}}</div>
+    <div class="aviso-norma">{{.Impuesto}}</div>
+    <div class="aviso-sintesis">{{.Obligacion}} {{.Periodo}}{{if .TerminacionCUIT}} · terminación {{.TerminacionCUIT}}{{end}}</div>
+    <div class="aviso-pie">{{.Texto}}</div>
+  </div>
+{{else}}
+  <div class="vacio">
+    <strong>Nada movido en los últimos 90 días</strong>
+    {{if .Estado.Resumen.CargaInicial}}Hace falta una segunda bajada para tener contra qué comparar.{{end}}
+  </div>
+{{end}}
+
+{{end}}
+{{end}}
