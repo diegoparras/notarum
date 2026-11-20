@@ -1231,6 +1231,7 @@ func trabajoSemanaDelBoletin(srv *servicio.Servicio) tareas.Trabajo {
 
 		var total servicio.Relleno
 		var fallaron []string
+		var bloqueo error
 		for _, sec := range boletin.SeccionesValidas {
 			if ctx.Err() != nil {
 				return "", ctx.Err()
@@ -1251,6 +1252,16 @@ func trabajoSemanaDelBoletin(srv *servicio.Servicio) tareas.Trabajo {
 				if errors.Is(err, context.Canceled) {
 					return "", err
 				}
+				// Si se cortó porque el Boletín no deja de limitar, las otras
+				// secciones se encontrarían con lo mismo: esperar e insistir
+				// por cada una es triplicar los pedidos contra un sitio que
+				// ya está bloqueando.
+				var es *boletin.ErrDelSitio
+				if errors.As(err, &es) && es.Limitado() {
+					slog.Warn("la bajada de la semana se corta: el Boletín sigue limitando", "seccion", sec, "err", err)
+					bloqueo = err
+					break
+				}
 				// Una sección que falla no se lleva a las otras: son tres
 				// bajadas distintas y perder las tres por una es peor.
 				fallaron = append(fallaron, string(sec)+" ("+err.Error()+")")
@@ -1265,6 +1276,11 @@ func trabajoSemanaDelBoletin(srv *servicio.Servicio) tareas.Trabajo {
 		}
 		if total.Fallidas > 0 {
 			texto += fmt.Sprintf("; %d días fallaron", total.Fallidas)
+		}
+		if bloqueo != nil {
+			// Lo que alcanzó a bajar queda guardado, y relanzar la bajada
+			// desde el panel saltea lo que ya está.
+			return texto, fmt.Errorf("no se pudo terminar; se puede relanzar cuando el Boletín vuelva a contestar: %w", bloqueo)
 		}
 		if len(fallaron) > 0 {
 			return texto, errors.New("no se pudo terminar: " + strings.Join(fallaron, "; "))

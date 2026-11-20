@@ -1796,7 +1796,7 @@
     }
    },
    "SitioLimitando": {
-    "description": "El Boletín Oficial limita los pedidos por dirección y esta instancia llegó al tope. La cabecera `Retry-After` dice en cuántos segundos reintentar. Lo que ya está guardado se sigue sirviendo: sólo falla lo que habría que ir a buscar al sitio.",
+    "description": "El Boletín Oficial limita los pedidos por dirección y esta instancia llegó al tope. La cabecera `Retry-After` dice en cuántos segundos reintentar, y `limitado_hasta` lo mismo como hora. Lo que ya está guardado se sigue sirviendo: sólo falla lo que habría que ir a buscar al sitio. Si el motivo es que el sitio contestó 429, el `detalle` contiene el texto «respondió 429»; si frenó el tope propio de notarum, que se adelanta al del sitio, no.",
     "headers": {
      "Retry-After": {
       "description": "Segundos que hay que esperar antes de reintentar.",
@@ -1840,6 +1840,11 @@
      "sin_edicion": {
       "type": "boolean",
       "description": "Ese día no hubo edición."
+     },
+     "limitado_hasta": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Sólo en el 503 del límite del Boletín: a partir de cuándo tiene sentido volver a pedir. Es lo mismo que `Retry-After`, como hora."
      }
     }
    },

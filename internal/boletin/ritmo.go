@@ -63,8 +63,12 @@ func tienePaciencia(ctx context.Context) bool {
 }
 
 // errSinTurno es lo que devuelve esperarTurno cuando el turno queda demasiado
-// lejos para un pedido sin paciencia. No se consumió nada.
-type errSinTurno struct{ espera time.Duration }
+// lejos para un pedido sin paciencia. No se consumió nada. enPausa dice si lo
+// que lo aleja es la pausa que siguió a un 429 del sitio, y no el tope propio.
+type errSinTurno struct {
+	espera  time.Duration
+	enPausa bool
+}
 
 func (e *errSinTurno) Error() string {
 	return "el turno para pedirle al sitio queda a " + e.espera.Round(time.Second).String()
@@ -103,8 +107,9 @@ func (c *Cliente) esperarTurno(ctx context.Context) error {
 	}
 	espera := turno.Sub(ahora)
 	if espera > c.aguante && !tienePaciencia(ctx) {
+		enPausa := c.pausaHasta.After(ahora)
 		c.mu.Unlock()
-		return &errSinTurno{espera: espera}
+		return &errSinTurno{espera: espera, enPausa: enPausa}
 	}
 	c.proximo = turno.Add(c.intervalo)
 	c.fichas, c.fichasAl = fichas, fichasAl
