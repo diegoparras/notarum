@@ -47,6 +47,9 @@ func (s *Servicio) Rellenar(ctx context.Context, sec boletin.Seccion, desde, has
 		case errors.Is(err, ErrSinEdicion):
 			// Un día sin edición no es una falla: son los feriados.
 			r.SinEdicion++
+		case sigueLimitando(err):
+			r.Tardo = time.Since(inicio)
+			return r, corteDe("el relleno", sec, f, err)
 		case err != nil:
 			r.Fallidas++
 			slog.Warn("no se pudo bajar", "seccion", sec, "fecha", f.API(), "err", err)
@@ -94,6 +97,9 @@ func (s *Servicio) RellenarConAvisos(ctx context.Context, sec boletin.Seccion, d
 				return r, ctx.Err()
 			}
 			if _, err := s.Aviso(ctx, sec, a.ID, a.Fecha); err != nil {
+				if sigueLimitando(err) {
+					return r, corteDe("la bajada de textos", sec, f, err)
+				}
 				slog.Warn("no se pudo bajar el aviso", "id", a.ID, "err", err)
 				continue
 			}
@@ -107,6 +113,30 @@ func (s *Servicio) RellenarConAvisos(ctx context.Context, sec boletin.Seccion, d
 		}
 	}
 	return r, nil
+}
+
+// sigueLimitando dice si un pedido de un trabajo con paciencia volvió igual con
+// el límite del Boletín. Con paciencia el cliente ya esperó la pausa y
+// reintentó, varias veces, antes de devolver ese error: llegado acá no es un
+// tope de ritmo que se arregla esperando un poco más, es un bloqueo.
+func sigueLimitando(err error) bool {
+	var es *boletin.ErrDelSitio
+	return errors.As(err, &es) && es.Limitado()
+}
+
+// corteDe arma el error de un trabajo largo que se corta porque el Boletín no
+// deja de limitar.
+//
+// Se corta en vez de seguir con el día o el aviso que viene porque seguir es
+// volver a esperar y a insistir, una vez por cada uno de los que faltan —y
+// una edición son cientos de avisos—, contra un sitio que acaba de decir que
+// no varias veces seguidas. Lo bajado queda guardado y el trabajo se retoma
+// donde quedó.
+func corteDe(que string, sec boletin.Seccion, f boletin.Fecha, err error) error {
+	slog.Warn(que+" se corta: el Boletín sigue limitando después de esperar",
+		"seccion", sec, "fecha", f.API(), "err", err)
+	return fmt.Errorf("%s de la sección %s se cortó en el %s: el Boletín siguió limitando los pedidos después de esperar y reintentar; lo bajado queda guardado y se puede retomar más tarde: %w",
+		que, sec, f.API(), err)
 }
 
 func (s *Servicio) avisarDe(avisar func(Avance), sec boletin.Seccion, f boletin.Fecha, i int, r Relleno) {

@@ -257,7 +257,13 @@ que costaron, por si a alguien le sirven:
   agotados, sale uno cada tres segundos. Si el 429 llega igual, se frena todo
   el cliente lo que diga `Retry-After` (o un minuto, que se duplica si
   insiste): el relleno espera y sigue, y la API contesta 503 con `Retry-After`
-  en vez de dejar colgado a quien pregunta.
+  en vez de dejar colgado a quien pregunta. Ese 503 trae además
+  `limitado_hasta`, la hora a la que conviene volver, y cuando el motivo es un
+  429 del sitio su `detalle` dice «respondió 429», que es el texto por el que
+  algunos clientes ya reconocían el caso. Si después de esperar y reintentar
+  el sitio sigue limitando, el relleno y la bajada semanal se cortan ahí en
+  vez de insistir con cada día y cada aviso que falta: a esa altura es un
+  bloqueo. Lo bajado queda guardado y se retoma después.
 
 - **`?suplemento=1` tampoco hace nada:** la portada normal ya incluye el
   suplemento, y sus avisos se reconocen por el rubro `(SUPLEMENTO)`.

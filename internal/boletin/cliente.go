@@ -32,6 +32,11 @@ type ErrDelSitio struct {
 	// ReintentarEn acompaña a un 429: cuánto hay que esperar antes de volver
 	// a pedir. Lo dice el sitio, o lo estima el cliente.
 	ReintentarEn time.Duration
+	// PorElSitio distingue los dos motivos de un Limitado. Es verdadero si el
+	// sitio contestó 429: este pedido lo recibió, o no salió porque sigue la
+	// pausa de uno anterior. Es falso si frenó el tope propio del cliente, que
+	// se adelanta para que el sitio no llegue a quejarse.
+	PorElSitio bool
 }
 
 // Limitado dice si el error es el sitio pidiendo que se le pida menos: un 429
@@ -267,6 +272,7 @@ func (c *Cliente) pedirCon(ctx context.Context, op, metodo, ruta string, form ur
 				return nil, &ErrDelSitio{
 					Operacion: op, URL: destino,
 					Codigo: http.StatusTooManyRequests, ReintentarEn: st.espera,
+					PorElSitio: st.enPausa,
 				}
 			}
 			return nil, err
@@ -332,6 +338,7 @@ func (c *Cliente) pedirCon(ctx context.Context, op, metodo, ruta string, form ur
 				return nil, &ErrDelSitio{
 					Operacion: op, URL: destino,
 					Codigo: http.StatusTooManyRequests, ReintentarEn: espera,
+					PorElSitio: true,
 				}
 			}
 			continue

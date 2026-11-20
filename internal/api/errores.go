@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/diegoparras/notarum/internal/boletin"
 )
@@ -33,6 +34,10 @@ type RespuestaError struct {
 	Detalle    string `json:"detalle,omitempty"`
 	Origen     Origen `json:"origen"`
 	SinEdicion bool   `json:"sin_edicion,omitempty"`
+	// LimitadoHasta acompaña al 503 del límite del Boletín: a partir de
+	// cuándo tiene sentido volver a pedir lo que no esté guardado. Es lo mismo
+	// que la cabecera Retry-After, como hora.
+	LimitadoHasta *time.Time `json:"limitado_hasta,omitempty"`
 }
 
 func escribirJSON(w http.ResponseWriter, r *http.Request, codigo int, cuerpo any, cacheControl string) {
@@ -104,9 +109,22 @@ func escribirErrorDeLectura(w http.ResponseWriter, r *http.Request, err error) {
 		}
 		w.Header().Set("Retry-After", strconv.Itoa(segundos))
 		slog.Warn("el Boletín está limitando los pedidos", "reintentar_en", segundos, "ruta", r.URL.Path)
-		escribirError(w, r, http.StatusServiceUnavailable, OrigenSitio,
-			"el Boletín Oficial está limitando los pedidos de esta instancia",
-			"probá de nuevo en "+strconv.Itoa(segundos)+" segundos; lo que ya está guardado se sigue sirviendo")
+		// El motivo va adelante y con estas palabras. Cuando notarum pasaba
+		// el 429 del sitio adentro de un 502, el detalle decía "el Boletín
+		// Oficial respondió 429", y hay clientes que reconocen el caso por
+		// ese texto para dejar de pedir. Sólo se dice cuando es cierto: si
+		// frenó el tope propio, el sitio no respondió nada.
+		motivo := "notarum llegó a su propio tope de pedidos al Boletín, que se adelanta al límite del sitio"
+		if es.PorElSitio {
+			motivo = "el Boletín Oficial respondió 429 (demasiados pedidos) y por un rato no se le pide nada"
+		}
+		hasta := time.Now().Add(es.ReintentarEn).UTC()
+		escribirJSON(w, r, http.StatusServiceUnavailable, RespuestaError{
+			Error:         "el Boletín Oficial está limitando los pedidos de esta instancia",
+			Detalle:       motivo + "; probá de nuevo en " + strconv.Itoa(segundos) + " segundos; lo que ya está guardado se sigue sirviendo",
+			Origen:        OrigenSitio,
+			LimitadoHasta: &hasta,
+		}, "no-store")
 		return
 	}
 	if errors.As(err, &es) {
