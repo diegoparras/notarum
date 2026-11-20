@@ -344,6 +344,9 @@ func (s *Sitio) fallo(w http.ResponseWriter, r *http.Request, codigo int, titulo
 // página, sin tecnicismos ni rastros internos.
 func mensajeDeError(err error) string {
 	var es *boletin.ErrDelSitio
+	if errors.As(err, &es) && es.Limitado() {
+		return "El Boletín Oficial está limitando los pedidos que le hace esta instancia. Probá de nuevo en unos minutos; lo que ya está guardado se sigue viendo."
+	}
 	if errors.As(err, &es) {
 		return "El sitio del Boletín Oficial no respondió como se esperaba. Probá de nuevo en un momento."
 	}

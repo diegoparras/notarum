@@ -18,7 +18,12 @@ import (
 // qué abrir una consola para ponerla en marcha.
 //
 // Se puede cortar y retomar: los días que ya están guardados se saltean.
+//
+// Es un trabajo largo y nadie está esperando la respuesta de cada pedido: si
+// el Boletín contesta 429, el cliente hace la pausa y sigue, en vez de dar
+// por fallido ese día y todos los que vienen detrás.
 func (s *Servicio) Rellenar(ctx context.Context, sec boletin.Seccion, desde, hasta boletin.Fecha, avisar func(Avance)) (Relleno, error) {
+	ctx = boletin.ConPaciencia(ctx)
 	var r Relleno
 	fechas, err := s.FechasDelAnio(ctx, sec, desde, hasta)
 	if err != nil {
@@ -67,6 +72,7 @@ func (s *Servicio) Rellenar(ctx context.Context, sec boletin.Seccion, desde, has
 // RellenarConAvisos hace lo mismo y además baja el texto de cada aviso, que
 // es lo que permite buscar por el cuerpo y no sólo por el sumario.
 func (s *Servicio) RellenarConAvisos(ctx context.Context, sec boletin.Seccion, desde, hasta boletin.Fecha, avisar func(Avance)) (Relleno, error) {
+	ctx = boletin.ConPaciencia(ctx)
 	r, err := s.Rellenar(ctx, sec, desde, hasta, avisar)
 	if err != nil {
 		return r, err

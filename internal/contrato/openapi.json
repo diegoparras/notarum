@@ -137,6 +137,9 @@
      },
      "502": {
       "$ref": "#/components/responses/FalloDelSitio"
+     },
+     "503": {
+      "$ref": "#/components/responses/SitioLimitando"
      }
     }
    }
@@ -193,6 +196,9 @@
      },
      "502": {
       "$ref": "#/components/responses/FalloDelSitio"
+     },
+     "503": {
+      "$ref": "#/components/responses/SitioLimitando"
      }
     }
    }
@@ -246,6 +252,9 @@
      },
      "502": {
       "$ref": "#/components/responses/FalloDelSitio"
+     },
+     "503": {
+      "$ref": "#/components/responses/SitioLimitando"
      }
     }
    }
@@ -294,6 +303,9 @@
      },
      "502": {
       "$ref": "#/components/responses/FalloDelSitio"
+     },
+     "503": {
+      "$ref": "#/components/responses/SitioLimitando"
      }
     }
    }
@@ -355,6 +367,9 @@
      },
      "502": {
       "$ref": "#/components/responses/FalloDelSitio"
+     },
+     "503": {
+      "$ref": "#/components/responses/SitioLimitando"
      }
     }
    }
@@ -390,6 +405,9 @@
      },
      "502": {
       "$ref": "#/components/responses/FalloDelSitio"
+     },
+     "503": {
+      "$ref": "#/components/responses/SitioLimitando"
      }
     }
    }
@@ -517,6 +535,9 @@
      },
      "502": {
       "$ref": "#/components/responses/FalloDelSitio"
+     },
+     "503": {
+      "$ref": "#/components/responses/SitioLimitando"
      }
     }
    }
@@ -1773,6 +1794,24 @@
       }
      }
     }
+   },
+   "SitioLimitando": {
+    "description": "El Boletín Oficial limita los pedidos por dirección y esta instancia llegó al tope. La cabecera `Retry-After` dice en cuántos segundos reintentar. Lo que ya está guardado se sigue sirviendo: sólo falla lo que habría que ir a buscar al sitio.",
+    "headers": {
+     "Retry-After": {
+      "description": "Segundos que hay que esperar antes de reintentar.",
+      "schema": {
+       "type": "integer"
+      }
+     }
+    },
+    "content": {
+     "application/json": {
+      "schema": {
+       "$ref": "#/components/schemas/Error"
+      }
+     }
+    }
    }
   },
   "schemas": {
@@ -2169,6 +2208,15 @@
        },
        "errores": {
         "type": "integer"
+       },
+       "limitados": {
+        "type": "integer",
+        "description": "Cuántas veces el Boletín contestó 429 (demasiados pedidos)."
+       },
+       "en_pausa_hasta": {
+        "type": "string",
+        "format": "date-time",
+        "description": "Presente mientras dura la pausa que sigue a un 429: hasta entonces notarum no le pide nada al sitio."
        },
        "ultimo_pedido_ok": {
         "type": "boolean"

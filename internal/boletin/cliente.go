@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"sort"
@@ -28,9 +29,23 @@ type ErrDelSitio struct {
 	URL       string
 	Codigo    int
 	Causa     error
+	// ReintentarEn acompaña a un 429: cuánto hay que esperar antes de volver
+	// a pedir. Lo dice el sitio, o lo estima el cliente.
+	ReintentarEn time.Duration
 }
 
+// Limitado dice si el error es el sitio pidiendo que se le pida menos: un 429
+// suyo, o el cliente negándose a pedir porque todavía dura la pausa.
+func (e *ErrDelSitio) Limitado() bool { return e.Codigo == http.StatusTooManyRequests }
+
 func (e *ErrDelSitio) Error() string {
+	if e.Limitado() {
+		msg := e.Operacion + ": el Boletín Oficial limita los pedidos por dirección y se llegó al tope"
+		if e.ReintentarEn > 0 {
+			msg += "; se puede reintentar en " + e.ReintentarEn.Round(time.Second).String()
+		}
+		return msg
+	}
 	if e.Codigo != 0 {
 		return fmt.Sprintf("%s: el Boletín Oficial respondió %d en %s", e.Operacion, e.Codigo, e.URL)
 	}
@@ -45,12 +60,25 @@ type Opciones struct {
 	UserAgent  string        // se envía en cada pedido, con contacto
 	Intervalo  time.Duration // espera mínima entre pedidos al sitio
 	Timeout    time.Duration // por pedido
-	Reintentos int           // ante 5xx o error de red
+	Reintentos int           // ante 5xx, error de red o 429 con paciencia
 	EsperaBase time.Duration // primera espera del backoff
 	HTTP       *http.Client
+
+	// Tope es cuántos pedidos sostenidos se le hacen al sitio por Ventana, y
+	// Rafaga cuántos pueden salir seguidos antes de que el tope frene. Ver
+	// ritmo.go.
+	//
+	// Con Tope en cero rige TopePorDefecto si el origen es el sitio real, y
+	// ninguno si es otro: el tope es una medida de ese sitio, no algo que se
+	// le pueda suponer a cualquier servidor. SinTope lo apaga.
+	Tope    int
+	Ventana time.Duration
+	Rafaga  int
+	// EsperaTras429 es la pausa ante un 429 que no trae Retry-After.
+	EsperaTras429 time.Duration
 }
 
-// Cliente lee el sitio del Boletín Oficial respetando un ritmo fijo. Es seguro
+// Cliente lee el sitio del Boletín Oficial respetando un ritmo. Es seguro
 // para uso concurrente: el ritmo es global al cliente, no por goroutine.
 type Cliente struct {
 	base       string
@@ -60,24 +88,50 @@ type Cliente struct {
 	esperaBase time.Duration
 	http       *http.Client
 
-	mu      sync.Mutex
-	proximo time.Time
+	// El ritmo: ver ritmo.go.
+	cadaFicha     time.Duration // 0 si no hay tope
+	rafaga        float64
+	esperaTras429 time.Duration
+	aguante       time.Duration
+
+	mu         sync.Mutex
+	proximo    time.Time
+	fichas     float64
+	fichasAl   time.Time
+	pausaHasta time.Time
 
 	// contadores para /v1/salud
 	cont struct {
 		sync.Mutex
 		lecturas      int64
 		errores       int64
+		limitados     int64
 		ultimaLectura time.Time
 		ultimoOK      bool
 	}
 }
 
 // NuevoCliente arma un cliente con valores razonables para un sitio público
-// con protección F5: un pedido cada medio segundo, sin paralelismo agresivo.
+// con protección F5: medio segundo entre pedidos como mínimo, un tope por
+// ventana para no llegar al 429, y sin paralelismo agresivo.
 func NuevoCliente(o Opciones) *Cliente {
 	if o.Base == "" {
 		o.Base = BaseSitio
+	}
+	if o.Tope == 0 && strings.TrimRight(o.Base, "/") == BaseSitio {
+		o.Tope = TopePorDefecto
+	}
+	if o.Ventana <= 0 {
+		o.Ventana = VentanaDelTope
+	}
+	if o.Rafaga <= 0 {
+		o.Rafaga = RafagaPorDefecto
+	}
+	if o.Tope > 0 && o.Rafaga > o.Tope {
+		o.Rafaga = o.Tope
+	}
+	if o.EsperaTras429 <= 0 {
+		o.EsperaTras429 = esperaTras429PorDefecto
 	}
 	if o.UserAgent == "" {
 		o.UserAgent = "notarum (+https://github.com/diegoparras/notarum)"
@@ -102,31 +156,56 @@ func NuevoCliente(o Opciones) *Cliente {
 	cli.CheckRedirect = func(*http.Request, []*http.Request) error {
 		return http.ErrUseLastResponse
 	}
-	return &Cliente{
-		base:       strings.TrimRight(o.Base, "/"),
-		ua:         o.UserAgent,
-		intervalo:  o.Intervalo,
-		reintentos: o.Reintentos,
-		esperaBase: o.EsperaBase,
-		http:       cli,
+	c := &Cliente{
+		base:          strings.TrimRight(o.Base, "/"),
+		ua:            o.UserAgent,
+		intervalo:     o.Intervalo,
+		reintentos:    o.Reintentos,
+		esperaBase:    o.EsperaBase,
+		http:          cli,
+		esperaTras429: o.EsperaTras429,
+		aguante:       aguantePorDefecto,
 	}
+	if o.Tope > 0 {
+		c.cadaFicha = o.Ventana / time.Duration(o.Tope)
+		c.rafaga = float64(o.Rafaga)
+		c.fichas = c.rafaga
+		c.fichasAl = time.Now()
+	}
+	return c
 }
 
 // Metricas describe lo que el cliente le pidió al sitio.
 type Metricas struct {
-	Lecturas      int64      `json:"lecturas"`
-	Errores       int64      `json:"errores"`
+	Lecturas int64 `json:"lecturas"`
+	Errores  int64 `json:"errores"`
+	// Limitados es cuántas veces el sitio contestó 429.
+	Limitados     int64      `json:"limitados"`
 	UltimaLectura *time.Time `json:"ultima_lectura,omitempty"`
 	SitioResponde bool       `json:"ultimo_pedido_ok"`
+	// EnPausaHasta está mientras dura la pausa que siguió a un 429: hasta
+	// entonces el cliente no le pide nada al sitio.
+	EnPausaHasta *time.Time `json:"en_pausa_hasta,omitempty"`
 }
 
 func (c *Cliente) Metricas() Metricas {
+	c.mu.Lock()
+	pausa := c.pausaHasta
+	c.mu.Unlock()
+
 	c.cont.Lock()
 	defer c.cont.Unlock()
-	m := Metricas{Lecturas: c.cont.lecturas, Errores: c.cont.errores, SitioResponde: c.cont.ultimoOK}
+	m := Metricas{
+		Lecturas: c.cont.lecturas, Errores: c.cont.errores,
+		Limitados: c.cont.limitados, SitioResponde: c.cont.ultimoOK,
+	}
 	if !c.cont.ultimaLectura.IsZero() {
 		t := c.cont.ultimaLectura
 		m.UltimaLectura = &t
+	}
+	if pausa.After(time.Now()) {
+		p := pausa.UTC()
+		m.EnPausaHasta = &p
 	}
 	return m
 }
@@ -142,28 +221,11 @@ func (c *Cliente) anotar(ok bool) {
 	c.cont.ultimoOK = ok
 }
 
-// esperarTurno respeta el intervalo entre pedidos al sitio.
-func (c *Cliente) esperarTurno(ctx context.Context) error {
-	c.mu.Lock()
-	ahora := time.Now()
-	espera := time.Duration(0)
-	if ahora.Before(c.proximo) {
-		espera = c.proximo.Sub(ahora)
-	}
-	c.proximo = ahora.Add(espera + c.intervalo)
-	c.mu.Unlock()
-
-	if espera <= 0 {
-		return nil
-	}
-	t := time.NewTimer(espera)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-t.C:
-		return nil
-	}
+// anotarLimite cuenta un 429.
+func (c *Cliente) anotarLimite() {
+	c.cont.Lock()
+	c.cont.limitados++
+	c.cont.Unlock()
 }
 
 type respuesta struct {
@@ -173,7 +235,8 @@ type respuesta struct {
 	cookies  []*http.Cookie
 }
 
-// pedir hace un pedido con ritmo y reintentos. Los 4xx no se reintentan.
+// pedir hace un pedido con ritmo y reintentos. Los 4xx no se reintentan,
+// salvo el 429 cuando el contexto tiene paciencia (ver ConPaciencia).
 func (c *Cliente) pedir(ctx context.Context, op, metodo, ruta string, form url.Values) (*respuesta, error) {
 	return c.pedirCon(ctx, op, metodo, ruta, form, nil)
 }
@@ -184,6 +247,7 @@ func (c *Cliente) pedir(ctx context.Context, op, metodo, ruta string, form url.V
 func (c *Cliente) pedirCon(ctx context.Context, op, metodo, ruta string, form url.Values, cabeceras http.Header) (*respuesta, error) {
 	destino := c.base + ruta
 	var ultimo error
+	var limitesSeguidos int
 	for intento := 0; intento <= c.reintentos; intento++ {
 		if intento > 0 {
 			espera := c.esperaBase * (1 << (intento - 1))
@@ -196,6 +260,15 @@ func (c *Cliente) pedirCon(ctx context.Context, op, metodo, ruta string, form ur
 			}
 		}
 		if err := c.esperarTurno(ctx); err != nil {
+			// El turno queda demasiado lejos para quien está esperando una
+			// respuesta: se le avisa cuándo volver, sin tocar el sitio.
+			var st *errSinTurno
+			if errors.As(err, &st) {
+				return nil, &ErrDelSitio{
+					Operacion: op, URL: destino,
+					Codigo: http.StatusTooManyRequests, ReintentarEn: st.espera,
+				}
+			}
 			return nil, err
 		}
 
@@ -228,6 +301,7 @@ func (c *Cliente) pedirCon(ctx context.Context, op, metodo, ruta string, form ur
 		}
 		cuerpo, errLec := io.ReadAll(io.LimitReader(res.Body, 32<<20))
 		loc := res.Header.Get("Location")
+		retryAfter := res.Header.Get("Retry-After")
 		codigo := res.StatusCode
 		cookies := res.Cookies()
 		res.Body.Close()
@@ -240,6 +314,26 @@ func (c *Cliente) pedirCon(ctx context.Context, op, metodo, ruta string, form ur
 		if codigo >= 500 {
 			ultimo = fmt.Errorf("respondió %d", codigo)
 			c.anotar(false)
+			continue
+		}
+		if codigo == http.StatusTooManyRequests {
+			// El sitio pide que se le pida menos. Se frena todo el cliente;
+			// quien puede esperar reintenta después de la pausa, y quien no,
+			// se entera de cuándo volver.
+			espera := c.esperaDe429(retryAfter, limitesSeguidos)
+			limitesSeguidos++
+			c.pausar(espera)
+			c.anotar(false)
+			c.anotarLimite()
+			slog.Warn("el Boletín contestó 429: se pausan los pedidos al sitio",
+				"operacion", op, "pausa", espera.Round(time.Second).String(),
+				"retry_after", retryAfter)
+			if !tienePaciencia(ctx) || intento == c.reintentos {
+				return nil, &ErrDelSitio{
+					Operacion: op, URL: destino,
+					Codigo: http.StatusTooManyRequests, ReintentarEn: espera,
+				}
+			}
 			continue
 		}
 		c.anotar(codigo < 400)
