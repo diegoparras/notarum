@@ -137,6 +137,9 @@
      },
      "502": {
       "$ref": "#/components/responses/FalloDelSitio"
+     },
+     "503": {
+      "$ref": "#/components/responses/SitioLimitando"
      }
     }
    }
@@ -147,7 +150,7 @@
      "ediciones"
     ],
     "summary": "Edición de una sección en una fecha",
-    "description": "El sumario completo de ese día. Si ese día no hubo edición devuelve 404 con `sin_edicion: true`, que no es una falla.",
+    "description": "El sumario completo de ese día. Si ese día no hubo edición devuelve 404 con `sin_edicion: true`, que no es una falla.\n\nEl sitio del Boletín entrega el sumario de a 100 avisos; notarum sigue todas las páginas y compara contra lo que el propio sitio declara (`cantidad_declarada`). Si no pudo confirmar que estén todos, la respuesta lo dice con `parcial: true` y no se guarda como definitiva.",
     "operationId": "verEdicion",
     "parameters": [
      {
@@ -193,6 +196,9 @@
      },
      "502": {
       "$ref": "#/components/responses/FalloDelSitio"
+     },
+     "503": {
+      "$ref": "#/components/responses/SitioLimitando"
      }
     }
    }
@@ -246,6 +252,9 @@
      },
      "502": {
       "$ref": "#/components/responses/FalloDelSitio"
+     },
+     "503": {
+      "$ref": "#/components/responses/SitioLimitando"
      }
     }
    }
@@ -294,6 +303,9 @@
      },
      "502": {
       "$ref": "#/components/responses/FalloDelSitio"
+     },
+     "503": {
+      "$ref": "#/components/responses/SitioLimitando"
      }
     }
    }
@@ -355,6 +367,9 @@
      },
      "502": {
       "$ref": "#/components/responses/FalloDelSitio"
+     },
+     "503": {
+      "$ref": "#/components/responses/SitioLimitando"
      }
     }
    }
@@ -390,6 +405,9 @@
      },
      "502": {
       "$ref": "#/components/responses/FalloDelSitio"
+     },
+     "503": {
+      "$ref": "#/components/responses/SitioLimitando"
      }
     }
    }
@@ -517,6 +535,9 @@
      },
      "502": {
       "$ref": "#/components/responses/FalloDelSitio"
+     },
+     "503": {
+      "$ref": "#/components/responses/SitioLimitando"
      }
     }
    }
@@ -1773,6 +1794,24 @@
       }
      }
     }
+   },
+   "SitioLimitando": {
+    "description": "El Boletín Oficial limita los pedidos por dirección y esta instancia llegó al tope. La cabecera `Retry-After` dice en cuántos segundos reintentar. Lo que ya está guardado se sigue sirviendo: sólo falla lo que habría que ir a buscar al sitio.",
+    "headers": {
+     "Retry-After": {
+      "description": "Segundos que hay que esperar antes de reintentar.",
+      "schema": {
+       "type": "integer"
+      }
+     }
+    },
+    "content": {
+     "application/json": {
+      "schema": {
+       "$ref": "#/components/schemas/Error"
+      }
+     }
+    }
    }
   },
   "schemas": {
@@ -1942,6 +1981,7 @@
      "seccion",
      "fecha",
      "cantidad",
+     "parcial",
      "por_rubro",
      "avisos"
     ],
@@ -1959,7 +1999,20 @@
       "format": "date"
      },
      "cantidad": {
-      "type": "integer"
+      "type": "integer",
+      "description": "Cuántos avisos trae esta respuesta."
+     },
+     "cantidad_declarada": {
+      "type": "integer",
+      "description": "Cuántos avisos declara el propio Boletín para la edición entera, sumando su índice de rubros. Falta si la página no lo informa o si la respuesta está filtrada por rubro."
+     },
+     "parcial": {
+      "type": "boolean",
+      "description": "`true` si la edición puede estar incompleta: se leyeron menos avisos de los declarados o no se pudo confirmar que estén todos. Una edición parcial se vuelve a intentar a los pocos minutos."
+     },
+     "paginas": {
+      "type": "integer",
+      "description": "Cuántas páginas del sitio hubo que leer para armarla: el Boletín entrega el sumario de a 100 avisos."
      },
      "por_rubro": {
       "type": "object",
@@ -1996,6 +2049,10 @@
      },
      "cantidad": {
       "type": "integer"
+     },
+     "parcial": {
+      "type": "boolean",
+      "description": "`true` si esa edición puede estar incompleta. Incluye las guardadas antes de que notarum siguiera las páginas del sumario y que quedaron justo en 100 avisos: se completan al pedirlas de a una o con el relleno."
      },
      "por_rubro": {
       "type": "object",
@@ -2151,6 +2208,15 @@
        },
        "errores": {
         "type": "integer"
+       },
+       "limitados": {
+        "type": "integer",
+        "description": "Cuántas veces el Boletín contestó 429 (demasiados pedidos)."
+       },
+       "en_pausa_hasta": {
+        "type": "string",
+        "format": "date-time",
+        "description": "Presente mientras dura la pausa que sigue a un 429: hasta entonces notarum no le pide nada al sitio."
        },
        "ultimo_pedido_ok": {
         "type": "boolean"

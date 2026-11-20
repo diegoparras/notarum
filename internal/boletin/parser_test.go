@@ -16,8 +16,10 @@ func fixture(t *testing.T, nombre string) []byte {
 	return b
 }
 
-// Las cantidades son las que devolvió el sitio el 4/9/2026; si el parser
-// cambia y deja de coincidir, es que rompimos la extracción.
+// Las cantidades son las de cada portada tal como la devolvió el sitio el
+// 4/9/2026; si el parser cambia y deja de coincidir, es que rompimos la
+// extracción. Ojo: los 100 de la Primera y la Segunda del 1/9 son la primera
+// página, no la edición (ver paginas_test.go).
 func TestParsearPortadaCantidades(t *testing.T) {
 	casos := []struct {
 		fixture  string

@@ -266,7 +266,13 @@ func (s *Servidor) verEdicion(w http.ResponseWriter, r *http.Request) {
 		escribirErrorDeLectura(w, r, err)
 		return
 	}
-	escribirJSON(w, r, http.StatusOK, ed, cacheDeFecha(fecha))
+	// Una edición parcial se vuelve a intentar: no puede quedar guardada un
+	// año en el navegador o en un proxy como si fuera la definitiva.
+	cache := cacheDeFecha(fecha)
+	if ed.Parcial {
+		cache = "public, max-age=300"
+	}
+	escribirJSON(w, r, http.StatusOK, ed, cache)
 }
 
 func (s *Servidor) verRango(w http.ResponseWriter, r *http.Request) {

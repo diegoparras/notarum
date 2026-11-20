@@ -129,6 +129,7 @@ func ayuda() {
         LOCKATUS_REDIRECT_URI   https://tu-notarum/entrar/lockatus/volver
 
         NOTARUM_INTERVALO   (--intervalo)   espera entre pedidos al sitio [500ms]
+        NOTARUM_TOPE_SITIO                  pedidos al sitio cada 5 minutos [100]
         NOTARUM_USER_AGENT  (--user-agent)  User-Agent hacia el sitio
         NOTARUM_LOG         (--log)         text | json                 [json]
         NOTARUM_MCP_TOKEN   (--mcp-token)   exige Bearer en /mcp        [abierto]
@@ -269,6 +270,25 @@ func armarPostgres() (almacen.Almacen, error) {
 	})
 }
 
+// topeDelSitio lee NOTARUM_TOPE_SITIO: cuántos pedidos sostenidos se le hacen
+// al Boletín cada cinco minutos. Vacío o ilegible deja el valor por defecto;
+// un número negativo apaga el tope.
+func topeDelSitio() int {
+	crudo := strings.TrimSpace(os.Getenv("NOTARUM_TOPE_SITIO"))
+	if crudo == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(crudo)
+	if err != nil {
+		slog.Warn("NOTARUM_TOPE_SITIO no es un número: se usa el tope por defecto", "valor", crudo)
+		return 0
+	}
+	if n < 0 {
+		return boletin.SinTope
+	}
+	return n
+}
+
 // armarServicio crea el cliente y el almacén compartidos por ambos comandos.
 func armarServicio(cfg configComun) (*servicio.Servicio, func(), error) {
 	alm, err := armarAlmacen(cfg.motor, cfg.dirCache, cfg.rutaDB)
@@ -278,6 +298,7 @@ func armarServicio(cfg configComun) (*servicio.Servicio, func(), error) {
 	cli := boletin.NuevoCliente(boletin.Opciones{
 		UserAgent: cfg.userAgent,
 		Intervalo: cfg.intervalo,
+		Tope:      topeDelSitio(),
 	})
 	srv := servicio.Nuevo(cli, alm)
 	// InfoLEG es un accesorio: si se apaga, notarum sirve el Boletín igual.

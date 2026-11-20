@@ -24,8 +24,13 @@ func clienteReal(t *testing.T) *Cliente {
 	})
 }
 
-// Las cantidades son las que devolvió el sitio el 4/9/2026. Una edición pasada
-// no cambia: si estos números cambian, cambió la extracción o cambió el sitio.
+// Las cantidades son las que devolvió el sitio el 19/11/2026, siguiendo las
+// páginas del sumario. Una edición pasada no cambia: si estos números cambian,
+// cambió la extracción o cambió el sitio.
+//
+// Hasta la 1.7.2 acá decía 100 para la Primera y la Segunda del 1/9/2026: era
+// la portada sola. El sitio declara 129 y 410 en su índice de rubros, y eso es
+// lo que hay.
 func TestRedCantidadesConocidas(t *testing.T) {
 	c := clienteReal(t)
 	casos := []struct {
@@ -35,8 +40,8 @@ func TestRedCantidadesConocidas(t *testing.T) {
 	}{
 		{Primera, "2026-07-15", 73},
 		{Primera, "2025-03-10", 52},
-		{Primera, "2026-09-01", 100},
-		{Segunda, "2026-09-01", 100},
+		{Primera, "2026-09-01", 129},
+		{Segunda, "2026-09-01", 410},
 		{Tercera, "2026-09-01", 54},
 	}
 	ctx, cancelar := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -55,6 +60,10 @@ func TestRedCantidadesConocidas(t *testing.T) {
 			if ed.Cantidad != caso.cantidad {
 				t.Errorf("cantidad = %d, se esperaba %d: el sitio o el parser cambiaron",
 					ed.Cantidad, caso.cantidad)
+			}
+			if ed.Parcial || ed.Declarados != caso.cantidad {
+				t.Errorf("parcial = %v, declarados = %d: el sitio declara otra cosa que lo extraído",
+					ed.Parcial, ed.Declarados)
 			}
 			// El organismo puede venir vacío y es legítimo: en el rubro
 			// LEYES, los decretos de promulgación no lo traen.

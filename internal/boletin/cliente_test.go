@@ -34,11 +34,11 @@ func TestTraerEdicionSinEdicion(t *testing.T) {
 }
 
 func TestTraerEdicionOK(t *testing.T) {
-	cuerpo := fixture(t, "portada_primera_20260901.html")
+	cuerpo := fixture(t, "portada_primera_20260715.html")
 	var pedidos int32
 	c := clienteDePrueba(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(&pedidos, 1)
-		if r.URL.Path != "/seccion/primera/20260901" {
+		if r.URL.Path != "/seccion/primera/20260715" {
 			t.Errorf("ruta pedida = %q", r.URL.Path)
 		}
 		if r.Header.Get("User-Agent") == "" {
@@ -46,12 +46,12 @@ func TestTraerEdicionOK(t *testing.T) {
 		}
 		w.Write(cuerpo)
 	}))
-	fecha, _ := ParseFecha("2026-09-01")
+	fecha, _ := ParseFecha("2026-07-15")
 	ed, err := c.TraerEdicion(context.Background(), Primera, fecha, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ed.Cantidad != 100 {
+	if ed.Cantidad != 73 {
 		t.Errorf("cantidad = %d", ed.Cantidad)
 	}
 	if pedidos != 1 {

@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/diegoparras/notarum/internal/boletin"
@@ -92,6 +94,21 @@ func escribirErrorDeLectura(w http.ResponseWriter, r *http.Request, err error) {
 	}
 
 	var es *boletin.ErrDelSitio
+	if errors.As(err, &es) && es.Limitado() {
+		// El Boletín limita los pedidos por dirección y esta instancia llegó
+		// al tope. No es un fallo del sitio ni del pedido: es cuestión de
+		// esperar, y se dice cuánto.
+		segundos := int(math.Ceil(es.ReintentarEn.Seconds()))
+		if segundos < 1 {
+			segundos = 1
+		}
+		w.Header().Set("Retry-After", strconv.Itoa(segundos))
+		slog.Warn("el Boletín está limitando los pedidos", "reintentar_en", segundos, "ruta", r.URL.Path)
+		escribirError(w, r, http.StatusServiceUnavailable, OrigenSitio,
+			"el Boletín Oficial está limitando los pedidos de esta instancia",
+			"probá de nuevo en "+strconv.Itoa(segundos)+" segundos; lo que ya está guardado se sigue sirviendo")
+		return
+	}
 	if errors.As(err, &es) {
 		codigo := http.StatusBadGateway
 		if es.Codigo == http.StatusNotFound {

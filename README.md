@@ -238,6 +238,27 @@ que costaron, por si a alguien le sirven:
   por `nroAnexo`. Deduplicar por id deja uno de doce. Este lo encontró un test
   contra el sitio real, no los fixtures.
 
+- **La portada de una edición trae sólo los primeros 100 avisos.** El resto lo
+  carga el sitio al desplazarse, con `/seccion/actualizar/{sección}?pag=N`, que
+  devuelve JSON con un pedazo de HTML y `hay_mas_datos`. Ese pedido no lleva
+  fecha: el sitio sabe de qué edición se habla por la cookie de sesión que dejó
+  la portada, y sin ella contesta con la edición del día. La Segunda de un día
+  hábil ronda los 400 avisos, así que leer sólo la portada era servir la cuarta
+  parte: sociedades sí, convocatorias y edictos judiciales no. Lo que permite
+  saber si está todo es el índice de rubros de la misma portada, que cuenta los
+  avisos de cada uno; la suma es el total de la edición. Cuando una página
+  sigue adentro del rubro de la anterior, no repite el encabezado.
+
+- **El sitio corta a los 140 pedidos en cinco minutos**, más o menos, y
+  contesta 429. Un intervalo fijo no sirve para respetarlo: con medio segundo
+  salen 600, y con los dos segundos largos que haría falta, leer una Segunda
+  entera tarda diez segundos aunque nadie haya pedido nada en toda la mañana.
+  notarum usa un tope con ráfaga: los primeros 20 pedidos salen seguidos y,
+  agotados, sale uno cada tres segundos. Si el 429 llega igual, se frena todo
+  el cliente lo que diga `Retry-After` (o un minuto, que se duplica si
+  insiste): el relleno espera y sigue, y la API contesta 503 con `Retry-After`
+  en vez de dejar colgado a quien pregunta.
+
 - **`?suplemento=1` tampoco hace nada:** la portada normal ya incluye el
   suplemento, y sus avisos se reconocen por el rubro `(SUPLEMENTO)`.
 
@@ -332,7 +353,8 @@ cada vez. Medido contra el catálogo real, con lotes son unos seis minutos.
 | `NOTARUM_POSTGRES_DSN` | — | cadena completa, con el motor `postgres` |
 | `NOTARUM_POSTGRES_HOST` … | — | o las piezas sueltas: `_PUERTO`, `_BASE`, `_USUARIO`, `_CLAVE`, `_SSL`, `_ESQUEMA` |
 | `NOTARUM_POR_MINUTO` | `60` | pedidos por minuto por IP; `0` lo desactiva |
-| `NOTARUM_INTERVALO` | `500ms` | espera entre pedidos al Boletín |
+| `NOTARUM_INTERVALO` | `500ms` | espera mínima entre pedidos al Boletín |
+| `NOTARUM_TOPE_SITIO` | `100` | pedidos sostenidos al Boletín cada 5 minutos; negativo lo apaga |
 | `NOTARUM_USER_AGENT` | `notarum/1.7 (+…)` | poné una URL de contacto real |
 | `NOTARUM_LOG` | `json` | `json` o `text` |
 | `NOTARUM_MCP_TOKEN` | vacío | si se define, `/mcp` exige `Bearer` |
