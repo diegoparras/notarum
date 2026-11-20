@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/diegoparras/notarum/internal/boletin"
 )
@@ -31,6 +34,10 @@ type RespuestaError struct {
 	Detalle    string `json:"detalle,omitempty"`
 	Origen     Origen `json:"origen"`
 	SinEdicion bool   `json:"sin_edicion,omitempty"`
+	// LimitadoHasta viene cuando el Boletín Oficial está limitando los pedidos:
+	// dice a partir de cuándo tiene sentido volver a pedir lo que no esté
+	// guardado. Es lo mismo que la cabecera Retry-After, como hora.
+	LimitadoHasta *time.Time `json:"limitado_hasta,omitempty"`
 }
 
 func escribirJSON(w http.ResponseWriter, r *http.Request, codigo int, cuerpo any, cacheControl string) {
@@ -88,6 +95,31 @@ func escribirErrorDeLectura(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, r.Context().Err()) && r.Context().Err() != nil:
 		escribirError(w, r, http.StatusRequestTimeout, OrigenNotarum,
 			"el pedido se canceló antes de terminar", err.Error())
+		return
+	}
+
+	// El sitio pidió que se le pida menos y el cliente dejó de pedirle. Es un
+	// 503 y no un 429: el 429 de notarum es la cuota de quien pide, y acá quien
+	// pide no hizo nada de más; lo que no está disponible por un rato es el
+	// sitio. Retry-After dice cuánto.
+	var lim *boletin.ErrLimitado
+	if errors.As(err, &lim) {
+		faltan := int(math.Ceil(time.Until(lim.Hasta).Seconds()))
+		if faltan < 1 {
+			faltan = 1
+		}
+		w.Header().Set("Retry-After", strconv.Itoa(faltan))
+		hasta := lim.Hasta.UTC()
+		if !lim.SinPedir {
+			slog.Warn("el Boletín está limitando: no se le pide hasta que pase la ventana",
+				"hasta", hasta, "ruta", r.URL.Path)
+		}
+		escribirJSON(w, r, http.StatusServiceUnavailable, RespuestaError{
+			Error:         "el Boletín Oficial está limitando los pedidos",
+			Detalle:       lim.Error(),
+			Origen:        OrigenSitio,
+			LimitadoHasta: &hasta,
+		}, "no-store")
 		return
 	}
 

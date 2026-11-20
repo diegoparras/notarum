@@ -111,6 +111,10 @@ func (f *Fecha) UnmarshalJSON(b []byte) error {
 // init() para no depender de la base de zonas horarias del contenedor.
 var tzArgentina = time.FixedZone("ART", -3*60*60)
 
+// EnArgentina pasa un instante al huso del Boletín, para mostrarle una hora a
+// una persona.
+func EnArgentina(t time.Time) time.Time { return t.In(tzArgentina) }
+
 // HoyEnArgentina es la fecha corriente en el huso del Boletín.
 func HoyEnArgentina() Fecha {
 	n := time.Now().In(tzArgentina)

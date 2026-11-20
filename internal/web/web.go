@@ -343,11 +343,31 @@ func (s *Sitio) fallo(w http.ResponseWriter, r *http.Request, codigo int, titulo
 // mensajeDeError traduce un error de lectura a algo que se pueda leer en una
 // página, sin tecnicismos ni rastros internos.
 func mensajeDeError(err error) string {
+	var lim *boletin.ErrLimitado
+	if errors.As(err, &lim) {
+		return "El Boletín Oficial pidió que se le consulte más despacio, así que por un rato no le pedimos nada nuevo. " +
+			"Lo que ya está guardado se sigue viendo. " + cuandoVolver(time.Until(lim.Hasta))
+	}
 	var es *boletin.ErrDelSitio
 	if errors.As(err, &es) {
 		return "El sitio del Boletín Oficial no respondió como se esperaba. Probá de nuevo en un momento."
 	}
 	return "No se pudo completar la consulta."
+}
+
+// cuandoVolver dice en palabras cuánto falta para volver a intentar. Redondea
+// para arriba: prometer menos de lo que falta es invitar a probar antes de
+// tiempo.
+func cuandoVolver(falta time.Duration) string {
+	minutos := int((falta + time.Minute - 1) / time.Minute)
+	switch {
+	case minutos <= 1:
+		return "Probá de nuevo en un minuto."
+	case minutos < 60:
+		return fmt.Sprintf("Probá de nuevo en unos %d minutos.", minutos)
+	default:
+		return "Probá de nuevo en una hora."
+	}
 }
 
 // ------------------------------------------------------------------- inicio

@@ -38,6 +38,54 @@ func (e *ErrDelSitio) Error() string {
 
 func (e *ErrDelSitio) Unwrap() error { return e.Causa }
 
+// IntervaloPorDefecto es la espera entre pedidos al sitio cuando nadie
+// configura otra (NOTARUM_INTERVALO).
+//
+// Hasta la 1.7.2 fue medio segundo. El 19/11/2026, con ese valor, el sitio
+// empezó a contestar 429 después de unos 140 pedidos en cinco minutos desde
+// una misma dirección. No es un límite que el Boletín documente, es lo que se
+// vio ese día; pero medio segundo deja salir 600 en cinco minutos, más de
+// cuatro veces eso. Con dos segundos y medio salen 120.
+const IntervaloPorDefecto = 2500 * time.Millisecond
+
+// TopeRetryAfter es lo máximo que se le cree a un Retry-After del sitio. Lo
+// que el sitio pide se respeta, pero un valor desmesurado (o mal formado, que
+// viene a ser lo mismo) no puede dejar al cliente mudo por días: pasada la
+// hora sale un pedido de prueba, y si el sitio sigue limitando lo vuelve a
+// decir.
+const TopeRetryAfter = time.Hour
+
+// ErrLimitado dice que el sitio pidió que se le pida menos (contestó 429) y
+// que el cliente dejó de pedirle hasta Hasta.
+//
+// Hay dos casos y los dos llevan este error: el pedido que se encontró con el
+// 429, y los que vinieron después y no salieron (SinPedir). El texto de los dos
+// dice "respondió 429": hay clientes de la API que reconocen el caso por esas
+// palabras, y cambiarlas los deja insistiendo.
+type ErrLimitado struct {
+	Operacion string
+	URL       string
+	Desde     time.Time // cuándo contestó 429 el sitio
+	Hasta     time.Time // hasta cuándo no se le vuelve a pedir
+	SinPedir  bool      // este pedido no llegó a salir
+}
+
+func (e *ErrLimitado) Error() string {
+	hasta := e.Hasta.UTC().Format(time.RFC3339)
+	if e.SinPedir {
+		return fmt.Sprintf("%s: no se le pidió al Boletín Oficial, que respondió 429 (demasiados pedidos) a las %s; no se le vuelve a pedir hasta las %s",
+			e.Operacion, e.Desde.UTC().Format(time.RFC3339), hasta)
+	}
+	return fmt.Sprintf("%s: el Boletín Oficial respondió 429 en %s; no se le vuelve a pedir hasta las %s",
+		e.Operacion, e.URL, hasta)
+}
+
+// Unwrap deja que quien sólo pregunta "¿fue culpa del sitio?" lo siga viendo
+// como un ErrDelSitio con código 429.
+func (e *ErrLimitado) Unwrap() error {
+	return &ErrDelSitio{Operacion: e.Operacion, URL: e.URL, Codigo: http.StatusTooManyRequests}
+}
+
 // Opciones configura el cliente.
 type Opciones struct {
 	Base       string        // origen del sitio; por defecto BaseSitio
@@ -46,7 +94,12 @@ type Opciones struct {
 	Timeout    time.Duration // por pedido
 	Reintentos int           // ante 5xx o error de red
 	EsperaBase time.Duration // primera espera del backoff
-	HTTP       *http.Client
+	// PausaBase es cuánto se deja de pedir ante un 429 que no trae
+	// Retry-After. Se duplica con cada 429 seguido, hasta PausaTope, y vuelve
+	// al principio cuando el sitio contesta bien.
+	PausaBase time.Duration
+	PausaTope time.Duration
+	HTTP      *http.Client
 }
 
 // Cliente lee el sitio del Boletín Oficial respetando un ritmo fijo. Es seguro
@@ -62,6 +115,20 @@ type Cliente struct {
 	mu      sync.Mutex
 	proximo time.Time
 
+	pausaBase time.Duration
+	pausaTope time.Duration
+
+	// freno es la ventana en la que no se le pide nada al sitio porque
+	// contestó 429. Ver frenar y limitado.
+	freno struct {
+		sync.Mutex
+		desde    time.Time // cuándo llegó el último 429
+		hasta    time.Time // hasta cuándo no se pide
+		seguidos int       // 429 seguidos, sin una respuesta buena en el medio
+		veces    int64     // 429 recibidos desde que arrancó
+		sinPedir int64     // pedidos que no salieron por estar en la ventana
+	}
+
 	// contadores para /v1/salud
 	cont struct {
 		sync.Mutex
@@ -73,7 +140,8 @@ type Cliente struct {
 }
 
 // NuevoCliente arma un cliente con valores razonables para un sitio público
-// con protección F5: un pedido cada medio segundo, sin paralelismo agresivo.
+// con protección F5: un pedido cada IntervaloPorDefecto, sin paralelismo
+// agresivo.
 func NuevoCliente(o Opciones) *Cliente {
 	if o.Base == "" {
 		o.Base = BaseSitio
@@ -82,7 +150,7 @@ func NuevoCliente(o Opciones) *Cliente {
 		o.UserAgent = "notarum (+https://github.com/diegoparras/notarum)"
 	}
 	if o.Intervalo <= 0 {
-		o.Intervalo = 500 * time.Millisecond
+		o.Intervalo = IntervaloPorDefecto
 	}
 	if o.Timeout <= 0 {
 		o.Timeout = 30 * time.Second
@@ -92,6 +160,15 @@ func NuevoCliente(o Opciones) *Cliente {
 	}
 	if o.EsperaBase <= 0 {
 		o.EsperaBase = time.Second
+	}
+	if o.PausaBase <= 0 {
+		o.PausaBase = time.Minute
+	}
+	if o.PausaTope <= 0 {
+		o.PausaTope = 30 * time.Minute
+	}
+	if o.PausaTope < o.PausaBase {
+		o.PausaTope = o.PausaBase
 	}
 	cli := o.HTTP
 	if cli == nil {
@@ -107,6 +184,8 @@ func NuevoCliente(o Opciones) *Cliente {
 		intervalo:  o.Intervalo,
 		reintentos: o.Reintentos,
 		esperaBase: o.EsperaBase,
+		pausaBase:  o.PausaBase,
+		pausaTope:  o.PausaTope,
 		http:       cli,
 	}
 }
@@ -117,6 +196,17 @@ type Metricas struct {
 	Errores       int64      `json:"errores"`
 	UltimaLectura *time.Time `json:"ultima_lectura,omitempty"`
 	SitioResponde bool       `json:"ultimo_pedido_ok"`
+
+	// Limitando: el sitio contestó 429 y todavía no se le volvió a pedir.
+	// LimitadoHasta dice cuándo se reanuda; sólo viene mientras dura.
+	Limitando     bool       `json:"limitando"`
+	LimitadoHasta *time.Time `json:"limitado_hasta,omitempty"`
+	Ultimo429     *time.Time `json:"ultimo_429,omitempty"`
+	// VecesLimitado cuenta los 429 del sitio; PedidosFrenados, los pedidos
+	// que no salieron por haber llegado adentro de una ventana. Los frenados
+	// no son lecturas: el sitio nunca los vio.
+	VecesLimitado   int64 `json:"veces_limitado"`
+	PedidosFrenados int64 `json:"pedidos_frenados"`
 }
 
 func (c *Cliente) Metricas() Metricas {
@@ -127,7 +217,96 @@ func (c *Cliente) Metricas() Metricas {
 		t := c.cont.ultimaLectura
 		m.UltimaLectura = &t
 	}
+
+	c.freno.Lock()
+	defer c.freno.Unlock()
+	m.VecesLimitado = c.freno.veces
+	m.PedidosFrenados = c.freno.sinPedir
+	if !c.freno.desde.IsZero() {
+		t := c.freno.desde.UTC()
+		m.Ultimo429 = &t
+	}
+	if time.Now().Before(c.freno.hasta) {
+		t := c.freno.hasta.UTC()
+		m.Limitando = true
+		m.LimitadoHasta = &t
+	}
 	return m
+}
+
+// limitado devuelve el error de un pedido que no va a salir porque el sitio
+// está limitando, o nil si se puede pedir.
+func (c *Cliente) limitado(op, destino string) error {
+	c.freno.Lock()
+	defer c.freno.Unlock()
+	if !time.Now().Before(c.freno.hasta) {
+		return nil
+	}
+	c.freno.sinPedir++
+	return &ErrLimitado{Operacion: op, URL: destino, Desde: c.freno.desde, Hasta: c.freno.hasta, SinPedir: true}
+}
+
+// frenar abre la ventana después de un 429 y devuelve el error del pedido que
+// lo recibió.
+//
+// Si la ventana ya estaba abierta —dos pedidos salieron casi juntos y los dos
+// volvieron con 429— no se toca: es el mismo aviso del sitio, y contarlo dos
+// veces haría crecer la espera sin que el sitio haya vuelto a quejarse.
+func (c *Cliente) frenar(op, destino, retryAfter string) error {
+	c.freno.Lock()
+	defer c.freno.Unlock()
+	ahora := time.Now()
+	if !ahora.Before(c.freno.hasta) {
+		pausa, loPidioElSitio := leerRetryAfter(retryAfter, ahora)
+		if !loPidioElSitio {
+			pausa = c.pausaBase
+			for i := 0; i < c.freno.seguidos && pausa < c.pausaTope; i++ {
+				pausa *= 2
+			}
+			if pausa > c.pausaTope {
+				pausa = c.pausaTope
+			}
+		}
+		c.freno.seguidos++
+		c.freno.veces++
+		c.freno.desde = ahora
+		c.freno.hasta = ahora.Add(pausa)
+	}
+	return &ErrLimitado{Operacion: op, URL: destino, Desde: c.freno.desde, Hasta: c.freno.hasta}
+}
+
+// soltar anota que el sitio volvió a contestar: el próximo 429 empieza otra
+// vez por la pausa más corta.
+func (c *Cliente) soltar() {
+	c.freno.Lock()
+	c.freno.seguidos = 0
+	c.freno.Unlock()
+}
+
+// leerRetryAfter entiende las dos formas de la cabecera: segundos o una fecha
+// HTTP. Un valor vacío, ilegible, de cero o ya vencido no cuenta como pedido
+// del sitio: ahí decide la espera propia.
+func leerRetryAfter(valor string, ahora time.Time) (time.Duration, bool) {
+	valor = strings.TrimSpace(valor)
+	if valor == "" {
+		return 0, false
+	}
+	var pausa time.Duration
+	if seg, err := strconv.ParseInt(valor, 10, 64); err == nil {
+		if seg > int64(TopeRetryAfter/time.Second) {
+			return TopeRetryAfter, true
+		}
+		pausa = time.Duration(seg) * time.Second
+	} else if fecha, err := http.ParseTime(valor); err == nil {
+		pausa = fecha.Sub(ahora)
+	}
+	if pausa <= 0 {
+		return 0, false
+	}
+	if pausa > TopeRetryAfter {
+		pausa = TopeRetryAfter
+	}
+	return pausa, true
 }
 
 func (c *Cliente) anotar(ok bool) {
@@ -172,6 +351,10 @@ type respuesta struct {
 }
 
 // pedir hace un pedido con ritmo y reintentos. Los 4xx no se reintentan.
+//
+// Un 429 abre una ventana en la que no sale nada: ni los pedidos nuevos ni los
+// que ya estaban esperando turno. Un sitio que acaba de pedir que se le pida
+// menos no tiene que recibir, encima, la cola entera.
 func (c *Cliente) pedir(ctx context.Context, op, metodo, ruta string, form url.Values) (*respuesta, error) {
 	destino := c.base + ruta
 	var ultimo error
@@ -186,7 +369,15 @@ func (c *Cliente) pedir(ctx context.Context, op, metodo, ruta string, form url.V
 			case <-t.C:
 			}
 		}
+		if err := c.limitado(op, destino); err != nil {
+			return nil, err
+		}
 		if err := c.esperarTurno(ctx); err != nil {
+			return nil, err
+		}
+		// Otra vez: mientras este pedido esperaba su turno, otro pudo haber
+		// recibido el 429.
+		if err := c.limitado(op, destino); err != nil {
 			return nil, err
 		}
 
@@ -214,8 +405,14 @@ func (c *Cliente) pedir(ctx context.Context, op, metodo, ruta string, form url.V
 		}
 		cuerpo, errLec := io.ReadAll(io.LimitReader(res.Body, 32<<20))
 		loc := res.Header.Get("Location")
+		retryAfter := res.Header.Get("Retry-After")
 		codigo := res.StatusCode
 		res.Body.Close()
+
+		if codigo == http.StatusTooManyRequests {
+			c.anotar(false)
+			return nil, c.frenar(op, destino, retryAfter)
+		}
 
 		if errLec != nil {
 			ultimo = errLec
@@ -228,6 +425,7 @@ func (c *Cliente) pedir(ctx context.Context, op, metodo, ruta string, form url.V
 			continue
 		}
 		c.anotar(codigo < 400)
+		c.soltar()
 		if codigo >= 400 {
 			return nil, &ErrDelSitio{Operacion: op, URL: destino, Codigo: codigo}
 		}

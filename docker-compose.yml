@@ -22,7 +22,7 @@ services:
       # NOTARUM_POSTGRES_USUARIO: notarum
       # NOTARUM_POSTGRES_CLAVE: notarum
       NOTARUM_POR_MINUTO: "60"
-      NOTARUM_INTERVALO: 500ms
+      NOTARUM_INTERVALO: 2500ms
       NOTARUM_LOG: json
       # Poné acá una URL de contacto real: el sitio del Boletín es público.
       NOTARUM_USER_AGENT: notarum/1.0 (+https://github.com/diegoparras/notarum)

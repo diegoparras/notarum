@@ -379,7 +379,7 @@ func (s *Servidor) hRubros(ctx context.Context, crudo json.RawMessage) *Resultad
 
 func (s *Servidor) hEstado(context.Context) *ResultadoHerramienta {
 	m := s.srv.Cliente().Metricas()
-	return comoJSON(map[string]any{
+	estado := map[string]any{
 		"version":        s.version,
 		"hoy":            boletin.HoyEnArgentina().API(),
 		"fuente":         boletin.BaseSitio,
@@ -387,5 +387,12 @@ func (s *Servidor) hEstado(context.Context) *ResultadoHerramienta {
 		"almacen":        s.srv.Almacen().Metricas(),
 		"lecturas_sitio": m.Lecturas,
 		"errores_sitio":  m.Errores,
-	})
+		// El Boletín contestó 429 y no se le pide hasta que pase la ventana:
+		// mientras tanto sólo anda lo que ya está guardado.
+		"sitio_limitando": m.Limitando,
+	}
+	if m.LimitadoHasta != nil {
+		estado["sitio_limitado_hasta"] = m.LimitadoHasta
+	}
+	return comoJSON(estado)
 }

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -15,22 +16,8 @@ import (
 // TestContrato valida cada respuesta real del servidor contra openapi.json.
 // Si el contrato y el código se separan, este test lo dice.
 func TestContrato(t *testing.T) {
-	cargador := &openapi3.Loader{Context: context.Background(), IsExternalRefsAllowed: false}
-	doc, err := cargador.LoadFromData(contrato.JSON())
-	if err != nil {
-		t.Fatalf("openapi.json no se pudo cargar: %v", err)
-	}
-	if err := doc.Validate(context.Background()); err != nil {
-		t.Fatalf("openapi.json no es un contrato válido: %v", err)
-	}
-
 	srv := servidorDePrueba(t)
-	// El router necesita un server que matchee la URL de prueba.
-	doc.Servers = openapi3.Servers{&openapi3.Server{URL: srv.URL}}
-	router, err := gorillamux.NewRouter(doc)
-	if err != nil {
-		t.Fatalf("no se pudo armar el router del contrato: %v", err)
-	}
+	validar := validadorDelContrato(t, srv)
 
 	casos := []struct {
 		nombre string
@@ -53,38 +40,63 @@ func TestContrato(t *testing.T) {
 
 	for _, c := range casos {
 		t.Run(c.nombre, func(t *testing.T) {
-			req, err := http.NewRequest(http.MethodGet, srv.URL+c.ruta, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-			ruta, params, err := router.FindRoute(req)
-			if err != nil {
-				t.Fatalf("la ruta %s no está en el contrato: %v", c.ruta, err)
-			}
-
-			res, cuerpo := pedir(t, srv, c.ruta)
-			if res.StatusCode != c.codigo {
-				t.Fatalf("codigo = %d, se esperaba %d (cuerpo: %s)", res.StatusCode, c.codigo, cuerpo)
-			}
-
-			entrada := &openapi3filter.RequestValidationInput{
-				Request:    req,
-				PathParams: params,
-				Route:      ruta,
-			}
-			salida := &openapi3filter.ResponseValidationInput{
-				RequestValidationInput: entrada,
-				Status:                 res.StatusCode,
-				Header:                 res.Header,
-				Body:                   http.NoBody,
-				Options:                &openapi3filter.Options{IncludeResponseStatus: true},
-			}
-			salida.SetBodyBytes(cuerpo)
-
-			if err := openapi3filter.ValidateResponse(context.Background(), salida); err != nil {
-				t.Errorf("la respuesta no cumple el contrato:\n%v", err)
-			}
+			validar(t, c.ruta, c.codigo)
 		})
+	}
+}
+
+// validadorDelContrato devuelve una función que pide una ruta al servidor y
+// comprueba que la respuesta, con ese código, cumpla openapi.json.
+func validadorDelContrato(t *testing.T, srv *httptest.Server) func(t *testing.T, ruta string, codigo int) {
+	t.Helper()
+	cargador := &openapi3.Loader{Context: context.Background(), IsExternalRefsAllowed: false}
+	doc, err := cargador.LoadFromData(contrato.JSON())
+	if err != nil {
+		t.Fatalf("openapi.json no se pudo cargar: %v", err)
+	}
+	if err := doc.Validate(context.Background()); err != nil {
+		t.Fatalf("openapi.json no es un contrato válido: %v", err)
+	}
+	// El router necesita un server que matchee la URL de prueba.
+	doc.Servers = openapi3.Servers{&openapi3.Server{URL: srv.URL}}
+	router, err := gorillamux.NewRouter(doc)
+	if err != nil {
+		t.Fatalf("no se pudo armar el router del contrato: %v", err)
+	}
+
+	return func(t *testing.T, camino string, codigo int) {
+		t.Helper()
+		req, err := http.NewRequest(http.MethodGet, srv.URL+camino, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ruta, params, err := router.FindRoute(req)
+		if err != nil {
+			t.Fatalf("la ruta %s no está en el contrato: %v", camino, err)
+		}
+
+		res, cuerpo := pedir(t, srv, camino)
+		if res.StatusCode != codigo {
+			t.Fatalf("%s: codigo = %d, se esperaba %d (cuerpo: %s)", camino, res.StatusCode, codigo, cuerpo)
+		}
+
+		entrada := &openapi3filter.RequestValidationInput{
+			Request:    req,
+			PathParams: params,
+			Route:      ruta,
+		}
+		salida := &openapi3filter.ResponseValidationInput{
+			RequestValidationInput: entrada,
+			Status:                 res.StatusCode,
+			Header:                 res.Header,
+			Body:                   http.NoBody,
+			Options:                &openapi3filter.Options{IncludeResponseStatus: true},
+		}
+		salida.SetBodyBytes(cuerpo)
+
+		if err := openapi3filter.ValidateResponse(context.Background(), salida); err != nil {
+			t.Errorf("%s: la respuesta no cumple el contrato:\n%v", camino, err)
+		}
 	}
 }
 

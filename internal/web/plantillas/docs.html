@@ -349,4 +349,13 @@
   Un día sin edición devuelve <code>404</code> con <code>"sin_edicion": true</code>.
   No es una falla: es un feriado.
 </p>
+<p class="docs-parrafo">
+  Si el Boletín contesta que se le está pidiendo demasiado, este servicio deja
+  de pedirle por un rato. Mientras tanto, lo que no esté guardado devuelve
+  <code>503</code> con <code>Retry-After</code> y <code>"limitado_hasta"</code>,
+  sin tocar el sitio; lo guardado se sigue sirviendo. Lo que corresponde es
+  esperar hasta esa hora antes de volver a pedir. En
+  <a href="/v1/salud"><code>/v1/salud</code></a>, <code>sitio_limitando</code>
+  dice si está pasando y <code>sitio_limitado_hasta</code>, hasta cuándo.
+</p>
 {{end}}

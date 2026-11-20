@@ -54,7 +54,7 @@ NOTARUM_PUERTO=8080
 NOTARUM_ALMACEN=sqlite
 NOTARUM_DB=/datos/notarum.db
 NOTARUM_POR_MINUTO=60
-NOTARUM_INTERVALO=500ms
+NOTARUM_INTERVALO=2500ms
 NOTARUM_LOG=json
 NOTARUM_USER_AGENT=notarum/1.0 (+https://tu-dominio.example)
 ```
@@ -116,8 +116,9 @@ anteriores, corré el relleno una vez desde la consola de la App:
 notarum rellenar --seccion primera --desde 2026-01-01 --log text
 ```
 
-Va a un pedido cada 500 ms: un año de una sección son unas 250 lecturas, poco
-más de dos minutos. Se puede cortar y retomar; lo bajado queda en el volumen.
+Va a un pedido cada dos segundos y medio: un año de una sección son unas 250
+lecturas, poco más de diez minutos. Se puede cortar y retomar; lo bajado queda
+en el volumen.
 
 Para dejarlo al día automáticamente, en EasyPanel podés agregar un **Cron** en
 el mismo proyecto que corra todos los días:
