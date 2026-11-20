@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
-# Publica la imagen de notarum en ghcr.io.
+# Publica la imagen de notarum en ghcr.io, a mano.
 #
 #   bash publicar.sh
+#
+# No hace falta para el camino de siempre: la imagen se publica sola cada vez
+# que algo entra en main y pasa las pruebas. Esto queda para cuando haya que
+# publicar sin pasar por ahí. Publica lo que haya en esta carpeta, esté o no
+# confirmado.
 #
 # Pide el token una sola vez, en la pantalla de docker login. No lo guarda en
 # ningún archivo ni lo imprime: queda en el credential store de Docker, y los
@@ -11,9 +16,19 @@
 #   https://github.com/settings/tokens/new?scopes=write:packages,read:packages
 set -euo pipefail
 
+cd "$(dirname "$0")"
+
 USUARIO=diegoparras
 IMAGEN=ghcr.io/$USUARIO/notarum
-VERSION=1.7.2
+
+# La versión sale del código, del mismo lugar que la lee la publicación
+# automática. Escrita a mano acá se quedó dos versiones atrás sin que nadie lo
+# notara: habría publicado el código de hoy con el número de antes.
+VERSION=$(sed -n 's/^var version = "\([^"]*\)".*/\1/p' cmd/notarum/main.go)
+if [ -z "$VERSION" ]; then
+  echo "No se pudo leer la versión de cmd/notarum/main.go" >&2
+  exit 1
+fi
 
 echo "==> Sesión en ghcr.io"
 if docker system info 2>/dev/null | grep -q "ghcr.io"; then
