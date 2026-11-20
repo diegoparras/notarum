@@ -259,6 +259,16 @@ func (s *Servidor) hEdicion(ctx context.Context, crudo json.RawMessage) *Resulta
 		"cantidad":       ed.Cantidad,
 		"por_rubro":      ed.PorRubro,
 		"con_suplemento": ed.ConSuplemento,
+		"parcial":        ed.Parcial,
+	}
+	if ed.Parcial {
+		// Que el modelo no cuente como "todos" lo que es una parte.
+		aviso := "esta edición puede estar incompleta: no se pudo confirmar que estén todos los avisos"
+		if ed.Declarados > ed.Cantidad {
+			aviso = fmt.Sprintf("esta edición está incompleta: el Boletín declara %d avisos y se pudieron leer %d",
+				ed.Declarados, ed.Cantidad)
+		}
+		salida["aviso"] = aviso
 	}
 	if len(ed.Avisos) > limite {
 		salida["avisos"] = ed.Avisos[:limite]
@@ -379,7 +389,7 @@ func (s *Servidor) hRubros(ctx context.Context, crudo json.RawMessage) *Resultad
 
 func (s *Servidor) hEstado(context.Context) *ResultadoHerramienta {
 	m := s.srv.Cliente().Metricas()
-	estado := map[string]any{
+	return comoJSON(map[string]any{
 		"version":        s.version,
 		"hoy":            boletin.HoyEnArgentina().API(),
 		"fuente":         boletin.BaseSitio,
@@ -387,12 +397,5 @@ func (s *Servidor) hEstado(context.Context) *ResultadoHerramienta {
 		"almacen":        s.srv.Almacen().Metricas(),
 		"lecturas_sitio": m.Lecturas,
 		"errores_sitio":  m.Errores,
-		// El Boletín contestó 429 y no se le pide hasta que pase la ventana:
-		// mientras tanto sólo anda lo que ya está guardado.
-		"sitio_limitando": m.Limitando,
-	}
-	if m.LimitadoHasta != nil {
-		estado["sitio_limitado_hasta"] = m.LimitadoHasta
-	}
-	return comoJSON(estado)
+	})
 }

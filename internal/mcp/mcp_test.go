@@ -28,6 +28,8 @@ func fixture(t *testing.T, nombre string) []byte {
 func servidorDePrueba(t *testing.T, conIndice bool) *Servidor {
 	t.Helper()
 	portada := fixture(t, "portada_primera_20260901.html")
+	// La portada trae 100 avisos; los 29 que faltan llegan en esta página.
+	pagina2 := fixture(t, "seccion_primera_20260901_p2.json")
 	detalle := fixture(t, "detalle_primera_346633.html")
 	cal := fixture(t, "calendario_primera_2026.json")
 	rubros := fixture(t, "rubros_primera.json")
@@ -38,6 +40,8 @@ func servidorDePrueba(t *testing.T, conIndice bool) *Servidor {
 		switch {
 		case p == "/seccion/primera/20260901":
 			w.Write(portada)
+		case p == "/seccion/actualizar/primera":
+			w.Write(pagina2)
 		case p == "/seccion/primera/20260817":
 			http.Redirect(w, r, "/", http.StatusFound)
 		case strings.HasPrefix(p, "/detalleAviso/"):
@@ -204,10 +208,10 @@ func TestHerramientaEdicion(t *testing.T) {
 		Recortado string          `json:"recortado"`
 	}
 	decodificar(t, r, &ed)
-	if ed.Cantidad != 100 {
+	if ed.Cantidad != 129 {
 		t.Errorf("cantidad = %d", ed.Cantidad)
 	}
-	// 100 avisos con el límite por defecto de 40: tiene que recortar y decirlo.
+	// 129 avisos con el límite por defecto de 40: tiene que recortar y decirlo.
 	if len(ed.Avisos) != 40 {
 		t.Errorf("avisos = %d, se esperaban 40 por el límite", len(ed.Avisos))
 	}
@@ -243,7 +247,7 @@ func TestHerramientaEdicionFiltraPorRubro(t *testing.T) {
 		Avisos   []boletin.Aviso `json:"avisos"`
 	}
 	decodificar(t, r, &ed)
-	if ed.Cantidad == 0 || ed.Cantidad == 100 {
+	if ed.Cantidad == 0 || ed.Cantidad == 129 {
 		t.Errorf("cantidad = %d", ed.Cantidad)
 	}
 	for _, a := range ed.Avisos {

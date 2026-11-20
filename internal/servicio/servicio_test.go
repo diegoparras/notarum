@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -42,12 +43,25 @@ func armar(t *testing.T, h http.Handler) (*Servicio, *int32) {
 	return Nuevo(cli, c), &pedidos
 }
 
-// Una edición pasada se lee del sitio una sola vez.
+// primera20260901 contesta como el sitio para la Primera del 1/9/2026: la
+// portada trae 100 avisos y los 29 que faltan llegan en la segunda página.
+func primera20260901(t *testing.T) http.HandlerFunc {
+	t.Helper()
+	portada := fixture(t, "portada_primera_20260901.html")
+	pagina2 := fixture(t, "seccion_primera_20260901_p2.json")
+	return func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/seccion/actualizar/") {
+			w.Write(pagina2)
+			return
+		}
+		w.Write(portada)
+	}
+}
+
+// Una edición pasada se lee del sitio una sola vez: la portada y la página
+// que le sigue.
 func TestEdicionPasadaSeLeeUnaSolaVez(t *testing.T) {
-	cuerpo := fixture(t, "portada_primera_20260901.html")
-	s, pedidos := armar(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(cuerpo)
-	}))
+	s, pedidos := armar(t, primera20260901(t))
 	fecha, _ := boletin.ParseFecha("2026-09-01")
 
 	for i := 0; i < 3; i++ {
@@ -55,12 +69,12 @@ func TestEdicionPasadaSeLeeUnaSolaVez(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if ed.Cantidad != 100 {
-			t.Fatalf("cantidad = %d", ed.Cantidad)
+		if ed.Cantidad != 129 || ed.Parcial {
+			t.Fatalf("cantidad = %d, parcial = %v", ed.Cantidad, ed.Parcial)
 		}
 	}
-	if *pedidos != 1 {
-		t.Errorf("pedidos al sitio = %d, se esperaba 1", *pedidos)
+	if *pedidos != 2 {
+		t.Errorf("pedidos al sitio = %d, se esperaban 2", *pedidos)
 	}
 	if m := s.Almacen().Metricas(); m.Aciertos != 2 {
 		t.Errorf("aciertos de caché = %d, se esperaban 2", m.Aciertos)
@@ -86,10 +100,7 @@ func TestSinEdicionSeCachea(t *testing.T) {
 
 // El filtro por rubro sale de la edición cacheada, sin pegarle otra vez al sitio.
 func TestFiltroPorRubroNoPegaAlSitio(t *testing.T) {
-	cuerpo := fixture(t, "portada_primera_20260901.html")
-	s, pedidos := armar(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write(cuerpo)
-	}))
+	s, pedidos := armar(t, primera20260901(t))
 	fecha, _ := boletin.ParseFecha("2026-09-01")
 
 	completa, err := s.Edicion(context.Background(), boletin.Primera, fecha, "")
@@ -100,7 +111,7 @@ func TestFiltroPorRubroNoPegaAlSitio(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if *pedidos != 1 {
+	if *pedidos != 2 {
 		t.Errorf("pedidos = %d: el filtro no debería pedir de nuevo", *pedidos)
 	}
 	if soloDecretos.Cantidad == 0 {
@@ -114,20 +125,20 @@ func TestFiltroPorRubroNoPegaAlSitio(t *testing.T) {
 			t.Errorf("se coló el rubro %q", a.Rubro)
 		}
 	}
-	if completa.Cantidad != 100 {
+	if completa.Cantidad != 129 {
 		t.Errorf("la edición completa quedó alterada: %d", completa.Cantidad)
 	}
 }
 
 func TestResumenesMarcaLasFaltantes(t *testing.T) {
 	cal := fixture(t, "calendario_primera_2026.json")
-	portada := fixture(t, "portada_primera_20260901.html")
+	sitio := primera20260901(t)
 	s, _ := armar(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/calendario/dias_publicacion/2026/primera" {
 			w.Write(cal)
 			return
 		}
-		w.Write(portada)
+		sitio(w, r)
 	}))
 	desde, _ := boletin.ParseFecha("2026-09-01")
 	hasta, _ := boletin.ParseFecha("2026-09-04")
@@ -154,7 +165,7 @@ func TestResumenesMarcaLasFaltantes(t *testing.T) {
 	if len(r2.Ediciones) != 1 {
 		t.Fatalf("resúmenes = %d, se esperaba 1", len(r2.Ediciones))
 	}
-	if r2.Ediciones[0].Cantidad != 100 || len(r2.Ediciones[0].PorRubro) == 0 {
+	if r2.Ediciones[0].Cantidad != 129 || r2.Ediciones[0].Parcial || len(r2.Ediciones[0].PorRubro) == 0 {
 		t.Errorf("resumen = %+v", r2.Ediciones[0])
 	}
 	if len(r2.Faltantes) != len(r.Faltantes)-1 {

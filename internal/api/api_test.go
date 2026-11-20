@@ -30,6 +30,8 @@ func sitioFalso(t *testing.T) (http.Handler, *int32) {
 	t.Helper()
 	var pedidos int32
 	portada := fixture(t, "portada_primera_20260901.html")
+	// La portada trae 100 avisos; los 29 que faltan llegan en esta página.
+	pagina2 := fixture(t, "seccion_primera_20260901_p2.json")
 	detalle := fixture(t, "detalle_primera_346633.html")
 	cal := fixture(t, "calendario_primera_2026.json")
 	rubros := fixture(t, "rubros_primera.json")
@@ -41,6 +43,8 @@ func sitioFalso(t *testing.T) (http.Handler, *int32) {
 		switch {
 		case p == "/seccion/primera/20260901":
 			w.Write(portada)
+		case p == "/seccion/actualizar/primera":
+			w.Write(pagina2)
 		case p == "/seccion/primera/20260817":
 			http.Redirect(w, r, "/", http.StatusFound)
 		case strings.HasPrefix(p, "/detalleAviso/"):
@@ -110,8 +114,12 @@ func TestEdicionOK(t *testing.T) {
 	if err := json.Unmarshal(cuerpo, &ed); err != nil {
 		t.Fatal(err)
 	}
-	if ed.Cantidad != 100 || len(ed.Avisos) != 100 {
+	// La portada trae 100; los otros 29 llegan en la página que le sigue.
+	if ed.Cantidad != 129 || len(ed.Avisos) != 129 {
 		t.Errorf("cantidad = %d, avisos = %d", ed.Cantidad, len(ed.Avisos))
+	}
+	if ed.Declarados != 129 || ed.Parcial {
+		t.Errorf("cantidad_declarada = %d, parcial = %v", ed.Declarados, ed.Parcial)
 	}
 	if ed.Fecha.API() != "2026-09-01" {
 		t.Errorf("fecha = %s", ed.Fecha.API())
@@ -151,7 +159,7 @@ func TestEdicionFiltradaPorRubro(t *testing.T) {
 	if err := json.Unmarshal(cuerpo, &ed); err != nil {
 		t.Fatal(err)
 	}
-	if ed.Cantidad == 0 || ed.Cantidad == 100 {
+	if ed.Cantidad == 0 || ed.Cantidad == 129 {
 		t.Errorf("cantidad filtrada = %d", ed.Cantidad)
 	}
 	for _, a := range ed.Avisos {

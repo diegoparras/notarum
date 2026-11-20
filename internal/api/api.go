@@ -266,7 +266,13 @@ func (s *Servidor) verEdicion(w http.ResponseWriter, r *http.Request) {
 		escribirErrorDeLectura(w, r, err)
 		return
 	}
-	escribirJSON(w, r, http.StatusOK, ed, cacheDeFecha(fecha))
+	// Una edición parcial se vuelve a intentar: no puede quedar guardada un
+	// año en el navegador o en un proxy como si fuera la definitiva.
+	cache := cacheDeFecha(fecha)
+	if ed.Parcial {
+		cache = "public, max-age=300"
+	}
+	escribirJSON(w, r, http.StatusOK, ed, cache)
 }
 
 func (s *Servidor) verRango(w http.ResponseWriter, r *http.Request) {
@@ -469,31 +475,25 @@ func (s *Servidor) verSecciones(w http.ResponseWriter, r *http.Request) {
 
 // Salud es lo que devuelve /v1/salud.
 type Salud struct {
-	OK            bool      `json:"ok"`
-	Version       string    `json:"version,omitempty"`
-	EnPieDesde    time.Time `json:"en_pie_desde"`
-	SitioResponde bool      `json:"sitio_responde"`
-	// SitioLimitando: el Boletín contestó 429 y notarum dejó de pedirle hasta
-	// SitioLimitadoHasta. Mientras tanto sólo se sirve lo guardado.
-	SitioLimitando     bool             `json:"sitio_limitando"`
-	SitioLimitadoHasta *time.Time       `json:"sitio_limitado_hasta,omitempty"`
-	UltimaLectura      *time.Time       `json:"ultima_lectura,omitempty"`
-	Sitio              boletin.Metricas `json:"sitio"`
-	Cache              any              `json:"cache"`
+	OK            bool             `json:"ok"`
+	Version       string           `json:"version,omitempty"`
+	EnPieDesde    time.Time        `json:"en_pie_desde"`
+	SitioResponde bool             `json:"sitio_responde"`
+	UltimaLectura *time.Time       `json:"ultima_lectura,omitempty"`
+	Sitio         boletin.Metricas `json:"sitio"`
+	Cache         any              `json:"cache"`
 }
 
 func (s *Servidor) verSalud(w http.ResponseWriter, r *http.Request) {
 	m := s.srv.Cliente().Metricas()
 	salud := Salud{
-		OK:                 true,
-		Version:            s.version,
-		EnPieDesde:         s.inicio.UTC(),
-		SitioResponde:      m.SitioResponde || m.Lecturas == 0,
-		SitioLimitando:     m.Limitando,
-		SitioLimitadoHasta: m.LimitadoHasta,
-		UltimaLectura:      m.UltimaLectura,
-		Sitio:              m,
-		Cache:              s.srv.Almacen().Metricas(),
+		OK:            true,
+		Version:       s.version,
+		EnPieDesde:    s.inicio.UTC(),
+		SitioResponde: m.SitioResponde || m.Lecturas == 0,
+		UltimaLectura: m.UltimaLectura,
+		Sitio:         m,
+		Cache:         s.srv.Almacen().Metricas(),
 	}
 	escribirJSON(w, r, http.StatusOK, salud, "no-store")
 }

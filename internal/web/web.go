@@ -343,31 +343,14 @@ func (s *Sitio) fallo(w http.ResponseWriter, r *http.Request, codigo int, titulo
 // mensajeDeError traduce un error de lectura a algo que se pueda leer en una
 // página, sin tecnicismos ni rastros internos.
 func mensajeDeError(err error) string {
-	var lim *boletin.ErrLimitado
-	if errors.As(err, &lim) {
-		return "El Boletín Oficial pidió que se le consulte más despacio, así que por un rato no le pedimos nada nuevo. " +
-			"Lo que ya está guardado se sigue viendo. " + cuandoVolver(time.Until(lim.Hasta))
-	}
 	var es *boletin.ErrDelSitio
+	if errors.As(err, &es) && es.Limitado() {
+		return "El Boletín Oficial está limitando los pedidos que le hace esta instancia. Probá de nuevo en unos minutos; lo que ya está guardado se sigue viendo."
+	}
 	if errors.As(err, &es) {
 		return "El sitio del Boletín Oficial no respondió como se esperaba. Probá de nuevo en un momento."
 	}
 	return "No se pudo completar la consulta."
-}
-
-// cuandoVolver dice en palabras cuánto falta para volver a intentar. Redondea
-// para arriba: prometer menos de lo que falta es invitar a probar antes de
-// tiempo.
-func cuandoVolver(falta time.Duration) string {
-	minutos := int((falta + time.Minute - 1) / time.Minute)
-	switch {
-	case minutos <= 1:
-		return "Probá de nuevo en un minuto."
-	case minutos < 60:
-		return fmt.Sprintf("Probá de nuevo en unos %d minutos.", minutos)
-	default:
-		return "Probá de nuevo en una hora."
-	}
 }
 
 // ------------------------------------------------------------------- inicio
@@ -438,6 +421,9 @@ type datosEdicion struct {
 	Rubros     []rubroContado
 	Rubro      string
 	Total      int
+	// Parcial y Declarados son de la edición entera, no del recorte por rubro.
+	Parcial    bool
+	Declarados int
 	Anterior   string
 	Siguiente  string
 	SinEdicion bool
@@ -479,6 +465,7 @@ func (s *Sitio) edicion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	d.Total = completa.Cantidad
+	d.Parcial, d.Declarados = completa.Parcial, completa.Declarados
 	for nombre, n := range completa.PorRubro {
 		d.Rubros = append(d.Rubros, rubroContado{nombre, n})
 	}

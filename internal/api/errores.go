@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/diegoparras/notarum/internal/boletin"
 )
@@ -34,10 +33,6 @@ type RespuestaError struct {
 	Detalle    string `json:"detalle,omitempty"`
 	Origen     Origen `json:"origen"`
 	SinEdicion bool   `json:"sin_edicion,omitempty"`
-	// LimitadoHasta viene cuando el Boletín Oficial está limitando los pedidos:
-	// dice a partir de cuándo tiene sentido volver a pedir lo que no esté
-	// guardado. Es lo mismo que la cabecera Retry-After, como hora.
-	LimitadoHasta *time.Time `json:"limitado_hasta,omitempty"`
 }
 
 func escribirJSON(w http.ResponseWriter, r *http.Request, codigo int, cuerpo any, cacheControl string) {
@@ -98,32 +93,22 @@ func escribirErrorDeLectura(w http.ResponseWriter, r *http.Request, err error) {
 		return
 	}
 
-	// El sitio pidió que se le pida menos y el cliente dejó de pedirle. Es un
-	// 503 y no un 429: el 429 de notarum es la cuota de quien pide, y acá quien
-	// pide no hizo nada de más; lo que no está disponible por un rato es el
-	// sitio. Retry-After dice cuánto.
-	var lim *boletin.ErrLimitado
-	if errors.As(err, &lim) {
-		faltan := int(math.Ceil(time.Until(lim.Hasta).Seconds()))
-		if faltan < 1 {
-			faltan = 1
+	var es *boletin.ErrDelSitio
+	if errors.As(err, &es) && es.Limitado() {
+		// El Boletín limita los pedidos por dirección y esta instancia llegó
+		// al tope. No es un fallo del sitio ni del pedido: es cuestión de
+		// esperar, y se dice cuánto.
+		segundos := int(math.Ceil(es.ReintentarEn.Seconds()))
+		if segundos < 1 {
+			segundos = 1
 		}
-		w.Header().Set("Retry-After", strconv.Itoa(faltan))
-		hasta := lim.Hasta.UTC()
-		if !lim.SinPedir {
-			slog.Warn("el Boletín está limitando: no se le pide hasta que pase la ventana",
-				"hasta", hasta, "ruta", r.URL.Path)
-		}
-		escribirJSON(w, r, http.StatusServiceUnavailable, RespuestaError{
-			Error:         "el Boletín Oficial está limitando los pedidos",
-			Detalle:       lim.Error(),
-			Origen:        OrigenSitio,
-			LimitadoHasta: &hasta,
-		}, "no-store")
+		w.Header().Set("Retry-After", strconv.Itoa(segundos))
+		slog.Warn("el Boletín está limitando los pedidos", "reintentar_en", segundos, "ruta", r.URL.Path)
+		escribirError(w, r, http.StatusServiceUnavailable, OrigenSitio,
+			"el Boletín Oficial está limitando los pedidos de esta instancia",
+			"probá de nuevo en "+strconv.Itoa(segundos)+" segundos; lo que ya está guardado se sigue sirviendo")
 		return
 	}
-
-	var es *boletin.ErrDelSitio
 	if errors.As(err, &es) {
 		codigo := http.StatusBadGateway
 		if es.Codigo == http.StatusNotFound {

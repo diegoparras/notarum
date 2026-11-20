@@ -128,7 +128,8 @@ func ayuda() {
         LOCKATUS_CLIENT_ID  el nombre con el que notarum está declarado  [notarum]
         LOCKATUS_REDIRECT_URI   https://tu-notarum/entrar/lockatus/volver
 
-        NOTARUM_INTERVALO   (--intervalo)   espera entre pedidos al Boletín [2.5s]
+        NOTARUM_INTERVALO   (--intervalo)   espera entre pedidos al sitio [500ms]
+        NOTARUM_TOPE_SITIO                  pedidos al sitio cada 5 minutos [100]
         NOTARUM_USER_AGENT  (--user-agent)  User-Agent hacia el sitio
         NOTARUM_LOG         (--log)         text | json                 [json]
         NOTARUM_MCP_TOKEN   (--mcp-token)   exige Bearer en /mcp        [abierto]
@@ -269,6 +270,25 @@ func armarPostgres() (almacen.Almacen, error) {
 	})
 }
 
+// topeDelSitio lee NOTARUM_TOPE_SITIO: cuántos pedidos sostenidos se le hacen
+// al Boletín cada cinco minutos. Vacío o ilegible deja el valor por defecto;
+// un número negativo apaga el tope.
+func topeDelSitio() int {
+	crudo := strings.TrimSpace(os.Getenv("NOTARUM_TOPE_SITIO"))
+	if crudo == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(crudo)
+	if err != nil {
+		slog.Warn("NOTARUM_TOPE_SITIO no es un número: se usa el tope por defecto", "valor", crudo)
+		return 0
+	}
+	if n < 0 {
+		return boletin.SinTope
+	}
+	return n
+}
+
 // armarServicio crea el cliente y el almacén compartidos por ambos comandos.
 func armarServicio(cfg configComun) (*servicio.Servicio, func(), error) {
 	alm, err := armarAlmacen(cfg.motor, cfg.dirCache, cfg.rutaDB)
@@ -278,15 +298,14 @@ func armarServicio(cfg configComun) (*servicio.Servicio, func(), error) {
 	cli := boletin.NuevoCliente(boletin.Opciones{
 		UserAgent: cfg.userAgent,
 		Intervalo: cfg.intervalo,
+		Tope:      topeDelSitio(),
 	})
 	srv := servicio.Nuevo(cli, alm)
 	// InfoLEG es un accesorio: si se apaga, notarum sirve el Boletín igual.
 	if !encendido("NOTARUM_SIN_INFOLEG", false) {
-		// Sin Intervalo: InfoLEG va a su propio ritmo. NOTARUM_INTERVALO es
-		// la perilla del Boletín, que es el que limita; atar los dos haría
-		// que cuidar a uno frenara, de paso, las lecturas del otro.
 		srv = srv.ConInfoLEG(infoleg.NuevoCliente(infoleg.Opciones{
 			UserAgent: cfg.userAgent,
+			Intervalo: cfg.intervalo,
 		}))
 	}
 	// La normativa provincial, lo mismo. Y no cuesta nada mientras nadie la
@@ -335,7 +354,7 @@ func servir(args []string) error {
 	motor := fs.String("almacen", entorno("NOTARUM_ALMACEN", "disco"), "dónde guardar: disco, sqlite o postgres")
 	rutaDB := fs.String("db", entorno("NOTARUM_DB", "/datos/notarum.db"), "archivo de la base (motor sqlite)")
 	porMinuto := fs.String("por-minuto", entorno("NOTARUM_POR_MINUTO", "60"), "pedidos por minuto por IP (0 desactiva)")
-	intervalo := fs.String("intervalo", entorno("NOTARUM_INTERVALO", boletin.IntervaloPorDefecto.String()), "espera entre pedidos al sitio")
+	intervalo := fs.String("intervalo", entorno("NOTARUM_INTERVALO", "500ms"), "espera entre pedidos al sitio")
 	userAgent := fs.String("user-agent", entorno("NOTARUM_USER_AGENT", uaPorDefecto()), "User-Agent hacia el sitio")
 	formatoLog := fs.String("log", entorno("NOTARUM_LOG", "json"), "formato de log: text o json")
 	tokenMCP := fs.String("mcp-token", entorno("NOTARUM_MCP_TOKEN", ""), "si se pone, /mcp exige Bearer con este token")
@@ -558,7 +577,7 @@ func servirMCP(args []string) error {
 	dirCache := fs.String("cache", entorno("NOTARUM_CACHE", "/datos/cache"), "directorio de caché (motor disco)")
 	motor := fs.String("almacen", entorno("NOTARUM_ALMACEN", "disco"), "dónde guardar: disco, sqlite o postgres")
 	rutaDB := fs.String("db", entorno("NOTARUM_DB", "/datos/notarum.db"), "archivo de la base (motor sqlite)")
-	intervalo := fs.String("intervalo", entorno("NOTARUM_INTERVALO", boletin.IntervaloPorDefecto.String()), "espera entre pedidos al sitio")
+	intervalo := fs.String("intervalo", entorno("NOTARUM_INTERVALO", "500ms"), "espera entre pedidos al sitio")
 	userAgent := fs.String("user-agent", entorno("NOTARUM_USER_AGENT", uaPorDefecto()), "User-Agent hacia el sitio")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -661,7 +680,7 @@ func sincronizarInfoLEG(args []string) error {
 	dirCache := fs.String("cache", entorno("NOTARUM_CACHE", "/datos/cache"), "directorio de caché (motor disco)")
 	motor := fs.String("almacen", entorno("NOTARUM_ALMACEN", "disco"), "dónde guardar: disco, sqlite o postgres")
 	rutaDB := fs.String("db", entorno("NOTARUM_DB", "/datos/notarum.db"), "archivo de la base (motor sqlite)")
-	intervalo := fs.String("intervalo", entorno("NOTARUM_INTERVALO", boletin.IntervaloPorDefecto.String()), "espera entre pedidos")
+	intervalo := fs.String("intervalo", entorno("NOTARUM_INTERVALO", "500ms"), "espera entre pedidos")
 	userAgent := fs.String("user-agent", entorno("NOTARUM_USER_AGENT", uaPorDefecto()), "User-Agent hacia los sitios")
 	trabajo := fs.String("trabajo", entorno("NOTARUM_TRABAJO", ""), "dónde bajar el catálogo (por defecto, el temporal del sistema)")
 	formatoLog := fs.String("log", entorno("NOTARUM_LOG", "text"), "formato de log: text o json")
@@ -715,7 +734,7 @@ func rellenar(args []string) error {
 	dirCache := fs.String("cache", entorno("NOTARUM_CACHE", "/datos/cache"), "directorio de caché (motor disco)")
 	motor := fs.String("almacen", entorno("NOTARUM_ALMACEN", "disco"), "dónde guardar: disco, sqlite o postgres")
 	rutaDB := fs.String("db", entorno("NOTARUM_DB", "/datos/notarum.db"), "archivo de la base (motor sqlite)")
-	intervalo := fs.String("intervalo", entorno("NOTARUM_INTERVALO", boletin.IntervaloPorDefecto.String()), "espera entre pedidos al sitio")
+	intervalo := fs.String("intervalo", entorno("NOTARUM_INTERVALO", "500ms"), "espera entre pedidos al sitio")
 	userAgent := fs.String("user-agent", entorno("NOTARUM_USER_AGENT", uaPorDefecto()), "User-Agent hacia el sitio")
 	conAvisos := fs.Bool("con-avisos", false, "bajar además el texto de cada aviso (mucho más lento)")
 	formatoLog := fs.String("log", entorno("NOTARUM_LOG", "text"), "formato de log: text o json")
@@ -943,7 +962,7 @@ func sincronizarSAIJ(args []string) error {
 
 	srv, cerrar, err := armarServicio(configComun{
 		motor: *motor, dirCache: *dirCache, rutaDB: *rutaDB,
-		userAgent: *userAgent, intervalo: boletin.IntervaloPorDefecto,
+		userAgent: *userAgent, intervalo: 500 * time.Millisecond,
 	})
 	if err != nil {
 		return err
@@ -985,7 +1004,7 @@ func sincronizarVencimientos(args []string) error {
 
 	srv, cerrar, err := armarServicio(configComun{
 		motor: *motor, dirCache: *dirCache, rutaDB: *rutaDB,
-		userAgent: *userAgent, intervalo: boletin.IntervaloPorDefecto,
+		userAgent: *userAgent, intervalo: 500 * time.Millisecond,
 	})
 	if err != nil {
 		return err
@@ -1212,7 +1231,6 @@ func trabajoSemanaDelBoletin(srv *servicio.Servicio) tareas.Trabajo {
 
 		var total servicio.Relleno
 		var fallaron []string
-		var bloqueo error
 		for _, sec := range boletin.SeccionesValidas {
 			if ctx.Err() != nil {
 				return "", ctx.Err()
@@ -1233,16 +1251,6 @@ func trabajoSemanaDelBoletin(srv *servicio.Servicio) tareas.Trabajo {
 				if errors.Is(err, context.Canceled) {
 					return "", err
 				}
-				// Salvo que haya fallado porque el Boletín no deja de limitar:
-				// las otras secciones se encontrarían con lo mismo, y esperar
-				// la paciencia entera por cada una es triplicar la insistencia
-				// contra un sitio que ya está bloqueando.
-				var lim *boletin.ErrLimitado
-				if errors.As(err, &lim) {
-					slog.Warn("la bajada de la semana se corta: el Boletín sigue limitando", "seccion", sec, "err", err)
-					bloqueo = err
-					break
-				}
 				// Una sección que falla no se lleva a las otras: son tres
 				// bajadas distintas y perder las tres por una es peor.
 				fallaron = append(fallaron, string(sec)+" ("+err.Error()+")")
@@ -1257,11 +1265,6 @@ func trabajoSemanaDelBoletin(srv *servicio.Servicio) tareas.Trabajo {
 		}
 		if total.Fallidas > 0 {
 			texto += fmt.Sprintf("; %d días fallaron", total.Fallidas)
-		}
-		if bloqueo != nil {
-			// Lo que alcanzó a bajar queda guardado, y relanzar la bajada
-			// desde el panel saltea lo que ya está.
-			return texto, fmt.Errorf("no se pudo terminar; lo que se bajó queda guardado y se puede relanzar cuando el Boletín vuelva a contestar: %w", bloqueo)
 		}
 		if len(fallaron) > 0 {
 			return texto, errors.New("no se pudo terminar: " + strings.Join(fallaron, "; "))

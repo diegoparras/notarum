@@ -22,6 +22,14 @@
   <div class="vacio"><strong>No se pudo leer la edición</strong>{{.Error}}</div>
 {{else}}
 
+  {{if .Parcial}}
+  <div class="aviso-nota">
+    <strong>Esta edición puede estar incompleta.</strong>
+    {{if gt .Declarados .Total}}El Boletín declara {{.Declarados}} avisos y se pudieron leer {{.Total}}.{{else}}No se pudo confirmar que estén todos los avisos.{{end}}
+    Se vuelve a intentar sola en unos minutos.
+  </div>
+  {{end}}
+
   {{if .Rubros}}
   <div class="rubros-nube">
     <a class="rubro-pastilla{{if not .Rubro}} activa{{end}}" href="/ed/{{.Seccion}}/{{.FechaActual}}">todos<span class="n">{{.Total}}</span></a>

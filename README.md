@@ -187,32 +187,6 @@ Cada error dice de quién es la culpa, para que sepas a quién mirar:
 
 `origen` es `sitio`, `notarum` o `pedido`.
 
-Hay un caso con respuesta propia: cuando el Boletín contesta `429` —demasiados
-pedidos—, notarum deja de pedirle por un rato y, mientras tanto, lo que no
-tenga guardado lo contesta así, sin tocar el sitio:
-
-```
-HTTP/1.1 503 Service Unavailable
-Retry-After: 287
-```
-
-```json
-{
-  "error": "el Boletín Oficial está limitando los pedidos",
-  "detalle": "leer aviso: no se le pidió al Boletín Oficial, que respondió 429 (demasiados pedidos) a las 2026-11-19T18:02:11Z; no se le vuelve a pedir hasta las 2026-11-19T18:07:11Z",
-  "origen": "sitio",
-  "limitado_hasta": "2026-11-19T18:07:11Z"
-}
-```
-
-Es un `503` y no un `429` porque el `429` de notarum es tu cuota, y acá vos no
-pediste de más: el que no está disponible es el sitio. Lo correcto del otro
-lado es dejar de pedir hasta `Retry-After`; insistir no gasta pedidos al
-Boletín, pero tampoco trae nada. El `detalle` siempre dice «respondió 429»,
-por si tu cliente ya reconocía el caso por ese texto. Lo que está guardado se
-sigue sirviendo con `200`, como siempre. El porqué está en
-[El ritmo contra el Boletín](#el-ritmo-contra-el-boletín).
-
 ### 3. El MCP, en `/mcp` y por entrada estándar
 
 Para que un modelo consulte las tres fuentes como una herramienta más:
@@ -263,6 +237,27 @@ que costaron, por si a alguien le sirven:
 - **Todos los anexos de un aviso comparten el mismo `idAnexo`** y se distinguen
   por `nroAnexo`. Deduplicar por id deja uno de doce. Este lo encontró un test
   contra el sitio real, no los fixtures.
+
+- **La portada de una edición trae sólo los primeros 100 avisos.** El resto lo
+  carga el sitio al desplazarse, con `/seccion/actualizar/{sección}?pag=N`, que
+  devuelve JSON con un pedazo de HTML y `hay_mas_datos`. Ese pedido no lleva
+  fecha: el sitio sabe de qué edición se habla por la cookie de sesión que dejó
+  la portada, y sin ella contesta con la edición del día. La Segunda de un día
+  hábil ronda los 400 avisos, así que leer sólo la portada era servir la cuarta
+  parte: sociedades sí, convocatorias y edictos judiciales no. Lo que permite
+  saber si está todo es el índice de rubros de la misma portada, que cuenta los
+  avisos de cada uno; la suma es el total de la edición. Cuando una página
+  sigue adentro del rubro de la anterior, no repite el encabezado.
+
+- **El sitio corta a los 140 pedidos en cinco minutos**, más o menos, y
+  contesta 429. Un intervalo fijo no sirve para respetarlo: con medio segundo
+  salen 600, y con los dos segundos largos que haría falta, leer una Segunda
+  entera tarda diez segundos aunque nadie haya pedido nada en toda la mañana.
+  notarum usa un tope con ráfaga: los primeros 20 pedidos salen seguidos y,
+  agotados, sale uno cada tres segundos. Si el 429 llega igual, se frena todo
+  el cliente lo que diga `Retry-After` (o un minuto, que se duplica si
+  insiste): el relleno espera y sigue, y la API contesta 503 con `Retry-After`
+  en vez de dejar colgado a quien pregunta.
 
 - **`?suplemento=1` tampoco hace nada:** la portada normal ya incluye el
   suplemento, y sus avisos se reconocen por el rubro `(SUPLEMENTO)`.
@@ -320,7 +315,7 @@ Environment:
 NOTARUM_ALMACEN=sqlite
 NOTARUM_DB=/datos/notarum.db
 NOTARUM_POR_MINUTO=60
-NOTARUM_INTERVALO=2500ms
+NOTARUM_INTERVALO=500ms
 NOTARUM_LOG=json
 NOTARUM_USER_AGENT=notarum/1.7 (+https://tu-dominio.com)
 ```
@@ -358,7 +353,8 @@ cada vez. Medido contra el catálogo real, con lotes son unos seis minutos.
 | `NOTARUM_POSTGRES_DSN` | — | cadena completa, con el motor `postgres` |
 | `NOTARUM_POSTGRES_HOST` … | — | o las piezas sueltas: `_PUERTO`, `_BASE`, `_USUARIO`, `_CLAVE`, `_SSL`, `_ESQUEMA` |
 | `NOTARUM_POR_MINUTO` | `60` | pedidos por minuto por IP; `0` lo desactiva |
-| `NOTARUM_INTERVALO` | `2500ms` | la perilla del ritmo: espera entre pedidos al Boletín. Ver [El ritmo contra el Boletín](#el-ritmo-contra-el-boletín) |
+| `NOTARUM_INTERVALO` | `500ms` | espera mínima entre pedidos al Boletín |
+| `NOTARUM_TOPE_SITIO` | `100` | pedidos sostenidos al Boletín cada 5 minutos; negativo lo apaga |
 | `NOTARUM_USER_AGENT` | `notarum/1.7 (+…)` | poné una URL de contacto real |
 | `NOTARUM_LOG` | `json` | `json` o `text` |
 | `NOTARUM_MCP_TOKEN` | vacío | si se define, `/mcp` exige `Bearer` |
@@ -376,71 +372,6 @@ cada vez. Medido contra el catálogo real, con lotes son unos seis minutos.
 Las variables de sí o no entienden `1/0`, `si/no`, `true/false` y `on/off`.
 Cualquier valor no vacío contando como sí hacía que `NOTARUM_SIN_MCP=0` apagara
 el MCP: lo contrario exacto de lo que quiso escribir quien lo escribió.
-
-### El ritmo contra el Boletín
-
-Quien cuida el ritmo contra el sitio es notarum, no sus clientes. Todos los
-pedidos que salen hacia `boletinoficial.gob.ar` —los de la API, los del lector,
-los del MCP y los de los trabajos del panel— pasan por una sola fila, y
-**`NOTARUM_INTERVALO` es la perilla**: la espera mínima entre uno y el
-siguiente. Lo que se contesta desde lo guardado no entra en la fila ni cuenta.
-
-El valor por defecto es `2500ms`: como mucho, 120 pedidos cada cinco minutos.
-Sólo gobierna los pedidos al Boletín; InfoLEG va a su propio ritmo.
-
-**Lo medido.** El 19/11/2026, con notarum 1.7.2 y `NOTARUM_INTERVALO=500ms`
-—el valor por defecto de entonces, que deja salir hasta 600 en cinco minutos—,
-después de unos **140 pedidos en cinco minutos** desde una misma dirección el
-sitio empezó a contestar `429`. No es un límite que el Boletín documente: es
-una observación, de un solo día, y puede cambiar sin aviso. Es la única
-referencia que hay, y por eso el valor por defecto quedó por debajo.
-
-Se nota cuando hay que bajar mucho de una vez —un relleno, o un cliente que
-pide cientos de avisos seguidos con la caché vacía—: doscientos avisos que no
-están guardados son algo más de ocho minutos. Lo que ya está guardado se
-contesta al instante, igual que antes. Si tu instancia casi nunca baja nada
-nuevo y querés el lector más ágil, podés acortarlo; `/v1/salud` te dice si te
-pasaste. Si salís por un proxy, la dirección que el sitio cuenta es la del
-proxy, y es la que hay que cuidar.
-
-Una instancia que ya tiene la variable puesta —la guía de EasyPanel la ponía
-en `500ms`— sigue con ese valor hasta que la cambies: el valor por defecto
-sólo vale cuando no hay ninguno.
-
-**Qué pasa cuando igual llega un `429`.** notarum deja de mandarle pedidos al
-sitio durante una ventana:
-
-- Si el sitio manda `Retry-After`, se respeta, hasta un máximo de una hora.
-- Si no, la espera empieza en un minuto y se duplica con cada `429` seguido
-  —1, 2, 4, 8, 16— hasta un tope de 30 minutos. Vuelve a un minuto en cuanto
-  el sitio contesta bien.
-
-Durante la ventana no sale nada: ni los pedidos nuevos ni los que estaban en la
-fila. Los clientes reciben un `503` con `Retry-After` (ver
-[la API](#2-la-api-en-v1)) y lo guardado se sigue sirviendo. Terminada la
-ventana, el primer pedido que llega vuelve a probar.
-
-Los trabajos largos —el relleno y la bajada semanal— no se cortan: esperan a
-que pase la ventana y siguen donde estaban, con el mismo día o el mismo aviso.
-Mientras esperan, el panel lo dice («el Boletín pidió una pausa; se retoma a
-las 04:37») y se pueden cancelar como siempre. La paciencia tiene tope: si el
-sitio vuelve a limitar seis ventanas seguidas —alrededor de una hora, con la
-espera creciente—, el trabajo se corta con el motivo a la vista y se retoma
-después, porque a esa altura lo que hay es un bloqueo e insistir lo empeora.
-
-`/v1/salud` lo muestra mientras dura:
-
-```json
-{
-  "sitio_limitando": true,
-  "sitio_limitado_hasta": "2026-11-19T18:07:11Z",
-  "sitio": { "ultimo_429": "2026-11-19T18:02:11Z", "veces_limitado": 1, "pedidos_frenados": 37 }
-}
-```
-
-`veces_limitado` cuenta los `429` del sitio desde que arrancó la instancia, y
-`pedidos_frenados` los pedidos que no salieron por haber llegado adentro de una
-ventana. Si `veces_limitado` sube seguido, el intervalo está corto.
 
 ### Quién entra, y cuánto puede pedir
 
@@ -750,10 +681,9 @@ notarum rellenar --seccion todas --desde 2026-01-01 --almacen sqlite --db /datos
 ```
 
 Recorre el calendario, baja lo que falta al mismo ritmo de siempre, saltea lo
-que ya está, y **se puede cortar y retomar**. Un año de una sección son unos
-diez minutos. Con `--con-avisos` baja además el texto de cada aviso, que es lo
-que permite buscar dentro del cuerpo y no sólo en el sumario. Si el Boletín
-pide que se le pida menos, el relleno espera y sigue solo.
+que ya está, y **se puede cortar y retomar**. Un año de una sección son unos dos
+minutos. Con `--con-avisos` baja además el texto de cada aviso, que es lo que
+permite buscar dentro del cuerpo y no sólo en el sumario.
 
 ---
 
@@ -774,11 +704,10 @@ internal/mcp       herramientas para un modelo, por stdio y por HTTP
 internal/web       el lector, con sus plantillas y su hoja de estilo
 ```
 
-**El trato con el sitio.** Un pedido cada dos segundos y medio, reintento con
-espera exponencial ante 5xx, y un `User-Agent` propio con URL de contacto. El
-Boletín tiene protección F5: no se intentan sesiones ni paralelismo agresivo. Y si
-contesta `429`, notarum deja de pedirle hasta que pase la ventana, en vez de
-insistir. Es un sitio público del Estado y la idea es no molestarlo.
+**El trato con el sitio.** Un pedido cada 500 ms, reintento con espera
+exponencial ante 5xx, y un `User-Agent` propio con URL de contacto. El Boletín
+tiene protección F5: no se intentan sesiones ni paralelismo agresivo. Es un
+sitio público del Estado y la idea es no molestarlo.
 
 **La caché.** Una edición pasada no vence nunca; la del día en curso, a los
 cinco minutos. Los feriados también se guardan: no tiene sentido volver a

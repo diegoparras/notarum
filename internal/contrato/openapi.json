@@ -150,7 +150,7 @@
      "ediciones"
     ],
     "summary": "Edición de una sección en una fecha",
-    "description": "El sumario completo de ese día. Si ese día no hubo edición devuelve 404 con `sin_edicion: true`, que no es una falla.",
+    "description": "El sumario completo de ese día. Si ese día no hubo edición devuelve 404 con `sin_edicion: true`, que no es una falla.\n\nEl sitio del Boletín entrega el sumario de a 100 avisos; notarum sigue todas las páginas y compara contra lo que el propio sitio declara (`cantidad_declarada`). Si no pudo confirmar que estén todos, la respuesta lo dice con `parcial: true` y no se guarda como definitiva.",
     "operationId": "verEdicion",
     "parameters": [
      {
@@ -1796,13 +1796,12 @@
     }
    },
    "SitioLimitando": {
-    "description": "El Boletín Oficial contestó 429 (demasiados pedidos) y notarum dejó de pedirle por un rato. Este pedido necesitaba algo que no está guardado, y no salió al sitio. `Retry-After` y `limitado_hasta` dicen cuándo volver a intentar; lo que ya está guardado se sigue sirviendo. El `detalle` siempre contiene el texto «respondió 429».",
+    "description": "El Boletín Oficial limita los pedidos por dirección y esta instancia llegó al tope. La cabecera `Retry-After` dice en cuántos segundos reintentar. Lo que ya está guardado se sigue sirviendo: sólo falla lo que habría que ir a buscar al sitio.",
     "headers": {
      "Retry-After": {
-      "description": "Segundos que faltan para que notarum le vuelva a pedir al Boletín.",
+      "description": "Segundos que hay que esperar antes de reintentar.",
       "schema": {
-       "type": "integer",
-       "minimum": 1
+       "type": "integer"
       }
      }
     },
@@ -1841,11 +1840,6 @@
      "sin_edicion": {
       "type": "boolean",
       "description": "Ese día no hubo edición."
-     },
-     "limitado_hasta": {
-      "type": "string",
-      "format": "date-time",
-      "description": "Sólo cuando el Boletín Oficial está limitando los pedidos: hasta cuándo notarum no le vuelve a pedir."
      }
     }
    },
@@ -1987,6 +1981,7 @@
      "seccion",
      "fecha",
      "cantidad",
+     "parcial",
      "por_rubro",
      "avisos"
     ],
@@ -2004,7 +1999,20 @@
       "format": "date"
      },
      "cantidad": {
-      "type": "integer"
+      "type": "integer",
+      "description": "Cuántos avisos trae esta respuesta."
+     },
+     "cantidad_declarada": {
+      "type": "integer",
+      "description": "Cuántos avisos declara el propio Boletín para la edición entera, sumando su índice de rubros. Falta si la página no lo informa o si la respuesta está filtrada por rubro."
+     },
+     "parcial": {
+      "type": "boolean",
+      "description": "`true` si la edición puede estar incompleta: se leyeron menos avisos de los declarados o no se pudo confirmar que estén todos. Una edición parcial se vuelve a intentar a los pocos minutos."
+     },
+     "paginas": {
+      "type": "integer",
+      "description": "Cuántas páginas del sitio hubo que leer para armarla: el Boletín entrega el sumario de a 100 avisos."
      },
      "por_rubro": {
       "type": "object",
@@ -2041,6 +2049,10 @@
      },
      "cantidad": {
       "type": "integer"
+     },
+     "parcial": {
+      "type": "boolean",
+      "description": "`true` si esa edición puede estar incompleta. Incluye las guardadas antes de que notarum siguiera las páginas del sumario y que quedaron justo en 100 avisos: se completan al pedirlas de a una o con el relleno."
      },
      "por_rubro": {
       "type": "object",
@@ -2184,15 +2196,6 @@
      "sitio_responde": {
       "type": "boolean"
      },
-     "sitio_limitando": {
-      "type": "boolean",
-      "description": "El Boletín Oficial contestó 429 y notarum dejó de pedirle. Mientras dura, sólo se sirve lo guardado y lo demás se contesta con 503."
-     },
-     "sitio_limitado_hasta": {
-      "type": "string",
-      "format": "date-time",
-      "description": "Hasta cuándo no se le vuelve a pedir al Boletín. Sólo viene mientras `sitio_limitando` es verdadero."
-     },
      "ultima_lectura": {
       "type": "string",
       "format": "date-time"
@@ -2206,32 +2209,21 @@
        "errores": {
         "type": "integer"
        },
+       "limitados": {
+        "type": "integer",
+        "description": "Cuántas veces el Boletín contestó 429 (demasiados pedidos)."
+       },
+       "en_pausa_hasta": {
+        "type": "string",
+        "format": "date-time",
+        "description": "Presente mientras dura la pausa que sigue a un 429: hasta entonces notarum no le pide nada al sitio."
+       },
        "ultimo_pedido_ok": {
         "type": "boolean"
        },
        "ultima_lectura": {
         "type": "string",
         "format": "date-time"
-       },
-       "limitando": {
-        "type": "boolean"
-       },
-       "limitado_hasta": {
-        "type": "string",
-        "format": "date-time"
-       },
-       "ultimo_429": {
-        "type": "string",
-        "format": "date-time",
-        "description": "La última vez que el Boletín contestó 429."
-       },
-       "veces_limitado": {
-        "type": "integer",
-        "description": "Cuántas veces contestó 429 el Boletín desde que arrancó la instancia."
-       },
-       "pedidos_frenados": {
-        "type": "integer",
-        "description": "Pedidos que no salieron al Boletín por haber llegado mientras limitaba."
        }
       }
      },

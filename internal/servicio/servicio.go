@@ -125,15 +125,23 @@ func claveEdicion(sec boletin.Seccion, f boletin.Fecha) string {
 // Edicion devuelve el sumario de una sección en una fecha. Si se pasa rubro,
 // filtra en memoria: la edición completa ya está en caché, no hace falta
 // volver a pedirla al sitio por cada rubro.
+//
+// Una edición guardada cuando notarum leía sólo la portada, y que quedó justo
+// en el tope de 100, se vuelve a leer: casi seguro está cortada. Si el sitio
+// no contesta se sirve la guardada, pero marcada como parcial.
 func (s *Servicio) Edicion(ctx context.Context, sec boletin.Seccion, fecha boletin.Fecha, rubro string) (*boletin.Edicion, error) {
 	clave := claveEdicion(sec, fecha)
+	var cortada *boletin.Edicion
 	if crudo, ok := s.cache.Leer(clave); ok {
 		if string(crudo) == marcaSinEdicion {
 			return nil, ErrSinEdicion
 		}
 		var ed boletin.Edicion
 		if err := json.Unmarshal(crudo, &ed); err == nil {
-			return filtrarPorRubro(&ed, rubro), nil
+			if !ed.DeAntesDeLasPaginas() {
+				return filtrarPorRubro(&ed, rubro), nil
+			}
+			cortada = &ed
 		}
 	}
 
@@ -141,14 +149,34 @@ func (s *Servicio) Edicion(ctx context.Context, sec boletin.Seccion, fecha bolet
 	if err != nil {
 		if errors.Is(err, ErrSinEdicion) {
 			_ = s.cache.Guardar(clave, []byte(marcaSinEdicion), ttlPara(fecha))
+			return nil, err
+		}
+		if cortada != nil {
+			slog.Warn("no se pudo completar una edición guardada cortada: se sirve como parcial",
+				"seccion", sec, "fecha", fecha.API(), "err", err)
+			cortada.Parcial = true
+			return filtrarPorRubro(cortada, rubro), nil
 		}
 		return nil, err
 	}
 	if crudo, err := json.Marshal(ed); err == nil {
-		_ = s.cache.Guardar(clave, crudo, ttlPara(fecha))
+		_ = s.cache.Guardar(clave, crudo, ttlDeEdicion(ed))
+	}
+	if ed.Parcial {
+		slog.Warn("la edición quedó parcial",
+			"seccion", sec, "fecha", fecha.API(), "avisos", ed.Cantidad, "declarados", ed.Declarados)
 	}
 	s.indexar(ed)
 	return filtrarPorRubro(ed, rubro), nil
+}
+
+// ttlDeEdicion: una edición parcial no se guarda para siempre, aunque sea de
+// una fecha pasada. Se vuelve a intentar como si fuera la de hoy.
+func ttlDeEdicion(ed *boletin.Edicion) time.Duration {
+	if ed.Parcial {
+		return TTLHoy
+	}
+	return ttlPara(ed.Fecha)
 }
 
 // filtrarPorRubro se queda con los avisos cuyo rubro coincide, por nombre o
@@ -159,9 +187,14 @@ func filtrarPorRubro(ed *boletin.Edicion, rubro string) *boletin.Edicion {
 		return ed
 	}
 	buscado := strings.ToUpper(rubro)
+	// Parcial se hereda: si a la edición le faltan avisos, a cualquier
+	// recorte suyo le pueden faltar también. Lo declarado no, porque es de la
+	// edición entera.
 	out := &boletin.Edicion{
 		Seccion:  ed.Seccion,
 		Fecha:    ed.Fecha,
+		Parcial:  ed.Parcial,
+		Paginas:  ed.Paginas,
 		PorRubro: map[string]int{},
 		Avisos:   []boletin.Aviso{},
 	}
@@ -288,9 +321,12 @@ func (s *Servicio) Resumenes(ctx context.Context, sec boletin.Seccion, desde, ha
 			continue
 		}
 		r.Ediciones = append(r.Ediciones, boletin.Resumen{
-			Seccion:       ed.Seccion,
-			Fecha:         ed.Fecha,
-			Cantidad:      ed.Cantidad,
+			Seccion:  ed.Seccion,
+			Fecha:    ed.Fecha,
+			Cantidad: ed.Cantidad,
+			// Las cortadas de antes no se vuelven a leer acá, porque un
+			// rango no le pide nada al sitio: quedan avisadas.
+			Parcial:       ed.Parcial || ed.DeAntesDeLasPaginas(),
 			PorRubro:      ed.PorRubro,
 			ConSuplemento: ed.ConSuplemento,
 		})
@@ -360,8 +396,22 @@ func (s *Servicio) Anexo(ctx context.Context, sec boletin.Seccion, nro, id strin
 
 // TieneEdicionEnCache dice si una fecha ya se bajó (incluido el "no hubo
 // edición"). Lo usa el relleno para saltear lo hecho.
+//
+// Una edición cortada de antes no cuenta como bajada: así el relleno, que se
+// lanza desde el panel, es también la forma de completar la historia.
 func (s *Servicio) TieneEdicionEnCache(sec boletin.Seccion, f boletin.Fecha) bool {
-	return s.cache.Existe(claveEdicion(sec, f))
+	crudo, ok := s.cache.Leer(claveEdicion(sec, f))
+	if !ok {
+		return false
+	}
+	if string(crudo) == marcaSinEdicion {
+		return true
+	}
+	var ed boletin.Edicion
+	if err := json.Unmarshal(crudo, &ed); err != nil {
+		return false
+	}
+	return !ed.DeAntesDeLasPaginas()
 }
 
 // FechasDelAnio expone el calendario para el relleno.
