@@ -98,6 +98,14 @@
           </span>
           documentación de la API y el MCP
         </a>
+        <a class="menu-item" href="/novedades" role="menuitem">
+          <span class="menu-ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 10v4h3l7 4V6l-7 4z"/><path d="M17.5 9a4.3 4.3 0 0 1 0 6"/><path d="M8 14l1.2 4.5"/>
+            </svg>
+          </span>
+          novedades
+        </a>
 
         {{if or .SoyAdmin .Cuentas}}<div class="menu-sep"></div>{{end}}
 
@@ -146,6 +154,20 @@
   </div>
 </header>
 
+{{/* Una sola vez por navegador, después de una actualización: qué cambió
+     desde la última versión que se vio acá (ver novedades.go). */}}
+{{if .AvisoVersiones}}
+<aside class="contenedor aviso-version" role="status">
+  <div class="aviso-version-caja">
+    <div class="aviso-version-titulo">notarum se actualizó a la v{{.Version}}. Esto cambió desde la v{{.AvisoDesde}}:</div>
+    <ul class="nov-list">
+      {{range .AvisoVersiones}}{{range .Secciones}}{{range .Items}}<li>{{notaHTML .}}</li>{{end}}{{end}}{{end}}
+    </ul>
+    <a href="/novedades?desde={{.AvisoDesde}}">ver qué cambió, versión por versión</a>
+  </div>
+</aside>
+{{end}}
+
 <main class="contenedor{{if .Angosto}} angosto{{end}}">
 {{template "cuerpo" .}}
 </main>
@@ -158,7 +180,7 @@
   <span><a href="/docs">documentación</a></span>
   <span><a href="/v1/openapi.json">openapi.json</a></span>
   <span><a href="/v1/salud">estado</a></span>
-  <span>notarum {{.Version}}</span>
+  <span>notarum {{.Version}} · <a href="/novedades">qué cambió</a></span>
 </footer>
 
 </body>

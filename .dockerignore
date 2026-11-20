@@ -3,6 +3,9 @@
 .github
 *.md
 !README.md
+# El CHANGELOG va embebido en el binario: es lo que el contenedor muestra al
+# arrancar (versión y qué cambia).
+!CHANGELOG.md
 docs/
 
 # Binarios compilados en la raíz. El "/" delante importa: sin él, el patrón

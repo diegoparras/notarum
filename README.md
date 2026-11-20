@@ -330,6 +330,15 @@ Deploy, y entrá a la raíz. La guía completa, con las dos formas de resolver e
 registry y el detalle de cada paso, está en
 [docs/easypanel.md](docs/easypanel.md).
 
+**Versión y novedades.** Cada versión tiene su sección en
+[CHANGELOG.md](CHANGELOG.md), que va embebido en el binario; sin ella la
+imagen no se publica. Lo primero que escribe el contenedor al arrancar (en
+EasyPanel: servicio → Resumen → Registros) es un cartel con la versión, la
+fecha y qué cambia. En el lector, el menú tiene **novedades** y el pie enlaza
+**qué cambió**; quien vuelve después de una actualización ve una vez un aviso
+con lo nuevo. Cada versión publicada tiene además su Release en GitHub con las
+mismas notas, y `notarum notas` las imprime en markdown.
+
 ### Cambiar de motor sin volver a bajar todo
 
 Pasar de SQLite a Postgres no cuesta volver a bajar los catálogos:

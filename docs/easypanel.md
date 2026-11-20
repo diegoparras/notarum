@@ -43,7 +43,20 @@ Ese número se lee de `var version` en `cmd/notarum/main.go`. Para que una
 versión nueva tenga número propio hay que subirlo ahí —y en el `ARG VERSION`
 del `Dockerfile`, que es el valor para quien construye a mano— en el mismo
 cambio. Si no se sube, la imagen nueva sale con el número de la anterior y la
-pisa: desde afuera ya no se distingue cuál de las dos está corriendo.
+pisa: desde afuera ya no se distingue cuál de las dos está corriendo (el CI lo
+avisa con un warning en la corrida).
+
+En el mismo cambio va su sección `## [X.Y.Z]` arriba de todo en
+`CHANGELOG.md`, con lo que cambia escrito para quien lo usa. Sin ella no se
+publica nada: lo frenan los tests (también adentro del build de la imagen), el
+CI y `publicar.sh`. Con ella, el CI crea el Release `vX.Y.Z` con esas notas y
+etiqueta la imagen con la versión (`org.opencontainers.image.version`).
+
+Para confirmar qué tomó un deploy: el historial de *Implementaciones* de
+EasyPanel siempre dice "Deploy service", así que la versión se mira en los
+**registros** del servicio (Resumen → Registros). Lo primero que escribe el
+contenedor al arrancar es un cartel con `NOTARUM vX.Y.Z  (fecha)` y un renglón
+por cambio, de 80 columnas como máximo.
 
 Para publicar a mano, sin pasar por `main`:
 

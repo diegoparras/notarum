@@ -31,6 +31,7 @@ import (
 	"github.com/diegoparras/notarum/internal/infoleg"
 	"github.com/diegoparras/notarum/internal/lockatus"
 	"github.com/diegoparras/notarum/internal/mcp"
+	"github.com/diegoparras/notarum/internal/novedades"
 	"github.com/diegoparras/notarum/internal/servicio"
 	"github.com/diegoparras/notarum/internal/tareas"
 )
@@ -145,7 +146,7 @@ func Nuevo(srv *servicio.Servicio, version string) (*Sitio, error) {
 		// se acuerde de cablearlo, y fallaría en vez de generar.
 		tareas: tareas.Nuevo(),
 	}
-	for _, nombre := range []string{"edicion", "aviso", "buscar", "calendario", "norma", "docs", "entrar", "cuenta", "error", "provincial", "normaprov", "nacional", "admin", "vencimientos"} {
+	for _, nombre := range []string{"edicion", "aviso", "buscar", "calendario", "norma", "docs", "entrar", "cuenta", "error", "provincial", "normaprov", "nacional", "admin", "vencimientos", "novedades"} {
 		t, err := template.New("base").Funcs(funciones).ParseFS(archivosPlantillas,
 			"plantillas/base.html", "plantillas/"+nombre+".html")
 		if err != nil {
@@ -168,6 +169,7 @@ func (s *Sitio) rutas() {
 	s.mux.HandleFunc("GET /norma/{id}", s.norma)
 	s.mux.HandleFunc("GET /buscar", s.buscar)
 	s.mux.HandleFunc("GET /docs", s.docs)
+	s.mux.HandleFunc("GET /novedades", s.verNovedades)
 	s.mux.HandleFunc("GET /entrar", s.verEntrar)
 	s.mux.HandleFunc("POST /entrar", s.hacerEntrar)
 	s.mux.HandleFunc("GET /salir", s.salir)
@@ -206,6 +208,7 @@ var funciones = template.FuncMap{
 	"n8n":        n8nDe,
 	"fechaCorta": fechaCorta,
 	"dict":       dict,
+	"notaHTML":   notaHTML,
 }
 
 // fechaCorta escribe una fecha como 2026-09-01, o nada si no hay.
@@ -267,6 +270,11 @@ type comun struct {
 	Secciones   []boletin.Seccion
 	FechaActual string
 	Angosto     bool
+	// AvisoDesde y AvisoVersiones arman el aviso de "notarum se actualizó":
+	// la última versión que vio este navegador y lo que cambió desde ahí.
+	// Vacíos, no hay aviso (ver novedades.go).
+	AvisoDesde     string
+	AvisoVersiones []novedades.Version
 }
 
 func (s *Sitio) base(sec boletin.Seccion, fecha string) comun {
@@ -286,6 +294,7 @@ func (s *Sitio) base(sec boletin.Seccion, fecha string) comun {
 // nombre en vez de "entrar".
 func (s *Sitio) baseCon(r *http.Request, sec boletin.Seccion, fecha string) comun {
 	c := s.base(sec, fecha)
+	c.AvisoDesde, c.AvisoVersiones = s.avisoDeVersion(r)
 	if u := s.yo(r); u != nil {
 		c.Yo = u.Nombre
 		c.SoyAdmin = u.Rol == cuentas.RolAdmin
@@ -314,6 +323,7 @@ func (s *Sitio) mostrar(w http.ResponseWriter, r *http.Request, nombre string, d
 			"Quedó anotado en el registro del servidor con el detalle.")
 		return
 	}
+	s.recordarVersion(w, r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Content-Length", strconv.Itoa(pagina.Len()))
 	w.WriteHeader(codigo)

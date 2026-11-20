@@ -1,0 +1,28 @@
+{{define "titulo"}}Novedades{{end}}
+{{define "cuerpo"}}
+
+<h1>Novedades</h1>
+<p class="bajada">
+  {{if .Desde}}Lo que cambió desde la v{{.Desde}} hasta la v{{.Version}}, que es la que corre esta instancia.
+  <a href="/novedades">Ver todas las versiones</a>.
+  {{else}}Qué cambió en cada versión de notarum, de la más nueva a la más vieja. Esta instancia corre la v{{.Version}}.{{end}}
+</p>
+
+{{range .Versiones}}
+<section class="nov">
+  <div class="nov-ver"><b>v{{.Version}}</b>{{if .Fecha}}<span>{{.Fecha}}</span>{{end}}</div>
+  {{range .Secciones}}
+  <div class="nov-sec">{{.Titulo}}</div>
+  <ul class="nov-list">
+    {{range .Items}}<li>{{notaHTML .}}</li>{{end}}
+  </ul>
+  {{end}}
+</section>
+{{else}}
+<div class="vacio">
+  <strong>No hay notas para mostrar</strong>
+  {{if .Desde}}No cambió nada después de la v{{.Desde}}.{{else}}El CHANGELOG de esta versión no trae notas.{{end}}
+</div>
+{{end}}
+
+{{end}}

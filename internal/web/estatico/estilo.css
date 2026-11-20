@@ -483,3 +483,19 @@ h2 { font-size: 17px; font-weight: 600; margin: 32px 0 12px; }
   background: var(--crema); border-radius: 10px;
 }
 .alerta-feed code { font-size: 12px; word-break: break-all; flex: 1 1 240px; }
+
+/* --------------------------------------------------------------- novedades */
+/* Qué cambió en cada versión (/novedades) y el aviso de "se actualizó", que
+   sale una sola vez por navegador arriba de todo. */
+.nov { margin-bottom: 22px; }
+.nov-ver { margin: 0 0 4px; display: flex; align-items: baseline; gap: 10px; }
+.nov-ver b { font-family: var(--mono); font-size: 14px; }
+.nov-ver span { color: var(--tinta-tenue); font-size: 12.5px; }
+.nov-sec { margin: 8px 0 2px; font-size: 12px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--tinta-tenue); }
+.nov-list { margin: 2px 0 6px; padding-left: 18px; font-size: 14px; line-height: 1.55; }
+.nov-list li { margin: 3px 0; }
+.nov-list code { font-family: var(--mono); font-size: 12.5px; }
+.aviso-version { margin-top: -10px; margin-bottom: 24px; }
+.aviso-version-caja { background: var(--acento-tenue); border-radius: 12px; padding: 13px 16px; font-size: 13.5px; }
+.aviso-version-titulo { font-weight: 600; margin-bottom: 4px; }

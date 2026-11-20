@@ -4,6 +4,7 @@
 //	notarum servir
 //	notarum rellenar --seccion primera --desde 2024-01-01 [--hasta 2024-12-31]
 //	notarum version
+//	notarum notas
 package main
 
 import (
@@ -41,7 +42,7 @@ import (
 )
 
 // version se puede fijar en el build: -ldflags "-X main.version=1.2.3".
-var version = "1.8.1"
+var version = "1.8.2"
 
 func main() {
 	if err := ejecutar(os.Args[1:]); err != nil {
@@ -75,6 +76,8 @@ func ejecutar(args []string) error {
 	case "version", "--version", "-v":
 		fmt.Println("notarum " + version)
 		return nil
+	case "notas":
+		return imprimirNotas(os.Stdout, version)
 	case "ayuda", "help", "--help", "-h":
 		ayuda()
 		return nil
@@ -180,6 +183,10 @@ func ayuda() {
       cada motor lo arma a su manera.
 
   notarum version
+
+  notarum notas
+      Imprime en markdown qué cambia en esta versión (del CHANGELOG). Sale
+      con error si no tiene notas: así el CI no publica una versión muda.
 `)
 }
 
@@ -363,6 +370,10 @@ func servir(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	// Lo primero que sale en los registros del contenedor: la versión y qué
+	// cambia (del CHANGELOG). Así el deploy dice qué tomó aunque lo que sigue
+	// falle.
+	imprimirCartel(os.Stdout)
 	armarLog(*formatoLog)
 
 	// Un techo para el recolector, antes que nada. Go deja crecer el heap

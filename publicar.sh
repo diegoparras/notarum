@@ -30,6 +30,19 @@ if [ -z "$VERSION" ]; then
   exit 1
 fi
 
+# Ninguna versión sale sin decir qué cambia: la sección "## [X.Y.Z]" del
+# CHANGELOG.md, con al menos un ítem. Es la misma regla que el CI (y que el
+# test que corre adentro del build), revisada acá antes de pedir el token.
+if ! awk -v v="$VERSION" '
+  index($0, "## [" v "]") == 1 { adentro = 1; next }
+  adentro && /^## / { exit }
+  adentro && /^- / { hay = 1 }
+  END { exit hay ? 0 : 1 }
+' CHANGELOG.md; then
+  echo "CHANGELOG.md no tiene la sección \"## [$VERSION]\" (o está vacía): agregala antes de publicar." >&2
+  exit 1
+fi
+
 echo "==> Sesión en ghcr.io"
 if docker system info 2>/dev/null | grep -q "ghcr.io"; then
   echo "    ya había sesión abierta"
@@ -39,7 +52,7 @@ else
 fi
 
 echo "==> Construyendo $IMAGEN:$VERSION"
-docker build -t "$IMAGEN:$VERSION" -t "$IMAGEN:latest" --build-arg VERSION="$VERSION" .
+docker build -t "$IMAGEN:$VERSION" -t "$IMAGEN:latest" --build-arg VERSION="$VERSION"   --label org.opencontainers.image.version="$VERSION" .
 
 echo "==> Publicando"
 docker push "$IMAGEN:$VERSION"
