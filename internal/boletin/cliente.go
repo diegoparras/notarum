@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -169,10 +170,18 @@ type respuesta struct {
 	cuerpo   []byte
 	codigo   int
 	location string
+	cookies  []*http.Cookie
 }
 
 // pedir hace un pedido con ritmo y reintentos. Los 4xx no se reintentan.
 func (c *Cliente) pedir(ctx context.Context, op, metodo, ruta string, form url.Values) (*respuesta, error) {
+	return c.pedirCon(ctx, op, metodo, ruta, form, nil)
+}
+
+// pedirCon es pedir con cabeceras propias del pedido. Las cookies van por acá
+// y no en un tarro compartido: la sesión del sitio recuerda qué edición se
+// está mirando, y dos lecturas simultáneas de fechas distintas se pisarían.
+func (c *Cliente) pedirCon(ctx context.Context, op, metodo, ruta string, form url.Values, cabeceras http.Header) (*respuesta, error) {
 	destino := c.base + ruta
 	var ultimo error
 	for intento := 0; intento <= c.reintentos; intento++ {
@@ -205,6 +214,11 @@ func (c *Cliente) pedir(ctx context.Context, op, metodo, ruta string, form url.V
 			req.Header.Set("X-Requested-With", "XMLHttpRequest")
 			req.Header.Set("Referer", c.base+"/")
 		}
+		for clave, valores := range cabeceras {
+			for _, v := range valores {
+				req.Header.Set(clave, v)
+			}
+		}
 
 		res, err := c.http.Do(req)
 		if err != nil {
@@ -215,6 +229,7 @@ func (c *Cliente) pedir(ctx context.Context, op, metodo, ruta string, form url.V
 		cuerpo, errLec := io.ReadAll(io.LimitReader(res.Body, 32<<20))
 		loc := res.Header.Get("Location")
 		codigo := res.StatusCode
+		cookies := res.Cookies()
 		res.Body.Close()
 
 		if errLec != nil {
@@ -231,32 +246,151 @@ func (c *Cliente) pedir(ctx context.Context, op, metodo, ruta string, form url.V
 		if codigo >= 400 {
 			return nil, &ErrDelSitio{Operacion: op, URL: destino, Codigo: codigo}
 		}
-		return &respuesta{cuerpo: cuerpo, codigo: codigo, location: loc}, nil
+		return &respuesta{cuerpo: cuerpo, codigo: codigo, location: loc, cookies: cookies}, nil
 	}
 	return nil, &ErrDelSitio{Operacion: op, URL: destino, Causa: ultimo}
 }
 
 // ------------------------------------------------------------------ lecturas
 
-// TraerEdicion lee la portada de una sección en una fecha. Devuelve
+// maxPaginasDeEdicion corta el recorrido de una edición que no termina nunca.
+// Son 6.000 avisos: la Segunda más cargada que se midió tiene 410.
+const maxPaginasDeEdicion = 60
+
+// TraerEdicion lee el sumario entero de una sección en una fecha. Devuelve
 // ErrSinEdicion si ese día no hubo.
+//
+// La portada trae los primeros 100 avisos y cuenta, en su índice de rubros,
+// cuántos tiene la edición. Si faltan, se piden las páginas siguientes como
+// las pide el sitio al desplazarse: /seccion/actualizar/<sección>?pag=N. Ese
+// pedido no lleva fecha: el sitio sabe de qué edición se habla por la cookie
+// de sesión que dejó la portada, así que cada lectura usa las suyas.
+//
+// Si una página falla, falla la lectura: una edición a medias no se entrega
+// como si fuera entera. Si el recorrido termina bien pero con menos avisos de
+// los declarados, la edición sale marcada como Parcial.
+//
+// Con rubro se lee sólo la portada filtrada, sin seguir páginas; la edición
+// queda Parcial si ese rubro declara más avisos de los que entraron.
 func (c *Cliente) TraerEdicion(ctx context.Context, sec Seccion, fecha Fecha, rubro string) (*Edicion, error) {
+	const op = "leer edición"
 	ruta := "/seccion/" + string(sec) + "/" + fecha.Sitio()
 	if rubro != "" {
 		ruta += "?rubro=" + url.QueryEscape(rubro)
 	}
-	res, err := c.pedir(ctx, "leer edición", http.MethodGet, ruta, nil)
+	res, err := c.pedir(ctx, op, http.MethodGet, ruta, nil)
 	if err != nil {
 		return nil, err
 	}
 	if res.codigo >= 300 && res.codigo < 400 {
 		return nil, ErrSinEdicion
 	}
-	ed, err := ParsearPortada(res.cuerpo, sec, fecha)
+	p, err := parsearPortada(res.cuerpo, sec, rubro)
 	if err != nil {
-		return nil, &ErrDelSitio{Operacion: "leer edición", URL: c.base + ruta, Causa: err}
+		return nil, &ErrDelSitio{Operacion: op, URL: c.base + ruta, Causa: err}
 	}
+	ed := &Edicion{Seccion: sec, Fecha: fecha, Declarados: p.declarados, Paginas: 1}
+	if err := ed.sumar(p.avisos); err != nil {
+		return nil, &ErrDelSitio{Operacion: op, URL: c.base + ruta, Causa: err}
+	}
+
+	// ¿Hace falta seguir? Si la portada trae el índice de rubros, alcanza con
+	// comparar. Si no lo trae, la única forma de saberlo es preguntar.
+	faltan := ed.Cantidad < ed.Declarados || (ed.Declarados == 0 && ed.Cantidad > 0)
+	if rubro != "" || !faltan {
+		ed.cerrar(false)
+		return ed, nil
+	}
+
+	sesion := map[string]string{}
+	anotarCookies(sesion, res.cookies)
+	ultimoRubro := p.ultimoRubro
+	quedaban := true
+	for pag := 2; pag <= maxPaginasDeEdicion; pag++ {
+		q := url.Values{}
+		q.Set("pag", strconv.Itoa(pag))
+		if ultimoRubro != "" {
+			q.Set("ult_rubro", ultimoRubro)
+		}
+		rutaPag := "/seccion/actualizar/" + string(sec) + "?" + q.Encode()
+		cab := http.Header{}
+		cab.Set("X-Requested-With", "XMLHttpRequest")
+		cab.Set("Referer", c.base+ruta)
+		if ck := cabeceraCookie(sesion); ck != "" {
+			cab.Set("Cookie", ck)
+		}
+		r, err := c.pedirCon(ctx, op, http.MethodGet, rutaPag, nil, cab)
+		if err != nil {
+			return nil, err
+		}
+		if r.codigo >= 300 {
+			return nil, &ErrDelSitio{Operacion: op, URL: c.base + rutaPag, Codigo: r.codigo}
+		}
+		anotarCookies(sesion, r.cookies)
+
+		// El rubro con el que arranca la página es el último que se vio, no
+		// el que informa el sitio: son el mismo, pero el propio es el que ya
+		// está en los avisos anteriores.
+		rubroInicial := ultimoRubro
+		if n := len(ed.Avisos); n > 0 {
+			rubroInicial = ed.Avisos[n-1].Rubro
+		}
+		pg, err := parsearPaginaDeSeccion(r.cuerpo, sec, rubroInicial)
+		if err != nil {
+			return nil, &ErrDelSitio{Operacion: op, URL: c.base + rutaPag, Causa: err}
+		}
+		antes := ed.Cantidad
+		if err := ed.sumar(pg.avisos); err != nil {
+			return nil, &ErrDelSitio{Operacion: op, URL: c.base + rutaPag, Causa: err}
+		}
+		if len(pg.avisos) > 0 {
+			ed.Paginas++
+		}
+		if pg.ultimoRubro != "" {
+			ultimoRubro = pg.ultimoRubro
+		}
+		switch {
+		case !pg.hayMas:
+			// El sitio dice que se terminó.
+			quedaban = false
+		case ed.Declarados > 0 && ed.Cantidad >= ed.Declarados:
+			// Ya está todo lo declarado: la página que sigue viene vacía.
+			quedaban = false
+		case ed.Cantidad == antes:
+			// Una página sin nada nuevo: el sitio está dando vueltas. Se corta
+			// y queda dicho que no se pudo confirmar el final.
+			ed.cerrar(true)
+			return ed, nil
+		}
+		if !quedaban {
+			break
+		}
+	}
+	ed.cerrar(quedaban)
 	return ed, nil
+}
+
+// anotarCookies guarda las cookies que deja una respuesta, pisando las viejas.
+func anotarCookies(sesion map[string]string, cookies []*http.Cookie) {
+	for _, ck := range cookies {
+		if ck.Name != "" {
+			sesion[ck.Name] = ck.Value
+		}
+	}
+}
+
+// cabeceraCookie arma el valor de Cookie, en orden estable.
+func cabeceraCookie(sesion map[string]string) string {
+	nombres := make([]string, 0, len(sesion))
+	for n := range sesion {
+		nombres = append(nombres, n)
+	}
+	sort.Strings(nombres)
+	partes := make([]string, 0, len(nombres))
+	for _, n := range nombres {
+		partes = append(partes, n+"="+sesion[n])
+	}
+	return strings.Join(partes, "; ")
 }
 
 // TraerAviso lee el detalle de un aviso.

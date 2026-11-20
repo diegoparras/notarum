@@ -238,6 +238,17 @@ que costaron, por si a alguien le sirven:
   por `nroAnexo`. Deduplicar por id deja uno de doce. Este lo encontró un test
   contra el sitio real, no los fixtures.
 
+- **La portada de una edición trae sólo los primeros 100 avisos.** El resto lo
+  carga el sitio al desplazarse, con `/seccion/actualizar/{sección}?pag=N`, que
+  devuelve JSON con un pedazo de HTML y `hay_mas_datos`. Ese pedido no lleva
+  fecha: el sitio sabe de qué edición se habla por la cookie de sesión que dejó
+  la portada, y sin ella contesta con la edición del día. La Segunda de un día
+  hábil ronda los 400 avisos, así que leer sólo la portada era servir la cuarta
+  parte: sociedades sí, convocatorias y edictos judiciales no. Lo que permite
+  saber si está todo es el índice de rubros de la misma portada, que cuenta los
+  avisos de cada uno; la suma es el total de la edición. Cuando una página
+  sigue adentro del rubro de la anterior, no repite el encabezado.
+
 - **`?suplemento=1` tampoco hace nada:** la portada normal ya incluye el
   suplemento, y sus avisos se reconocen por el rubro `(SUPLEMENTO)`.
 

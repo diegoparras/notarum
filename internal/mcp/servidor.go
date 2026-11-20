@@ -259,6 +259,16 @@ func (s *Servidor) hEdicion(ctx context.Context, crudo json.RawMessage) *Resulta
 		"cantidad":       ed.Cantidad,
 		"por_rubro":      ed.PorRubro,
 		"con_suplemento": ed.ConSuplemento,
+		"parcial":        ed.Parcial,
+	}
+	if ed.Parcial {
+		// Que el modelo no cuente como "todos" lo que es una parte.
+		aviso := "esta edición puede estar incompleta: no se pudo confirmar que estén todos los avisos"
+		if ed.Declarados > ed.Cantidad {
+			aviso = fmt.Sprintf("esta edición está incompleta: el Boletín declara %d avisos y se pudieron leer %d",
+				ed.Declarados, ed.Cantidad)
+		}
+		salida["aviso"] = aviso
 	}
 	if len(ed.Avisos) > limite {
 		salida["avisos"] = ed.Avisos[:limite]

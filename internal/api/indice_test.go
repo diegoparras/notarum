@@ -169,8 +169,8 @@ func TestSaludInformaElMotor(t *testing.T) {
 	if salud.Cache.Motor != "sqlite" {
 		t.Errorf("motor = %q", salud.Cache.Motor)
 	}
-	if salud.Cache.Avisos != 100 {
-		t.Errorf("avisos indexados = %d, se esperaban 100", salud.Cache.Avisos)
+	if salud.Cache.Avisos != 129 {
+		t.Errorf("avisos indexados = %d, se esperaban 129", salud.Cache.Avisos)
 	}
 }
 

@@ -23,21 +23,24 @@ const (
 // contrataciones sino "DOMINIOS PUBLICADOS ar", el listado diario de altas de
 // dominios de internet con su titular. No es normativa.
 //
-// Aunque se la quisiera, no se puede leer entera. Medido contra el sitio:
+// Medido contra el sitio:
 //
-//   - /seccion/cuarta/<fecha> contesta, pero siempre exactamente 100 entradas,
-//     en orden alfabético y cortadas en la "g".
-//   - No tiene paginación: ?pagina, ?page y ?offset devuelven los mismos 100.
+//   - /seccion/cuarta/<fecha> contesta con exactamente 100 entradas, en orden
+//     alfabético y cortadas en la "g".
+//   - ?pagina, ?page y ?offset devuelven los mismos 100. El resto llega, como
+//     en las otras secciones, por /seccion/actualizar/cuarta?pag=N (ver
+//     TamanoDePagina): el 19/11/2026 la página 2 siguió el listado donde lo
+//     dejaba la portada. Cuando se escribió esta nota eso no se sabía, y se
+//     creyó que la única fuente completa era el PDF.
 //   - El buscador avanzado del sitio no la conoce: pedirle la sección 4
 //     redirige a la página de error.
 //   - El PDF de la sección tiene 63 páginas, o sea unos 2.500 dominios por
-//     día. Esa es la única fuente completa.
+//     día: unas 25 páginas de 100 por edición.
 //
-// Servir los 100 del HTML sería servir el cuatro por ciento sin que se note, y
-// leer el PDF es otro proyecto: una dependencia nueva para extraer texto y un
-// parser de tablas en PDF, que se rompe cuando el Boletín cambia el diseño.
-// Además el modelo no encaja: no hay avisos con identificador ni páginas de
-// detalle, que es sobre lo que está armado todo lo demás.
+// Sigue afuera porque el modelo no encaja: no hay avisos con identificador ni
+// páginas de detalle, que es sobre lo que está armado todo lo demás. Lo que
+// no puede pasar es lo que pasaba con las otras tres antes de seguir las
+// páginas: servir los primeros 100 sin que se note.
 var SeccionesValidas = []Seccion{Primera, Segunda, Tercera}
 
 // ParseSeccion valida el nombre de una sección.
@@ -133,14 +136,43 @@ type Aviso struct {
 	URL         string  `json:"url"`
 }
 
+// TamanoDePagina es de a cuántos avisos entrega el sitio el sumario de una
+// edición. La portada trae los primeros; el resto llega por
+// /seccion/actualizar/<sección>?pag=N, que es lo que el sitio pide solo cuando
+// el lector se desplaza hasta el final.
+//
+// Medido el 19/11/2026: la Segunda de ese día tiene 387 avisos y la del
+// 1/9/2026, 410; la Primera del 1/9/2026, 129. Leer sólo la portada era servir
+// 100 como si fueran todos.
+const TamanoDePagina = 100
+
 // Edicion es el sumario de una sección en una fecha.
 type Edicion struct {
-	Seccion       Seccion        `json:"seccion"`
-	Fecha         Fecha          `json:"fecha"`
-	Cantidad      int            `json:"cantidad"`
+	Seccion  Seccion `json:"seccion"`
+	Fecha    Fecha   `json:"fecha"`
+	Cantidad int     `json:"cantidad"`
+	// Declarados es cuántos avisos anuncia el propio sitio para esa edición,
+	// sumando su índice de rubros. Vale 0 si la página no trae el índice.
+	Declarados int `json:"cantidad_declarada,omitempty"`
+	// Parcial avisa que la edición puede no estar entera: se extrajeron menos
+	// avisos de los que el sitio declara, o no se pudo confirmar que estén
+	// todos. Una edición parcial no se guarda para siempre.
+	Parcial bool `json:"parcial"`
+	// Paginas es cuántas páginas del sitio hubo que leer para armarla. Las
+	// ediciones guardadas antes de que notarum siguiera las páginas no lo
+	// traen, y por eso se las reconoce.
+	Paginas       int            `json:"paginas,omitempty"`
 	PorRubro      map[string]int `json:"por_rubro"`
 	ConSuplemento bool           `json:"con_suplemento"`
 	Avisos        []Aviso        `json:"avisos"`
+}
+
+// DeAntesDeLasPaginas dice si esta edición se guardó cuando notarum leía sólo
+// la portada y quedó justo en el tope: es la firma de una edición cortada.
+// Puede ser una edición que de verdad tenía 100 avisos; volver a leerla cuesta
+// un pedido y lo confirma.
+func (e *Edicion) DeAntesDeLasPaginas() bool {
+	return e.Paginas == 0 && e.Cantidad == TamanoDePagina
 }
 
 // Resumen es una edición sin sus avisos, para listar rangos.
@@ -148,6 +180,7 @@ type Resumen struct {
 	Seccion       Seccion        `json:"seccion"`
 	Fecha         Fecha          `json:"fecha"`
 	Cantidad      int            `json:"cantidad"`
+	Parcial       bool           `json:"parcial"`
 	PorRubro      map[string]int `json:"por_rubro"`
 	ConSuplemento bool           `json:"con_suplemento"`
 }

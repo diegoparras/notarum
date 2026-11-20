@@ -147,7 +147,7 @@
      "ediciones"
     ],
     "summary": "Edición de una sección en una fecha",
-    "description": "El sumario completo de ese día. Si ese día no hubo edición devuelve 404 con `sin_edicion: true`, que no es una falla.",
+    "description": "El sumario completo de ese día. Si ese día no hubo edición devuelve 404 con `sin_edicion: true`, que no es una falla.\n\nEl sitio del Boletín entrega el sumario de a 100 avisos; notarum sigue todas las páginas y compara contra lo que el propio sitio declara (`cantidad_declarada`). Si no pudo confirmar que estén todos, la respuesta lo dice con `parcial: true` y no se guarda como definitiva.",
     "operationId": "verEdicion",
     "parameters": [
      {
@@ -1942,6 +1942,7 @@
      "seccion",
      "fecha",
      "cantidad",
+     "parcial",
      "por_rubro",
      "avisos"
     ],
@@ -1959,7 +1960,20 @@
       "format": "date"
      },
      "cantidad": {
-      "type": "integer"
+      "type": "integer",
+      "description": "Cuántos avisos trae esta respuesta."
+     },
+     "cantidad_declarada": {
+      "type": "integer",
+      "description": "Cuántos avisos declara el propio Boletín para la edición entera, sumando su índice de rubros. Falta si la página no lo informa o si la respuesta está filtrada por rubro."
+     },
+     "parcial": {
+      "type": "boolean",
+      "description": "`true` si la edición puede estar incompleta: se leyeron menos avisos de los declarados o no se pudo confirmar que estén todos. Una edición parcial se vuelve a intentar a los pocos minutos."
+     },
+     "paginas": {
+      "type": "integer",
+      "description": "Cuántas páginas del sitio hubo que leer para armarla: el Boletín entrega el sumario de a 100 avisos."
      },
      "por_rubro": {
       "type": "object",
@@ -1996,6 +2010,10 @@
      },
      "cantidad": {
       "type": "integer"
+     },
+     "parcial": {
+      "type": "boolean",
+      "description": "`true` si esa edición puede estar incompleta. Incluye las guardadas antes de que notarum siguiera las páginas del sumario y que quedaron justo en 100 avisos: se completan al pedirlas de a una o con el relleno."
      },
      "por_rubro": {
       "type": "object",

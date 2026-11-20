@@ -50,6 +50,7 @@ func (w *sbW) Write(p []byte) (int, error) { return w.sb.Write(p) }
 func sitioConInfoLEG(t *testing.T, csv string) *httptest.Server {
 	t.Helper()
 	portada := fixture(t, "portada_primera_20260901.html")
+	pagina2 := fixture(t, "seccion_primera_20260901_p2.json")
 	detalle := fixture(t, "detalle_primera_346633.html")
 	cal := fixture(t, "calendario_primera_2026.json")
 	catalogo := zipCon(t, csv)
@@ -65,6 +66,8 @@ func sitioConInfoLEG(t *testing.T, csv string) *httptest.Server {
 			w.Write(catalogo)
 		case strings.Contains(p, "/anexos/"):
 			w.Write([]byte("<html><body><p>TEXTO ACTUALIZADO POR INFOLEG</p></body></html>"))
+		case strings.HasPrefix(p, "/seccion/actualizar/"):
+			w.Write(pagina2)
 		case strings.HasPrefix(p, "/seccion/"):
 			w.Write(portada)
 		case strings.HasPrefix(p, "/detalleAviso/"):

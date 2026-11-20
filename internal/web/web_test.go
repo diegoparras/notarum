@@ -26,6 +26,8 @@ func fixture(t *testing.T, nombre string) []byte {
 func sitioDePrueba(t *testing.T) *httptest.Server {
 	t.Helper()
 	portada := fixture(t, "portada_primera_20260901.html")
+	// La portada trae 100 avisos; los 29 que faltan llegan en esta página.
+	pagina2 := fixture(t, "seccion_primera_20260901_p2.json")
 	detalle := fixture(t, "detalle_primera_346633.html")
 	cal := fixture(t, "calendario_primera_2026.json")
 	busq := fixture(t, "busqueda_primera.json")
@@ -35,6 +37,8 @@ func sitioDePrueba(t *testing.T) *httptest.Server {
 		switch {
 		case p == "/seccion/primera/20260901":
 			w.Write(portada)
+		case p == "/seccion/actualizar/primera":
+			w.Write(pagina2)
 		case p == "/seccion/primera/20260817":
 			http.Redirect(w, r, "/", http.StatusFound)
 		case strings.HasPrefix(p, "/detalleAviso/"):

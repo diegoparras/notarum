@@ -418,6 +418,9 @@ type datosEdicion struct {
 	Rubros     []rubroContado
 	Rubro      string
 	Total      int
+	// Parcial y Declarados son de la edición entera, no del recorte por rubro.
+	Parcial    bool
+	Declarados int
 	Anterior   string
 	Siguiente  string
 	SinEdicion bool
@@ -459,6 +462,7 @@ func (s *Sitio) edicion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	d.Total = completa.Cantidad
+	d.Parcial, d.Declarados = completa.Parcial, completa.Declarados
 	for nombre, n := range completa.PorRubro {
 		d.Rubros = append(d.Rubros, rubroContado{nombre, n})
 	}
