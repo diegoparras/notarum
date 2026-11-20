@@ -42,7 +42,7 @@ import (
 )
 
 // version se puede fijar en el build: -ldflags "-X main.version=1.2.3".
-var version = "1.8.2"
+var version = "1.8.3"
 
 func main() {
 	if err := ejecutar(os.Args[1:]); err != nil {
@@ -433,8 +433,9 @@ func servir(args []string) error {
 	}
 	// La cuenta que administra sale de la configuración, como en el resto de
 	// la suite: si la clave está en el entorno, esa es; si no, se genera y se
-	// imprime una vez. Cambiarla en el entorno y reiniciar la vuelve a poner,
-	// así que no hay forma de quedarse afuera de la propia instancia.
+	// guarda una vez en el directorio de datos (nunca en el log). Cambiarla en el
+	// entorno y reiniciar la vuelve a poner, así que no hay forma de quedarse
+	// afuera de la propia instancia.
 	generada, err := reg.AsegurarAdmin(
 		entorno("NOTARUM_ADMIN_USUARIO", cuentas.UsuarioAdminPorDefecto),
 		entorno("NOTARUM_ADMIN_CLAVE", ""))
@@ -442,10 +443,9 @@ func servir(args []string) error {
 		return err
 	}
 	if generada != "" {
-		slog.Warn("se creó la cuenta que administra; esta clave se muestra una sola vez",
-			"usuario", entorno("NOTARUM_ADMIN_USUARIO", cuentas.UsuarioAdminPorDefecto),
-			"clave", generada,
-			"para_no_verla_mas", "poné NOTARUM_ADMIN_CLAVE en la configuración")
+		ruta, errGuardar := guardarClaveInicial(entorno("NOTARUM_DATOS", "/datos"), generada)
+		slog.Warn("se creó la cuenta que administra con una clave generada; no se muestra en el log",
+			avisoClaveGenerada(entorno("NOTARUM_ADMIN_USUARIO", cuentas.UsuarioAdminPorDefecto), ruta, errGuardar)...)
 	}
 	politica, err := armarPolitica(reg.HayUsuarios(), limite)
 	if err != nil {

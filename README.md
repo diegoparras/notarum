@@ -403,7 +403,7 @@ lector público con la API por token. Las tres son legítimas.
 | `NOTARUM_CUOTA_LOGIN` | `10` | intentos de entrada por minuto |
 | `NOTARUM_SECRETO_SESION` | se genera | firma las sesiones; fijalo para que sobrevivan al reinicio |
 | `NOTARUM_ADMIN_USUARIO` | `admin` | la cuenta que administra |
-| `NOTARUM_ADMIN_CLAVE` | se genera | su clave; sin esto se genera una y se imprime en el log una vez |
+| `NOTARUM_ADMIN_CLAVE` | se genera | su clave; sin esto se genera una y queda en `/datos/clave-admin-inicial` (nunca en el log) |
 | `NOTARUM_BUSCADOR_INFOLEG` | vacío | con `1`, enciende la búsqueda de normativa nacional; pide 1 GB de memoria |
 
 - **abierto**: leer no pide nada. Las cuentas sirven para tener más cuota y
@@ -437,7 +437,9 @@ volver a lo que diga la configuración del servicio.
 
 **La cuenta que administra sale de la configuración**, como en el resto de la
 suite: `NOTARUM_ADMIN_USUARIO` y `NOTARUM_ADMIN_CLAVE`. Si no se define la
-clave, se genera una y se imprime en el log al arrancar —una sola vez—. Y si
+clave, se genera una al arrancar —una sola vez— y queda en el directorio de
+datos, en `clave-admin-inicial`, legible sólo por notarum: nunca en el log.
+Se lee desde la consola del servicio (`cat /datos/clave-admin-inicial`). Y si
 alguna vez te quedás afuera, ponés otra en el entorno y reiniciás: se aplica
 sola.
 

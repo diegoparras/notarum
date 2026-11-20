@@ -91,8 +91,10 @@ Poné en `NOTARUM_USER_AGENT` una URL de contacto real. Es un sitio público del
 Estado: que sepan quién los está leyendo y cómo avisarte si molesta.
 
 `NOTARUM_ADMIN_CLAVE` es la clave de la cuenta `admin`, la que entra al panel
-en `/admin`. Si no la definís, notarum genera una y la imprime en el log al
-arrancar, una sola vez: ponerla acá ahorra ir a buscarla.
+en `/admin`. Si no la definís, notarum genera una al arrancar, una sola vez, y
+la deja en el volumen (`/datos/clave-admin-inicial`, legible sólo por notarum;
+nunca en el log): se lee desde la consola del servicio con
+`cat /datos/clave-admin-inicial`. Ponerla acá ahorra ir a buscarla.
 
 `NOTARUM_TOPE_SITIO` es cuántos pedidos sostenidos le hace notarum al Boletín
 cada cinco minutos. El sitio corta alrededor de los 140 desde una misma

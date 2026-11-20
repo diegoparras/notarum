@@ -5,6 +5,16 @@ Versionado semántico. Cada versión que se publica tiene su sección acá: es l
 que muestran el arranque del contenedor, la página de novedades del lector,
 el Release de GitHub y `notarum notas`.
 
+## [1.8.3] - 2026-11-20
+
+### Seguridad
+- La clave que se genera para la cuenta que administra (cuando no está `NOTARUM_ADMIN_CLAVE`)
+  ya no se escribe en los registros del contenedor: queda en el directorio de datos, en el
+  archivo `clave-admin-inicial`, legible sólo por notarum. El log dice cómo leerla desde la
+  consola del servicio (`cat /datos/clave-admin-inicial`); después conviene borrar el archivo
+  o fijar `NOTARUM_ADMIN_CLAVE`. Si no se puede guardar, el log indica entrar con
+  `NOTARUM_ADMIN_CLAVE`.
+
 ## [1.8.2] - 2026-11-20
 
 ### Nuevo
